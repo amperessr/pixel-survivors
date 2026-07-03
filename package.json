@@ -1,0 +1,22 @@
+{
+  "name": "pixel-survivors-roguelike",
+  "version": "1.0.0",
+  "description": "一款以 Phaser 3 製作的 Roguelike 像素生存遊戲，具備無限地圖、武器與被動 Build 系統、Boss 戰、以及 Firebase 即時排行榜。",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "start": "npx http-server . -p 8080 -c-1",
+    "dev": "npx http-server . -p 8080 -c-1 -o",
+    "deploy:gh-pages": "echo 將本資料夾內容 push 到 gh-pages 分支即可部署到 GitHub Pages",
+    "deploy:vercel": "npx vercel --prod"
+  },
+  "keywords": ["phaser3", "roguelike", "survivors", "game", "firebase"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "dependencies": {
+    "firebase": "^10.12.0"
+  }
+}
