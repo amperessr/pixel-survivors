@@ -4,22 +4,26 @@ import { audioManager } from '../managers/AudioManager.js';
 // 四種初始角色設定 (依規格百分比修正基礎數值)
 export const CHARACTERS = {
   attacker: {
-    id: 'attacker', name: '攻擊型 · 烈焰戰士', texture: 'player_attacker',
+    id: 'attacker', name: '4M', title: '飛過去扁你', texture: 'player_attacker',
+    typeLabel: '攻擊型',
     desc: 'Attack +40%／HP -10%／Defense -10%',
     mods: { attack: 1.4, hp: 0.9, defense: 0.9, moveSpeed: 1, atkSpeed: 1 },
   },
   speedster: {
-    id: 'speedster', name: '速度型 · 疾風劍客', texture: 'player_speedster',
+    id: 'speedster', name: '跩跩', title: '1000元內隨便拿', texture: 'player_speedster',
+    typeLabel: '敏捷型',
     desc: 'MoveSpeed +40%／AtkSpeed +25%／Attack -15%',
     mods: { attack: 0.85, hp: 1, defense: 1, moveSpeed: 1.4, atkSpeed: 1.25 },
   },
   tank: {
-    id: 'tank', name: '防禦型 · 鋼鐵守衛', texture: 'player_tank',
+    id: 'tank', name: '汪汪', title: '大主管', texture: 'player_tank',
+    typeLabel: '防禦型',
     desc: 'HP +40%／Defense +40%／MoveSpeed -20%',
     mods: { attack: 1, hp: 1.4, defense: 1.4, moveSpeed: 0.8, atkSpeed: 1 },
   },
   balanced: {
-    id: 'balanced', name: '平衡型 · 遊俠', texture: 'player_balanced',
+    id: 'balanced', name: '基本款', title: '無', texture: 'player_balanced',
+    typeLabel: '一般型',
     desc: '所有能力平均成長',
     mods: { attack: 1.1, hp: 1.1, defense: 1.1, moveSpeed: 1.1, atkSpeed: 1.1 },
   },

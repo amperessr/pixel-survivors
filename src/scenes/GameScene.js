@@ -37,6 +37,7 @@ export default class GameScene extends Phaser.Scene {
     this.startTime = this.time.now;
     this.killCount = 0;
     this.paused = false;
+    this.escPaused = false; // 僅代表玩家手動按 ESC 暫停（用於顯示「已暫停」遮罩）
 
     // 滑鼠瞄準方向（用於飛刀等以滑鼠為準的武器，此處以世界座標更新提供 UI 之用）
     this.input.on('pointermove', () => {});
@@ -100,6 +101,7 @@ export default class GameScene extends Phaser.Scene {
           if (hitSet.has(e)) return;
           hitSet.add(e);
           this.enemySystem.damageEnemy(e, p.getData('dmg'), stats.critRate, stats.critDmg);
+          this.spawnImpactFx(e.x, e.y, 'lightning');
           const chainsLeft = p.getData('chains') - 1;
           if (chainsLeft > 0) {
             const next = this._findNearestExcluding(e.x, e.y, hitSet, p.getData('range'));
@@ -118,9 +120,7 @@ export default class GameScene extends Phaser.Scene {
 
         // 火球 / 飛刀
         this.enemySystem.damageEnemy(e, p.getData('dmg'), stats.critRate, stats.critDmg);
-        if (kind === 'fireball') {
-          this.spawnFlameFx(p.x, p.y);
-        }
+        this.spawnImpactFx(p.x, p.y, kind);
         const pierce = p.getData('pierce') || 0;
         if (pierce > 0) {
           p.setData('pierce', pierce - 1);
@@ -141,12 +141,14 @@ export default class GameScene extends Phaser.Scene {
         if (time - last < 300) return;
         lastHit.set(e, time);
         this.enemySystem.damageEnemy(e, dmg, stats.critRate, stats.critDmg);
+        this.spawnImpactFx(e.x, e.y, 'sawblade');
       });
       if (this.boss && this.boss.alive && dist(saw.x, saw.y, this.boss.sprite.x, this.boss.sprite.y) < 34) {
         const last = lastHit.get(this.boss) || 0;
         if (time - last >= 300) {
           lastHit.set(this.boss, time);
           this.boss.takeDamage(dmg, stats.critRate, stats.critDmg);
+          this.spawnImpactFx(this.boss.sprite.x, this.boss.sprite.y, 'sawblade');
         }
       }
     }
@@ -158,6 +160,7 @@ export default class GameScene extends Phaser.Scene {
         if (dist(p.x, p.y, this.boss.sprite.x, this.boss.sprite.y) < 30) {
           this.boss.takeDamage(p.getData('dmg'), stats.critRate, stats.critDmg);
           const kind = p.getData('kind');
+          this.spawnImpactFx(this.boss.sprite.x, this.boss.sprite.y, kind);
           if (kind !== 'lightning') {
             this.weaponSystem.projectilePool.free(p);
           }
@@ -225,12 +228,11 @@ export default class GameScene extends Phaser.Scene {
   _togglePause() {
     if (this.gameEnded) return;
     this.paused = !this.paused;
+    this.escPaused = this.paused;
     if (this.paused) {
       this.physics.world.pause();
-      this.scene.launch('UIScene', { gameScene: this, showPauseOverlay: true });
     } else {
       this.physics.world.resume();
-      this.events.emit('hidePauseOverlay');
     }
   }
 
@@ -254,5 +256,70 @@ export default class GameScene extends Phaser.Scene {
   spawnLevelUpFx(x, y) {
     const fx = this.add.image(x, y, 'fx_levelup').setDepth(30001).setScale(0.4).setAlpha(0.9);
     this.tweens.add({ targets: fx, scale: 2.2, alpha: 0, duration: 600, onComplete: () => fx.destroy() });
+  }
+
+  // 攻擊「出招瞬間」特效：讓玩家清楚看到自己開火的那一刻
+  spawnCastFx(x, y, kind, angle = 0, radius = 0) {
+    switch (kind) {
+      case 'fireball': {
+        const fx = this.add.image(x, y, 'fx_flame').setDepth(6001).setScale(0.7).setAlpha(0.95);
+        this.tweens.add({ targets: fx, scale: 1.3, alpha: 0, duration: 180, onComplete: () => fx.destroy() });
+        break;
+      }
+      case 'lightning': {
+        const fx = this.add.image(x, y, 'fx_bolt').setDepth(6001).setScale(1.3).setAlpha(1)
+          .setRotation(angle);
+        this.tweens.add({ targets: fx, scale: 2, alpha: 0, duration: 160, onComplete: () => fx.destroy() });
+        break;
+      }
+      case 'knife': {
+        const fx = this.add.image(x, y, 'fx_crit').setDepth(6001).setScale(1).setAlpha(0.95)
+          .setRotation(angle).setTint(0xdfefff);
+        this.tweens.add({ targets: fx, scale: 1.6, alpha: 0, duration: 160, onComplete: () => fx.destroy() });
+        break;
+      }
+      case 'frost': {
+        const ring = this.add.image(x, y, 'fx_frost').setDepth(6001).setScale(radius / 24).setAlpha(0.7);
+        this.tweens.add({
+          targets: ring, alpha: 0, scale: radius / 20,
+          duration: 400, onComplete: () => ring.destroy(),
+        });
+        break;
+      }
+    }
+  }
+
+  // 攻擊「命中瞬間」特效：依武器種類顯示不同的命中視覺回饋
+  spawnImpactFx(x, y, kind) {
+    switch (kind) {
+      case 'fireball': {
+        const fx = this.add.image(x, y, 'fx_flame').setDepth(29999);
+        this.tweens.add({ targets: fx, scale: 1.6, alpha: 0, duration: 250, onComplete: () => fx.destroy() });
+        break;
+      }
+      case 'lightning': {
+        const fx = this.add.image(x, y, 'fx_bolt').setDepth(29999).setScale(0.9).setAlpha(0.95);
+        this.tweens.add({ targets: fx, scale: 1.4, alpha: 0, duration: 180, onComplete: () => fx.destroy() });
+        break;
+      }
+      case 'knife': {
+        const fx = this.add.image(x, y, 'fx_crit').setDepth(29999).setScale(0.7).setTint(0xffffff);
+        this.tweens.add({ targets: fx, scale: 1.1, alpha: 0, duration: 150, onComplete: () => fx.destroy() });
+        break;
+      }
+      case 'sawblade': {
+        const fx = this.add.image(x, y, 'fx_crit').setDepth(29999).setScale(0.6).setTint(0xcfcfcf);
+        this.tweens.add({ targets: fx, scale: 1, alpha: 0, duration: 130, onComplete: () => fx.destroy() });
+        break;
+      }
+      case 'frost': {
+        const fx = this.add.image(x, y, 'fx_frost').setDepth(29999).setScale(0.6).setAlpha(0.85);
+        this.tweens.add({ targets: fx, scale: 1.1, alpha: 0, duration: 220, onComplete: () => fx.destroy() });
+        break;
+      }
+      default: {
+        this.spawnKillFx(x, y);
+      }
+    }
   }
 }

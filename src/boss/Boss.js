@@ -32,12 +32,12 @@ export default class Boss {
     this.chargeTarget = null;
 
     // 血條 UI (畫面固定位置，右上方中央)
-    this.barBg = scene.add.image(scene.scale.width / 2, 70, 'ui_bar_bg')
-      .setScrollFactor(0).setDepth(30000).setDisplaySize(320, 20);
-    this.barFill = scene.add.image(scene.scale.width / 2 - 150, 70, 'ui_bar_fill_boss')
-      .setScrollFactor(0).setDepth(30001).setOrigin(0, 0.5).setDisplaySize(300, 18);
-    this.label = scene.add.text(scene.scale.width / 2, 50, 'Boss 降臨！', {
-      fontSize: '16px', color: '#ff6b6b', fontStyle: 'bold',
+    this.barBg = scene.add.image(scene.scale.width / 2, 100, 'ui_bar_bg')
+      .setScrollFactor(0).setDepth(30000).setDisplaySize(460, 26);
+    this.barFill = scene.add.image(scene.scale.width / 2 - 220, 100, 'ui_bar_fill_boss')
+      .setScrollFactor(0).setDepth(30001).setOrigin(0, 0.5).setDisplaySize(440, 24);
+    this.label = scene.add.text(scene.scale.width / 2, 68, 'Boss 降臨！', {
+      fontSize: '22px', color: '#ff6b6b', fontStyle: 'bold',
     }).setScrollFactor(0).setDepth(30001).setOrigin(0.5);
 
     audioManager.bossRoar();
@@ -67,7 +67,7 @@ export default class Boss {
     }
 
     this.sprite.setFlipX(px < bx);
-    this.barFill.setDisplaySize((this.hp / this.maxHp) * 300, 18);
+    this.barFill.setDisplaySize((this.hp / this.maxHp) * 440, 24);
   }
 
   _chooseSkill(time) {

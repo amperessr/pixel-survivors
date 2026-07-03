@@ -9,7 +9,7 @@ export default class WeaponSystem {
     this.player = player;
     this.enemySystem = enemySystem;
     this.owned = {}; // { fireball: level, ... }
-    this.timers = {};
+    this.nextFireAt = {}; // { fireball: timestamp, ... } 即時運算冷卻時間，避免屬性提升後冷卻不同步
     this.sawbladeSprites = [];
     this.sawbladeAngle = 0;
 
@@ -29,22 +29,13 @@ export default class WeaponSystem {
   addOrUpgrade(id) {
     const newLevel = Math.min((this.owned[id] || 0) + 1, 5);
     this.owned[id] = newLevel;
-    this._setupTimer(id);
+    // 立即可以再次開火（不必等待舊等級的冷卻）
+    this.nextFireAt[id] = this.scene.time.now;
     if (id === 'sawblade') this._rebuildSawblades();
   }
 
-  _setupTimer(id) {
-    if (this.timers[id]) this.timers[id].remove();
-    if (id === 'sawblade') return; // 鋸片為持續環繞，另行處理
-    const data = getWeaponLevelData(id, this.owned[id]);
-    this.timers[id] = this.scene.time.addEvent({
-      delay: this._scaledCooldown(id, data.cooldown),
-      loop: true,
-      callback: () => this._fire(id),
-    });
-  }
-
-  // 依照聯動屬性微調冷卻時間 (例如攻速影響飛刀/鋸片)
+  // 依照聯動屬性微調冷卻時間（例如攻速影響飛刀/鋸片）；
+  // 每次開火時「即時」重新計算，屬性提升會立刻反映在下一次冷卻，不會卡在舊數值
   _scaledCooldown(id, base) {
     const stats = this.player.stats;
     if (id === 'knife' || id === 'sawblade') {
@@ -54,6 +45,19 @@ export default class WeaponSystem {
   }
 
   update(time, delta) {
+    // 依照擁有的武器，逐一檢查是否可以開火（取代舊版基於 Timer 的作法）
+    for (const id of Object.keys(this.owned)) {
+      if (id === 'sawblade') continue; // 鋸片為持續環繞傷害，非計時開火
+      const nextAt = this.nextFireAt[id] || 0;
+      if (time >= nextAt) {
+        const fired = this._fire(id, time);
+        const data = getWeaponLevelData(id, this.owned[id]);
+        const cooldown = this._scaledCooldown(id, data.cooldown);
+        // 若因找不到敵人而沒有實際開火（frost 以外的武器），縮短重試間隔避免卡頓
+        this.nextFireAt[id] = time + (fired ? cooldown : Math.min(150, cooldown));
+      }
+    }
+
     // 鋸片環繞更新
     if (this.owned.sawblade) {
       const data = getWeaponLevelData('sawblade', this.owned.sawblade);
@@ -69,20 +73,18 @@ export default class WeaponSystem {
       }
     }
 
-    // 更新活躍投射物
+    // 更新活躍投射物存活時間
     this.projectilePool.forEachActive((p) => {
-      if (p.getData('type') === 'homing') {
-        // 已有速度向量，僅檢查存活時間
-      }
       if (this.scene.time.now > p.getData('expireAt')) {
         this.projectilePool.free(p);
       }
     });
   }
 
-  _fire(id) {
+  // 回傳是否真的開火（frost 一律開火；其餘武器需要有目標敵人）
+  _fire(id, time) {
     const enemy = this.enemySystem.findNearest(this.player.sprite.x, this.player.sprite.y);
-    if (id !== 'frost' && !enemy) return;
+    if (id !== 'frost' && !enemy) return false;
     const data = getWeaponLevelData(id, this.owned[id]);
     const stats = this.player.stats;
 
@@ -93,6 +95,7 @@ export default class WeaponSystem {
       case 'frost': this._fireFrost(data, stats); break;
     }
     audioManager.attack();
+    return true;
   }
 
   _fireFireball(data, stats, enemy) {
@@ -110,6 +113,7 @@ export default class WeaponSystem {
     proj.setData('kind', 'fireball');
     proj.setData('expireAt', this.scene.time.now + 2500);
     proj.body.setVelocity(Math.cos(ang) * data.speed, Math.sin(ang) * data.speed);
+    this.scene.spawnCastFx(px, py, 'fireball', ang);
   }
 
   _fireLightning(data, stats, enemy) {
@@ -127,6 +131,7 @@ export default class WeaponSystem {
     proj.setData('hitSet', new Set());
     proj.setData('expireAt', this.scene.time.now + 1200);
     proj.body.setVelocity(Math.cos(ang) * 420, Math.sin(ang) * 420);
+    this.scene.spawnCastFx(px, py, 'lightning', ang);
   }
 
   _fireKnife(data, stats, enemy) {
@@ -136,6 +141,7 @@ export default class WeaponSystem {
     const px = this.player.sprite.x, py = this.player.sprite.y;
     const baseAng = angleTo(px, py, enemy.x, enemy.y);
     const spread = 0.18;
+    this.scene.spawnCastFx(px, py, 'knife', baseAng);
     for (let i = 0; i < totalCount; i++) {
       const off = (i - (totalCount - 1) / 2) * spread;
       const proj = this.projectilePool.spawn();
@@ -155,16 +161,13 @@ export default class WeaponSystem {
     const bonusRadius = stats.defense * 1.2;
     const radius = data.radius + bonusRadius;
     const px = this.player.sprite.x, py = this.player.sprite.y;
-    const ring = this.scene.add.image(px, py, 'fx_frost').setScale(radius / 24).setAlpha(0.7).setDepth(9000);
-    this.scene.tweens.add({
-      targets: ring, alpha: 0, scale: radius / 20,
-      duration: 400, onComplete: () => ring.destroy(),
-    });
+    this.scene.spawnCastFx(px, py, 'frost', 0, radius);
     this.enemySystem.forEachActive((e) => {
       if (dist(px, py, e.x, e.y) <= radius) {
         this.enemySystem.damageEnemy(e, data.dmg, stats.critRate, stats.critDmg);
         e.setData('slowUntil', this.scene.time.now + data.slowDuration);
         e.setData('slowFactor', 1 - data.slow);
+        this.scene.spawnImpactFx(e.x, e.y, 'frost');
       }
     });
   }
@@ -174,11 +177,11 @@ export default class WeaponSystem {
     this.sawbladeSprites = [];
     const data = getWeaponLevelData('sawblade', this.owned.sawblade);
     for (let i = 0; i < data.count; i++) {
-      const sp = this.scene.physics.add.image(this.player.sprite.x, this.player.sprite.y, 'proj_sawblade');
+      const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'proj_sawblade');
+      sp.setDepth(6000);
       sp.setData('kind', 'sawblade');
       sp.setData('lastHit', new Map());
       this.sawbladeSprites.push(sp);
-      if (this.scene.projectileGroup) this.scene.projectileGroup.add(sp);
     }
   }
 

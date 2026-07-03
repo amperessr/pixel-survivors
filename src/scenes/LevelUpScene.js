@@ -14,24 +14,24 @@ export default class LevelUpScene extends Phaser.Scene {
     const w = this.scale.width, h = this.scale.height;
     this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.72).setScrollFactor(0);
     this.add.text(w / 2, h * 0.18, '升 級！選擇一項強化', {
-      fontSize: '26px', color: '#6fd3ff', fontStyle: 'bold',
+      fontSize: '36px', color: '#6fd3ff', fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
 
     const options = this._buildOptions();
-    const cardW = 210, gap = 30;
+    const cardW = 280, gap = 40;
     const totalW = options.length * cardW + (options.length - 1) * gap;
     let startX = w / 2 - totalW / 2 + cardW / 2;
-    const cy = h / 2 + 20;
+    const cy = h / 2 + 30;
 
     options.forEach((opt, i) => {
       const cx = startX + i * (cardW + gap);
-      const card = this.add.image(cx, cy, 'ui_card').setInteractive({ useHandCursor: true }).setScrollFactor(0);
-      this.add.image(cx, cy - 70, opt.icon).setScale(opt.iconScale || 1.6).setScrollFactor(0);
-      this.add.text(cx, cy - 20, opt.title, {
-        fontSize: '15px', color: '#fff', fontStyle: 'bold', align: 'center', wordWrap: { width: 180 },
+      const card = this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, 320).setInteractive({ useHandCursor: true }).setScrollFactor(0);
+      this.add.image(cx, cy - 95, opt.icon).setScale((opt.iconScale || 1.6) * 1.3).setScrollFactor(0);
+      this.add.text(cx, cy - 25, opt.title, {
+        fontSize: '18px', color: '#fff', fontStyle: 'bold', align: 'center', wordWrap: { width: 240 },
       }).setOrigin(0.5).setScrollFactor(0);
-      this.add.text(cx, cy + 50, opt.desc, {
-        fontSize: '11px', color: '#9fd3ff', align: 'center', wordWrap: { width: 180 },
+      this.add.text(cx, cy + 65, opt.desc, {
+        fontSize: '14px', color: '#9fd3ff', align: 'center', wordWrap: { width: 240 },
       }).setOrigin(0.5).setScrollFactor(0);
 
       card.on('pointerover', () => card.setTint(0xbfe9ff));
