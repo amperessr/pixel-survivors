@@ -11,28 +11,28 @@ export default class LevelUpScene extends Phaser.Scene {
 
   create() {
     const w = this.scale.width, h = this.scale.height;
-    this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.75).setScrollFactor(0);
-    this.add.text(w / 2, h * 0.15, '升 級！選擇一項強化', {
-      fontSize: '42px', color: '#6fd3ff', fontStyle: 'bold',
+    this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.78).setScrollFactor(0);
+    this.add.text(w / 2, h * 0.12, '升 級！選擇一項強化', {
+      fontSize: '64px', color: '#6fd3ff', fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
 
     const options = this._buildOptions();
-    const cardW = 320, cardH = 380, gap = 44;
+    const cardW = 460, cardH = 620, gap = 50;
     const totalW = options.length * cardW + (options.length - 1) * gap;
     let startX = w / 2 - totalW / 2 + cardW / 2;
-    const cy = h / 2 + 40;
+    const cy = h / 2 + 60;
 
     options.forEach((opt, i) => {
       const cx = startX + i * (cardW + gap);
       const card = this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH).setInteractive({ useHandCursor: true }).setScrollFactor(0);
-      this.add.image(cx, cy - 120, opt.icon).setScale((opt.iconScale || 1.6) * 1.4).setScrollFactor(0);
-      this.add.text(cx, cy - 45, opt.title, {
-        fontSize: '20px', color: '#fff', fontStyle: 'bold', align: 'center',
-        wordWrap: { width: cardW - 40, useAdvancedWrap: true },
+      this.add.image(cx, cy - 190, opt.icon).setScale((opt.iconScale || 1.6) * 2.2).setScrollFactor(0);
+      this.add.text(cx, cy - 70, opt.title, {
+        fontSize: '32px', color: '#fff', fontStyle: 'bold', align: 'center',
+        wordWrap: { width: cardW - 50, useAdvancedWrap: true },
       }).setOrigin(0.5).setScrollFactor(0);
-      this.add.text(cx, cy + 60, opt.desc, {
-        fontSize: '15px', color: '#9fd3ff', align: 'center', lineSpacing: 4,
-        wordWrap: { width: cardW - 44, useAdvancedWrap: true },
+      this.add.text(cx, cy + 100, opt.desc, {
+        fontSize: '24px', color: '#9fd3ff', align: 'center', lineSpacing: 8,
+        wordWrap: { width: cardW - 60, useAdvancedWrap: true },
       }).setOrigin(0.5).setScrollFactor(0);
 
       card.on('pointerover', () => card.setTint(0xbfe9ff));

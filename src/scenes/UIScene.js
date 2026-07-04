@@ -11,33 +11,33 @@ export default class UIScene extends Phaser.Scene {
     const w = this.scale.width, h = this.scale.height;
 
     // ---- 左上：HP / 等級 / EXP ----
-    this.add.image(190, 50, 'ui_bar_bg').setScrollFactor(0).setDisplaySize(340, 30).setOrigin(0.5);
-    this.hpFill = this.add.image(20, 50, 'ui_bar_fill_hp').setScrollFactor(0).setOrigin(0, 0.5).setDisplaySize(334, 26);
-    this.hpText = this.add.text(190, 50, '', { fontSize: '18px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setScrollFactor(0);
+    this.add.image(280, 70, 'ui_bar_bg').setScrollFactor(0).setDisplaySize(500, 44).setOrigin(0.5);
+    this.hpFill = this.add.image(30, 70, 'ui_bar_fill_hp').setScrollFactor(0).setOrigin(0, 0.5).setDisplaySize(492, 38);
+    this.hpText = this.add.text(280, 70, '', { fontSize: '26px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setScrollFactor(0);
 
-    this.lvText = this.add.text(20, 76, 'Lv.1', { fontSize: '26px', color: '#6fd3ff', fontStyle: 'bold' }).setScrollFactor(0);
-    this.add.image(270, 112, 'ui_bar_bg').setScrollFactor(0).setDisplaySize(200, 16).setOrigin(0.5);
-    this.xpFill = this.add.image(170, 112, 'ui_bar_fill_xp').setScrollFactor(0).setOrigin(0, 0.5).setDisplaySize(198, 14);
+    this.lvText = this.add.text(30, 108, 'Lv.1', { fontSize: '38px', color: '#6fd3ff', fontStyle: 'bold' }).setScrollFactor(0);
+    this.add.image(400, 158, 'ui_bar_bg').setScrollFactor(0).setDisplaySize(280, 22).setOrigin(0.5);
+    this.xpFill = this.add.image(260, 158, 'ui_bar_fill_xp').setScrollFactor(0).setOrigin(0, 0.5).setDisplaySize(278, 19);
 
     // ---- 右上：時間 / 擊殺數 / FPS ----
-    this.timeText = this.add.text(w - 24, 20, '', { fontSize: '26px', color: '#fff', fontStyle: 'bold' }).setOrigin(1, 0).setScrollFactor(0);
-    this.killText = this.add.text(w - 24, 54, '', { fontSize: '20px', color: '#ffd93d' }).setOrigin(1, 0).setScrollFactor(0);
-    this.fpsText = this.add.text(w - 24, 82, '', { fontSize: '15px', color: '#999' }).setOrigin(1, 0).setScrollFactor(0);
+    this.timeText = this.add.text(w - 32, 26, '', { fontSize: '38px', color: '#fff', fontStyle: 'bold' }).setOrigin(1, 0).setScrollFactor(0);
+    this.killText = this.add.text(w - 32, 74, '', { fontSize: '28px', color: '#ffd93d' }).setOrigin(1, 0).setScrollFactor(0);
+    this.fpsText = this.add.text(w - 32, 112, '', { fontSize: '20px', color: '#999' }).setOrigin(1, 0).setScrollFactor(0);
 
     // ---- 右側：目前技能 ----
-    this.weaponPanel = this.add.container(w - 160, 170).setScrollFactor(0);
-    this.add.text(w - 250, 140, '武器', { fontSize: '18px', color: '#bbb' }).setScrollFactor(0);
+    this.weaponPanel = this.add.container(w - 220, 220).setScrollFactor(0);
+    this.add.text(w - 340, 180, '武器', { fontSize: '26px', color: '#bbb' }).setScrollFactor(0);
 
     // ---- 下方：角色能力值 ----
-    this.statsText = this.add.text(w / 2, h - 26, '', {
-      fontSize: '19px', color: '#cfe9ff', align: 'center',
+    this.statsText = this.add.text(w / 2, h - 36, '', {
+      fontSize: '26px', color: '#cfe9ff', align: 'center',
     }).setOrigin(0.5, 1).setScrollFactor(0);
 
     // ---- 暫停覆蓋層 ----
     this.pauseOverlay = this.add.container(0, 0).setScrollFactor(0).setDepth(50000).setVisible(false);
     const dim = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.6);
     const txt = this.add.text(w / 2, h / 2, '已暫停\n按 ESC 繼續', {
-      fontSize: '48px', color: '#fff', align: 'center',
+      fontSize: '64px', color: '#fff', align: 'center',
     }).setOrigin(0.5);
     this.pauseOverlay.add([dim, txt]);
   }
@@ -51,11 +51,11 @@ export default class UIScene extends Phaser.Scene {
     this.pauseOverlay.setVisible(!!this.gs.escPaused && !this.gs.gameEnded);
 
     const hpRatio = Math.max(0, p.hp / p.stats.maxHp);
-    this.hpFill.setDisplaySize(334 * hpRatio, 26);
+    this.hpFill.setDisplaySize(492 * hpRatio, 38);
     this.hpText.setText(`${Math.ceil(p.hp)} / ${p.stats.maxHp}`);
     this.lvText.setText(`Lv.${p.level}`);
     const xpRatio = Math.max(0, Math.min(1, p.exp / p.expToNext));
-    this.xpFill.setDisplaySize(198 * xpRatio, 14);
+    this.xpFill.setDisplaySize(278 * xpRatio, 19);
 
     const t = this.gs.getElapsedSeconds();
     const mm = String(Math.floor(t / 60)).padStart(2, '0');
@@ -80,10 +80,10 @@ export default class UIScene extends Phaser.Scene {
 
     this.weaponPanel.removeAll(true);
     keys.forEach((id, i) => {
-      const y = i * 60;
-      const icon = this.add.image(-40, y, `weapon_${id}_lv${owned[id]}`).setScale(1.8);
-      const label = this.add.text(-5, y, `${WEAPON_DATA[id].name} Lv${owned[id]}`, {
-        fontSize: '16px', color: '#fff',
+      const y = i * 88;
+      const icon = this.add.image(-60, y, `weapon_${id}_lv${owned[id]}`).setScale(2.6);
+      const label = this.add.text(-10, y, `${WEAPON_DATA[id].name} Lv${owned[id]}`, {
+        fontSize: '24px', color: '#fff',
       }).setOrigin(0, 0.5);
       this.weaponPanel.add([icon, label]);
     });
