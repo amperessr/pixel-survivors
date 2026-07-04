@@ -105,7 +105,7 @@ export default class GameScene extends Phaser.Scene {
     if (p.getData('exploded')) return;
     const aoe = p.getData('aoe');
     let triggered = false;
-    this.enemySystem.forEachActive((e) => {
+    this.enemySystem.queryNear(p.x, p.y, 14, (e) => {
       if (!triggered && dist(p.x, p.y, e.x, e.y) <= 14) triggered = true;
     });
     if (!triggered && this.boss && this.boss.alive && dist(p.x, p.y, this.boss.sprite.x, this.boss.sprite.y) <= 20) {
@@ -114,7 +114,7 @@ export default class GameScene extends Phaser.Scene {
     if (!triggered) return;
 
     p.setData('exploded', true);
-    this.enemySystem.forEachActive((e) => {
+    this.enemySystem.queryNear(p.x, p.y, aoe, (e) => {
       if (dist(p.x, p.y, e.x, e.y) <= aoe) {
         this.enemySystem.damageEnemy(e, p.getData('dmg'), stats.critRate, stats.critDmg);
       }
@@ -137,7 +137,7 @@ export default class GameScene extends Phaser.Scene {
   _handleKnifeHit(p, stats) {
     const hitSet = p.getData('hitSet');
     let target = null;
-    this.enemySystem.forEachActive((e) => {
+    this.enemySystem.queryNear(p.x, p.y, 14, (e) => {
       if (target || hitSet.has(e)) return;
       if (dist(p.x, p.y, e.x, e.y) <= 14) target = e;
     });
@@ -171,7 +171,7 @@ export default class GameScene extends Phaser.Scene {
     const hitSet = p.getData('hitSet');
     const range = p.getData('range');
     let target = null;
-    this.enemySystem.forEachActive((e) => {
+    this.enemySystem.queryNear(p.x, p.y, 14, (e) => {
       if (target || hitSet.has(e)) return;
       if (dist(p.x, p.y, e.x, e.y) <= 14) target = e;
     });
@@ -214,7 +214,7 @@ export default class GameScene extends Phaser.Scene {
     for (const saw of this.weaponSystem.sawbladeSprites) {
       const dmg = this.weaponSystem.getSawbladeDamage();
       const lastHit = saw.getData('lastHit');
-      this.enemySystem.forEachActive((e) => {
+      this.enemySystem.queryNear(saw.x, saw.y, 16, (e) => {
         if (!e.active) return;
         if (dist(saw.x, saw.y, e.x, e.y) > 16) return;
         const last = lastHit.get(e) || 0;
@@ -236,7 +236,7 @@ export default class GameScene extends Phaser.Scene {
 
   _findNearestExcluding(x, y, excludeSet, range) {
     let best = null, bestD = Infinity;
-    this.enemySystem.forEachActive((e) => {
+    this.enemySystem.queryNear(x, y, range, (e) => {
       if (excludeSet.has(e)) return;
       const d = dist(x, y, e.x, e.y);
       if (d < range && d < bestD) { bestD = d; best = e; }

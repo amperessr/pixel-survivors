@@ -4,6 +4,7 @@ import { dist, choice, randRange } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 
 const MAX_ENEMIES = 500;
+const GRID_SIZE = 96; // 空間網格邊長：把場上怪物依座標分桶，碰撞判定只需查附近幾個格子
 
 export default class EnemySystem {
   constructor(scene, player) {
@@ -12,6 +13,7 @@ export default class EnemySystem {
     this.difficultyMinutes = 0;
     this.spawnInterval = 900;
     this.lastSpawn = 0;
+    this.grid = new Map(); // "gx,gy" -> [enemy, ...]，每幀重建一次
 
     this.pool = new ObjectPool(
       scene,
@@ -39,6 +41,10 @@ export default class EnemySystem {
     sprite.setPosition(x, y);
     sprite.setScale(def.scale * tierDef.scaleMult);
     sprite.setDepth(y);
+    // 防呆重置：確保從物件池取出的怪物一定是完全不透明、正常混合模式，
+    // 避免任何殘留視覺狀態（例如特效或閃白動畫中途被打斷）造成看起來「隱形」
+    sprite.setAlpha(1);
+    sprite.setBlendMode(Phaser.BlendModes.NORMAL);
     const scaling = 1 + this.difficultyMinutes * 0.18;
     sprite.setData('typeId', typeId);
     sprite.setData('tier', tier);
@@ -51,12 +57,14 @@ export default class EnemySystem {
     sprite.setData('slowUntil', 0);
     sprite.setData('slowFactor', 1);
     sprite.setData('lastHitAt', 0);
+    sprite.setData('flashToken', 0); // 用來讓「閃白後恢復顏色」的計時器只認得最新一次的傷害
     if (tierDef.tint) sprite.setTint(tierDef.tint); else sprite.clearTint();
   }
 
   _resetGem(gem, x, y, amount) {
     gem.setPosition(x, y);
     gem.setData('amount', amount);
+    gem.setAlpha(1);
     // 經驗寶石依經驗值大小呈現不同體積與亮度，讓玩家一眼看出這顆值多少經驗
     const scale = Math.min(2.4, 0.8 + amount / 12);
     gem.setScale(scale);
@@ -77,7 +85,42 @@ export default class EnemySystem {
     return { min: edge + 60, max: edge + 260 };
   }
 
+  _cellKey(x, y) {
+    return `${Math.floor(x / GRID_SIZE)},${Math.floor(y / GRID_SIZE)}`;
+  }
+
+  // 每幀重建一次空間網格：O(N)，之後每次「查詢附近怪物」都只需檢查少數格子，
+  // 而不必每次都掃過全部怪物（原本武器碰撞判定是 O(子彈數 × 怪物數)，
+  // 在怪物數量多時很容易造成單幀嚴重掉幀、畫面來不及重繪，看起來就像怪物瞬間消失）
+  _rebuildGrid() {
+    this.grid.clear();
+    this.pool.forEachActive((e) => {
+      const key = this._cellKey(e.x, e.y);
+      let arr = this.grid.get(key);
+      if (!arr) { arr = []; this.grid.set(key, arr); }
+      arr.push(e);
+    });
+  }
+
+  // 查詢以 (x,y) 為圓心、radius 為半徑的範圍內所有怪物（僅限已建格的候選者，
+  // 呼叫端仍應自行用精確距離做最終判斷，這裡只是縮小候選範圍的「粗篩」）
+  queryNear(x, y, radius, cb) {
+    const cellR = Math.ceil(radius / GRID_SIZE) + 1;
+    const cx = Math.floor(x / GRID_SIZE), cy = Math.floor(y / GRID_SIZE);
+    for (let gy = cy - cellR; gy <= cy + cellR; gy++) {
+      for (let gx = cx - cellR; gx <= cx + cellR; gx++) {
+        const arr = this.grid.get(`${gx},${gy}`);
+        if (!arr) continue;
+        for (const e of arr) {
+          if (e.active) cb(e);
+        }
+      }
+    }
+  }
+
   update(time, delta) {
+    this._rebuildGrid();
+
     if (time - this.lastSpawn > this.spawnInterval && this.pool.activeCount < MAX_ENEMIES) {
       this.lastSpawn = time;
       this._spawnWave();
@@ -160,9 +203,13 @@ export default class EnemySystem {
     const hp = enemy.getData('hp') - dmg;
     enemy.setData('hp', hp);
     enemy.setTintFill(0xffffff);
+    // 用一個遞增的 token 標記「這是第幾次閃白」，避免同一隻怪物在極短時間內
+    // 被連續打好幾下時，較早的那次 delayedCall 事後又把顏色蓋回去、或誤判已死亡的物件
+    const token = (enemy.getData('flashToken') || 0) + 1;
+    enemy.setData('flashToken', token);
     this.scene.time.delayedCall(60, () => {
       if (!enemy.active) return;
-      // 閃白結束後恢復原本強度所對應的顏色（一般怪為無染色）
+      if (enemy.getData('flashToken') !== token) return; // 期間又被打了一下，交給更新的那次處理
       const tierTint = enemy.getData('tierTint');
       if (tierTint) enemy.setTint(tierTint); else enemy.clearTint();
     });
