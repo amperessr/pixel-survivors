@@ -69,6 +69,10 @@ export default class EnemySystem {
     sprite.setData('exp', Math.round(def.exp * tierDef.expMult));
     sprite.setData('slowUntil', 0);
     sprite.setData('slowFactor', 1);
+    sprite.setData('knockbackUntil', 0);
+    sprite.setData('knockbackVX', 0);
+    sprite.setData('knockbackVY', 0);
+    sprite.setData('knockbackDuration', 220);
     sprite.setData('lastHitAt', 0);
     sprite.setData('flashToken', 0); // 用來讓「閃白後恢復顏色」的計時器只認得最新一次的傷害
     if (tierDef.tint) sprite.setTint(tierDef.tint); else sprite.clearTint();
@@ -143,12 +147,21 @@ export default class EnemySystem {
     this.pool.forEachActive((e) => {
       if (!e.active) return;
       const now = time;
-      const slowed = now < e.getData('slowUntil') ? e.getData('slowFactor') : 1;
-      const spd = e.getData('speed') * slowed;
-      const ang = Math.atan2(py - e.y, px - e.x);
-      e.body.setVelocity(Math.cos(ang) * spd, Math.sin(ang) * spd);
       e.setDepth(e.y);
       e.setFlipX(px < e.x);
+
+      const knockbackUntil = e.getData('knockbackUntil');
+      if (now < knockbackUntil) {
+        // 擊退期間：直接套用擊退速度並隨時間衰減，暫時不追玩家，製造「被打飛」的手感
+        const totalDuration = e.getData('knockbackDuration') || 220;
+        const remainRatio = Math.max(0, (knockbackUntil - now) / totalDuration);
+        e.body.setVelocity(e.getData('knockbackVX') * remainRatio, e.getData('knockbackVY') * remainRatio);
+      } else {
+        const slowed = now < e.getData('slowUntil') ? e.getData('slowFactor') : 1;
+        const spd = e.getData('speed') * slowed;
+        const ang = Math.atan2(py - e.y, px - e.x);
+        e.body.setVelocity(Math.cos(ang) * spd, Math.sin(ang) * spd);
+      }
 
       // 接觸傷害
       if (dist(e.x, e.y, px, py) < 20 && now - e.getData('lastHitAt') > 500) {
@@ -206,7 +219,7 @@ export default class EnemySystem {
 
   forEachActive(cb) { this.pool.forEachActive(cb); }
 
-  damageEnemy(enemy, baseDmg, critRate = 0, critDmg = 150) {
+  damageEnemy(enemy, baseDmg, critRate = 0, critDmg = 150, knockback = null) {
     let dmg = baseDmg;
     let isCrit = false;
     if (Math.random() * 100 < critRate) {
@@ -226,6 +239,16 @@ export default class EnemySystem {
       const tierTint = enemy.getData('tierTint');
       if (tierTint) enemy.setTint(tierTint); else enemy.clearTint();
     });
+
+    // 擊退：把敵人往「遠離攻擊來源」的方向推開一小段時間
+    if (knockback && knockback.force > 0) {
+      const ang = Math.atan2(enemy.y - knockback.fromY, enemy.x - knockback.fromX);
+      const duration = knockback.duration || 220;
+      enemy.setData('knockbackVX', Math.cos(ang) * knockback.force);
+      enemy.setData('knockbackVY', Math.sin(ang) * knockback.force);
+      enemy.setData('knockbackDuration', duration);
+      enemy.setData('knockbackUntil', this.scene.time.now + duration);
+    }
 
     if (isCrit) this.scene.spawnCritFx(enemy.x, enemy.y);
 

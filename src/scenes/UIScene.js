@@ -1,4 +1,4 @@
-import { WEAPON_DATA } from '../weapons/WeaponData.js';
+import { WEAPON_DATA, WEAPON_EVOLUTIONS } from '../weapons/WeaponData.js';
 import { textStyle } from '../utils/TextStyle.js';
 
 export default class UIScene extends Phaser.Scene {
@@ -74,17 +74,22 @@ export default class UIScene extends Phaser.Scene {
   }
 
   _refreshWeaponPanel() {
-    const owned = this.gs.weaponSystem.owned;
+    const ws = this.gs.weaponSystem;
+    const owned = ws.owned;
     const keys = Object.keys(owned);
-    if (this._lastKeyStr === keys.map(k => k + owned[k]).join(',')) return;
-    this._lastKeyStr = keys.map(k => k + owned[k]).join(',');
+    const stateStr = keys.map(k => k + owned[k] + (ws.isEvolved(k) ? 'E' : '')).join(',');
+    if (this._lastKeyStr === stateStr) return;
+    this._lastKeyStr = stateStr;
 
     this.weaponPanel.removeAll(true);
     keys.forEach((id, i) => {
       const y = i * 88;
+      const evolved = ws.isEvolved(id);
       const icon = this.add.image(-60, y, `weapon_${id}_lv${owned[id]}`).setScale(2.6);
-      const label = this.add.text(-10, y, `${WEAPON_DATA[id].name} Lv${owned[id]}`, textStyle({
-        fontSize: '24px', color: '#fff',
+      if (evolved) icon.setTint(0xffe066);
+      const labelStr = evolved ? `⭐${WEAPON_EVOLUTIONS[id].name}` : `${WEAPON_DATA[id].name} Lv${owned[id]}`;
+      const label = this.add.text(-10, y, labelStr, textStyle({
+        fontSize: '24px', color: evolved ? '#ffe066' : '#fff',
       })).setOrigin(0, 0.5);
       this.weaponPanel.add([icon, label]);
     });

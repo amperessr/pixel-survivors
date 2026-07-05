@@ -84,3 +84,42 @@ export function getWeaponLevelData(id, level) {
   const w = WEAPON_DATA[id];
   return { ...w, ...w.levels[Math.min(level, w.levels.length) - 1], level };
 }
+
+// 每種武器的擊退設定：force 是推開的力道，duration 是擊退持續多久（毫秒）
+export const WEAPON_KNOCKBACK = {
+  fireball: { force: 260, duration: 220 },
+  lightning: { force: 170, duration: 150 },
+  knife: { force: 210, duration: 150 },
+  sawblade: { force: 130, duration: 120 },
+  frost: { force: 190, duration: 260 },
+};
+
+// 武器五級滿了之後可以「進化」成更強的高階版本，不是單純數值疊加，
+// 而是外觀（金色光環）與數值全面躍升的新武器
+export const WEAPON_EVOLUTIONS = {
+  fireball: {
+    name: '隕石燄爆',
+    desc: '火球術的最終進化。體積與爆炸範圍大幅提升，威力驚人的隕石級火焰。',
+    dmgMult: 1.9, extraMult: 1.6,
+  },
+  lightning: {
+    name: '雷霆風暴',
+    desc: '雷電鎖鏈的最終進化。分裂數與傷害都大幅躍升，瞬間連鎖整群敵人。',
+    dmgMult: 1.7, extraMult: 1.8,
+  },
+  knife: {
+    name: '旋風飛刃',
+    desc: '飛刀的最終進化。數量與穿透力大幅提升，形成一片刀刃風暴。',
+    dmgMult: 1.6, extraMult: 1.8,
+  },
+  sawblade: {
+    name: '狂暴鋸輪',
+    desc: '旋轉鋸片的最終進化。數量與轉速大幅提升，環繞成一圈死亡領域。',
+    dmgMult: 1.7, extraMult: 1.6,
+  },
+  frost: {
+    name: '永凍冰川',
+    desc: '冰霜新星的最終進化。範圍與減速效果大幅提升，凍結一切靠近的敵人。',
+    dmgMult: 1.8, extraMult: 1.6,
+  },
+};

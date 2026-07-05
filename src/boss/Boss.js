@@ -4,6 +4,11 @@ import { textStyle } from '../utils/TextStyle.js';
 
 const BOSS_BASE_HP = 900;
 const BOSS_BASE_DMG = 22;
+// Boss 體型：至少要比一般小怪大 5 倍以上（一般小怪顯示大小約 24~48px，
+// Boss 材質原生 64x64，用 4.0 倍縮放後顯示約 256px，安全超過 5 倍）
+const BOSS_SCALE = 4.0;
+const BOSS_TOUCH_RADIUS = 95;   // Boss 對玩家造成接觸傷害的判定半徑（跟著體型放大）
+const BOSS_AOE_HIT_RADIUS = 220; // Boss 範圍技能命中玩家的判定半徑
 
 // Boss 系統：具備衝撞 / 範圍攻擊 / 遠距攻擊 三種技能，血條與死亡動畫
 export default class Boss {
@@ -19,11 +24,11 @@ export default class Boss {
 
     const px = player.sprite.x, py = player.sprite.y;
     const angle = Math.random() * Math.PI * 2;
-    const x = px + Math.cos(angle) * 500;
-    const y = py + Math.sin(angle) * 500;
+    const x = px + Math.cos(angle) * 600;
+    const y = py + Math.sin(angle) * 600;
 
     this.sprite = scene.physics.add.sprite(x, y, 'boss_main');
-    this.sprite.setScale(1.4);
+    this.sprite.setScale(BOSS_SCALE);
     this.sprite.body.setCircle(24, 8, 8);
     this.sprite.setDepth(y);
 
@@ -37,9 +42,14 @@ export default class Boss {
       .setScrollFactor(0).setDepth(30000).setDisplaySize(600, 36);
     this.barFill = scene.add.image(scene.scale.width / 2 - 290, 130, 'ui_bar_fill_boss')
       .setScrollFactor(0).setDepth(30001).setOrigin(0, 0.5).setDisplaySize(580, 32);
-    this.label = scene.add.text(scene.scale.width / 2, 88, 'Boss 降臨！', textStyle({
+    this.label = scene.add.text(scene.scale.width / 2, 88, '⚠ 巨型 Boss 降臨！ ⚠', textStyle({
       fontSize: '34px', color: '#ff6b6b',
     })).setScrollFactor(0).setDepth(30001).setOrigin(0.5);
+
+    // 登場震撼效果：鏡頭震動＋巨大陰影光環，凸顯體型巨大
+    scene.cameras.main.shake(400, 0.01);
+    const shadow = scene.add.image(x, y, 'fx_bossdeath').setTint(0x330000).setAlpha(0.5).setScale(0.5).setDepth(y - 1);
+    scene.tweens.add({ targets: shadow, scale: 3.2, alpha: 0, duration: 500, onComplete: () => shadow.destroy() });
 
     audioManager.bossRoar();
   }
@@ -60,8 +70,8 @@ export default class Boss {
       this._updateCharge(time);
     }
 
-    // 接觸傷害
-    if (dist(bx, by, px, py) < 34 && time - (this._lastTouch || 0) > 600) {
+    // 接觸傷害（判定半徑跟著巨大體型放大）
+    if (dist(bx, by, px, py) < BOSS_TOUCH_RADIUS && time - (this._lastTouch || 0) > 600) {
       this._lastTouch = time;
       const died = this.player.takeDamage(this.dmg * 0.5, time);
       if (died) this.scene.onPlayerDeath();
@@ -99,17 +109,18 @@ export default class Boss {
     this.sprite.body.setVelocity(Math.cos(ang) * 480, Math.sin(ang) * 480);
   }
 
-  // 技能二：範圍攻擊
+  // 技能二：範圍攻擊（視覺範圍跟著巨大體型放大）
   _startAoe(time) {
     this.phase = 'aoe';
     const ring = this.scene.add.image(this.sprite.x, this.sprite.y, 'fx_frost')
       .setTint(0xff5b5b).setScale(1).setAlpha(0.8).setDepth(19999);
+    this.scene.cameras.main.shake(200, 0.006);
     this.scene.tweens.add({
-      targets: ring, scale: 6, alpha: 0, duration: 700,
+      targets: ring, scale: 16, alpha: 0, duration: 700,
       onComplete: () => {
         ring.destroy();
         const d = dist(this.sprite.x, this.sprite.y, this.player.sprite.x, this.player.sprite.y);
-        if (d < 160) {
+        if (d < BOSS_AOE_HIT_RADIUS) {
           const died = this.player.takeDamage(this.dmg, this.scene.time.now);
           if (died) this.scene.onPlayerDeath();
         }
@@ -122,10 +133,10 @@ export default class Boss {
   // 技能三：遠距攻擊 (發射多發彈幕)
   _startRanged(time) {
     this.phase = 'ranged';
-    const count = 8;
+    const count = 10;
     for (let i = 0; i < count; i++) {
       const ang = (i / count) * Math.PI * 2;
-      const bolt = this.scene.physics.add.image(this.sprite.x, this.sprite.y, 'proj_frost').setTint(0xff8888);
+      const bolt = this.scene.physics.add.image(this.sprite.x, this.sprite.y, 'proj_frost').setTint(0xff8888).setScale(1.4);
       bolt.body.setVelocity(Math.cos(ang) * 220, Math.sin(ang) * 220);
       bolt.setData('dmg', this.dmg * 0.5);
       bolt.setData('kind', 'bossBolt');
@@ -152,11 +163,15 @@ export default class Boss {
   _die() {
     this.alive = false;
     audioManager.bossDeath();
-    const fx = this.scene.add.image(this.sprite.x, this.sprite.y, 'fx_bossdeath').setDepth(20001);
-    this.scene.tweens.add({
-      targets: fx, scale: 2.4, alpha: 0, duration: 700,
-      onComplete: () => fx.destroy(),
-    });
+    this.scene.cameras.main.shake(500, 0.015);
+    // 巨大體型死亡時要有相對應的盛大爆炸效果
+    for (let i = 0; i < 3; i++) {
+      const fx = this.scene.add.image(this.sprite.x, this.sprite.y, 'fx_bossdeath').setDepth(20001).setScale(0.6);
+      this.scene.tweens.add({
+        targets: fx, scale: 5 + i * 1.5, alpha: 0, duration: 800 + i * 200, delay: i * 120,
+        onComplete: () => fx.destroy(),
+      });
+    }
     this.sprite.destroy();
     this.barBg.destroy();
     this.barFill.destroy();

@@ -1,4 +1,4 @@
-import { WEAPON_IDS, WEAPON_DATA } from '../weapons/WeaponData.js';
+import { WEAPON_IDS, WEAPON_DATA, WEAPON_EVOLUTIONS } from '../weapons/WeaponData.js';
 import { PASSIVE_IDS, PASSIVE_DATA, passiveLevelValue } from '../skills/PassiveData.js';
 import { textStyle } from '../utils/TextStyle.js';
 
@@ -26,9 +26,14 @@ export default class LevelUpScene extends Phaser.Scene {
     options.forEach((opt, i) => {
       const cx = startX + i * (cardW + gap);
       const card = this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH).setInteractive({ useHandCursor: true }).setScrollFactor(0);
-      this.add.image(cx, cy - 190, opt.icon).setScale((opt.iconScale || 1.6) * 2.2).setScrollFactor(0);
+      if (opt.type === 'evolveWeapon') {
+        // 進化選項用金色外框強調，讓玩家一眼認出這是特殊選項
+        card.setTint(0xfff3c4);
+      }
+      const icon = this.add.image(cx, cy - 190, opt.icon).setScale((opt.iconScale || 1.6) * 2.2).setScrollFactor(0);
+      if (opt.iconTint) icon.setTint(opt.iconTint);
       this.add.text(cx, cy - 70, opt.title, textStyle({
-        fontSize: '32px', color: '#fff', align: 'center',
+        fontSize: '32px', color: opt.type === 'evolveWeapon' ? '#ffe066' : '#fff', align: 'center',
         wordWrap: { width: cardW - 50, useAdvancedWrap: true },
       })).setOrigin(0.5).setScrollFactor(0);
       this.add.text(cx, cy + 100, opt.desc, textStyle({
@@ -36,8 +41,8 @@ export default class LevelUpScene extends Phaser.Scene {
         wordWrap: { width: cardW - 60, useAdvancedWrap: true },
       })).setOrigin(0.5).setScrollFactor(0);
 
-      card.on('pointerover', () => card.setTint(0xbfe9ff));
-      card.on('pointerout', () => card.clearTint());
+      card.on('pointerover', () => card.setTint(opt.type === 'evolveWeapon' ? 0xffffff : 0xbfe9ff));
+      card.on('pointerout', () => card.setTint(opt.type === 'evolveWeapon' ? 0xfff3c4 : 0xffffff));
       card.on('pointerdown', () => this._select(opt));
     });
   }
@@ -57,7 +62,7 @@ export default class LevelUpScene extends Phaser.Scene {
         });
       }
     }
-    // 武器升級選項
+    // 武器升級選項 / 滿五級後的進化選項
     for (const id of Object.keys(owned)) {
       if (owned[id] < 5) {
         pool.push({
@@ -65,6 +70,15 @@ export default class LevelUpScene extends Phaser.Scene {
           title: `${WEAPON_DATA[id].name} 升級 → Lv${owned[id] + 1}`,
           desc: WEAPON_DATA[id].desc,
           icon: `weapon_${id}_lv${owned[id]}`,
+        });
+      } else if (this.weaponSystem.canEvolve(id)) {
+        const evo = WEAPON_EVOLUTIONS[id];
+        pool.push({
+          type: 'evolveWeapon', id,
+          title: `⭐ 進化！${evo.name}`,
+          desc: evo.desc,
+          icon: `weapon_${id}_lv5`,
+          iconTint: 0xffe066,
         });
       }
     }
@@ -82,9 +96,12 @@ export default class LevelUpScene extends Phaser.Scene {
       }
     }
 
-    // 隨機挑選 3 個不重複選項；若不足則以回復生命補足
+    // 隨機挑選 3 個不重複選項；進化選項優先出現（比較稀有、值得凸顯）；若不足則以回復生命補足
+    const evolveOpts = pool.filter((o) => o.type === 'evolveWeapon');
+    const otherOpts = pool.filter((o) => o.type !== 'evolveWeapon').sort(() => Math.random() - 0.5);
+    const shuffled = [...evolveOpts, ...otherOpts];
+
     const picked = [];
-    const shuffled = pool.sort(() => Math.random() - 0.5);
     for (const opt of shuffled) {
       if (picked.length >= 3) break;
       picked.push(opt);
@@ -104,6 +121,8 @@ export default class LevelUpScene extends Phaser.Scene {
   _select(opt) {
     if (opt.type === 'newWeapon' || opt.type === 'upgradeWeapon') {
       this.weaponSystem.addOrUpgrade(opt.id);
+    } else if (opt.type === 'evolveWeapon') {
+      this.weaponSystem.evolveWeapon(opt.id);
     } else if (opt.type === 'passive') {
       const value = passiveLevelValue(opt.id, 1);
       this.gs.player.applyPassiveBonus(opt.id, value);
