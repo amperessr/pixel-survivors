@@ -42,9 +42,12 @@ export default class Player {
     this.charDef = char;
 
     this.sprite = scene.physics.add.sprite(x, y, char.texture);
+    // 角色材質已改成 64x64（原本 32x32 的兩倍解析度，讓選角畫面更清晰），
+    // 這裡縮小回 0.5 倍讓遊戲內實際顯示大小維持不變。
+    this.sprite.setScale(0.5);
     this.sprite.setCollideWorldBounds(false);
-    this.sprite.body.setCircle(11, 5, 8);
-    this.sprite.setDepth(5000);
+    this.sprite.body.setCircle(22, 10, 16);
+    this.sprite.setDepth(y);
 
     this.level = 1;
     this.exp = 0;
@@ -106,6 +109,7 @@ export default class Player {
     }
 
     this._updateHeadBar();
+    this.sprite.setDepth(this.sprite.y);
   }
 
   _updateHeadBar() {
@@ -114,7 +118,9 @@ export default class Player {
     const ratio = Math.max(0, this.hp / this.stats.maxHp);
     this.headBarFill.setPosition(bx - 20, by);
     this.headBarFill.setDisplaySize(40 * ratio, 5);
-    // 血量偏低時讓頭頂血條閃爍提醒
+    // 血條深度跟著玩家目前深度走，確保無論玩家在世界的哪個座標，血條永遠畫在玩家上方
+    this.headBarBg.setDepth(this.sprite.depth + 1);
+    this.headBarFill.setDepth(this.sprite.depth + 2);
     this.headBarBg.setVisible(true);
     this.headBarFill.setVisible(true);
   }

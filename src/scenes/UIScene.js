@@ -1,4 +1,5 @@
 import { WEAPON_DATA } from '../weapons/WeaponData.js';
+import { textStyle } from '../utils/TextStyle.js';
 
 export default class UIScene extends Phaser.Scene {
   constructor() { super('UIScene'); }
@@ -13,32 +14,32 @@ export default class UIScene extends Phaser.Scene {
     // ---- 左上：HP / 等級 / EXP ----
     this.add.image(280, 70, 'ui_bar_bg').setScrollFactor(0).setDisplaySize(500, 44).setOrigin(0.5);
     this.hpFill = this.add.image(30, 70, 'ui_bar_fill_hp').setScrollFactor(0).setOrigin(0, 0.5).setDisplaySize(492, 38);
-    this.hpText = this.add.text(280, 70, '', { fontSize: '26px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setScrollFactor(0);
+    this.hpText = this.add.text(280, 70, '', textStyle({ fontSize: '26px', color: '#fff' })).setOrigin(0.5).setScrollFactor(0);
 
-    this.lvText = this.add.text(30, 108, 'Lv.1', { fontSize: '38px', color: '#6fd3ff', fontStyle: 'bold' }).setScrollFactor(0);
+    this.lvText = this.add.text(30, 108, 'Lv.1', textStyle({ fontSize: '38px', color: '#6fd3ff' })).setScrollFactor(0);
     this.add.image(400, 158, 'ui_bar_bg').setScrollFactor(0).setDisplaySize(280, 22).setOrigin(0.5);
     this.xpFill = this.add.image(260, 158, 'ui_bar_fill_xp').setScrollFactor(0).setOrigin(0, 0.5).setDisplaySize(278, 19);
 
     // ---- 右上：時間 / 擊殺數 / FPS ----
-    this.timeText = this.add.text(w - 32, 26, '', { fontSize: '38px', color: '#fff', fontStyle: 'bold' }).setOrigin(1, 0).setScrollFactor(0);
-    this.killText = this.add.text(w - 32, 74, '', { fontSize: '28px', color: '#ffd93d' }).setOrigin(1, 0).setScrollFactor(0);
-    this.fpsText = this.add.text(w - 32, 112, '', { fontSize: '20px', color: '#999' }).setOrigin(1, 0).setScrollFactor(0);
+    this.timeText = this.add.text(w - 32, 26, '', textStyle({ fontSize: '38px', color: '#fff' })).setOrigin(1, 0).setScrollFactor(0);
+    this.killText = this.add.text(w - 32, 74, '', textStyle({ fontSize: '28px', color: '#ffd93d' })).setOrigin(1, 0).setScrollFactor(0);
+    this.fpsText = this.add.text(w - 32, 112, '', textStyle({ fontSize: '20px', color: '#999' })).setOrigin(1, 0).setScrollFactor(0);
 
     // ---- 右側：目前技能 ----
     this.weaponPanel = this.add.container(w - 220, 220).setScrollFactor(0);
-    this.add.text(w - 340, 180, '武器', { fontSize: '26px', color: '#bbb' }).setScrollFactor(0);
+    this.add.text(w - 340, 180, '武器', textStyle({ fontSize: '26px', color: '#bbb' })).setScrollFactor(0);
 
     // ---- 下方：角色能力值 ----
-    this.statsText = this.add.text(w / 2, h - 36, '', {
+    this.statsText = this.add.text(w / 2, h - 36, '', textStyle({
       fontSize: '26px', color: '#cfe9ff', align: 'center',
-    }).setOrigin(0.5, 1).setScrollFactor(0);
+    })).setOrigin(0.5, 1).setScrollFactor(0);
 
     // ---- 暫停覆蓋層 ----
     this.pauseOverlay = this.add.container(0, 0).setScrollFactor(0).setDepth(50000).setVisible(false);
     const dim = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.6);
-    const txt = this.add.text(w / 2, h / 2, '已暫停\n按 ESC 繼續', {
+    const txt = this.add.text(w / 2, h / 2, '已暫停\n按 ESC 繼續', textStyle({
       fontSize: '64px', color: '#fff', align: 'center',
-    }).setOrigin(0.5);
+    })).setOrigin(0.5);
     this.pauseOverlay.add([dim, txt]);
   }
 
@@ -82,9 +83,9 @@ export default class UIScene extends Phaser.Scene {
     keys.forEach((id, i) => {
       const y = i * 88;
       const icon = this.add.image(-60, y, `weapon_${id}_lv${owned[id]}`).setScale(2.6);
-      const label = this.add.text(-10, y, `${WEAPON_DATA[id].name} Lv${owned[id]}`, {
+      const label = this.add.text(-10, y, `${WEAPON_DATA[id].name} Lv${owned[id]}`, textStyle({
         fontSize: '24px', color: '#fff',
-      }).setOrigin(0, 0.5);
+      })).setOrigin(0, 0.5);
       this.weaponPanel.add([icon, label]);
     });
   }

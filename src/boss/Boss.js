@@ -1,5 +1,6 @@
 import { dist, angleTo } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
+import { textStyle } from '../utils/TextStyle.js';
 
 const BOSS_BASE_HP = 900;
 const BOSS_BASE_DMG = 22;
@@ -24,7 +25,7 @@ export default class Boss {
     this.sprite = scene.physics.add.sprite(x, y, 'boss_main');
     this.sprite.setScale(1.4);
     this.sprite.body.setCircle(24, 8, 8);
-    this.sprite.setDepth(20000);
+    this.sprite.setDepth(y);
 
     this.phase = 'chase'; // chase | charge | aoe | ranged
     this.phaseTimer = 0;
@@ -36,9 +37,9 @@ export default class Boss {
       .setScrollFactor(0).setDepth(30000).setDisplaySize(600, 36);
     this.barFill = scene.add.image(scene.scale.width / 2 - 290, 130, 'ui_bar_fill_boss')
       .setScrollFactor(0).setDepth(30001).setOrigin(0, 0.5).setDisplaySize(580, 32);
-    this.label = scene.add.text(scene.scale.width / 2, 88, 'Boss 降臨！', {
-      fontSize: '34px', color: '#ff6b6b', fontStyle: 'bold',
-    }).setScrollFactor(0).setDepth(30001).setOrigin(0.5);
+    this.label = scene.add.text(scene.scale.width / 2, 88, 'Boss 降臨！', textStyle({
+      fontSize: '34px', color: '#ff6b6b',
+    })).setScrollFactor(0).setDepth(30001).setOrigin(0.5);
 
     audioManager.bossRoar();
   }
@@ -67,6 +68,7 @@ export default class Boss {
     }
 
     this.sprite.setFlipX(px < bx);
+    this.sprite.setDepth(by);
     this.barFill.setDisplaySize((this.hp / this.maxHp) * 580, 32);
   }
 

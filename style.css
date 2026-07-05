@@ -4,7 +4,8 @@ html, body {
   width: 100%; height: 100%;
   background: #10131a;
   overflow: hidden;
-  font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+  font-family: "Microsoft JhengHei", "Microsoft YaHei", "PingFang TC", "PingFang SC", "Heiti TC", "Noto Sans TC", Arial, sans-serif;
+  font-weight: 700;
   color: #eee;
 }
 

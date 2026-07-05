@@ -15,6 +15,15 @@ export default class EnemySystem {
     this.lastSpawn = 0;
     this.grid = new Map(); // "gx,gy" -> [enemy, ...]，每幀重建一次
 
+    // 診斷用：若怪物材質不存在（例如素材產生階段出錯），直接在主控台報錯，
+    // 方便之後排查「怪物看不到」是不是材質根本沒生出來
+    const requiredTextures = ['enemy_slime', 'enemy_goblin', 'enemy_skeleton', 'enemy_orc'];
+    for (const key of requiredTextures) {
+      if (!scene.textures.exists(key)) {
+        console.error(`[EnemySystem] 材質 "${key}" 不存在！怪物將無法正常顯示，請檢查 TextureFactory 是否成功執行。`);
+      }
+    }
+
     this.pool = new ObjectPool(
       scene,
       () => {
@@ -44,7 +53,11 @@ export default class EnemySystem {
     // 防呆重置：確保從物件池取出的怪物一定是完全不透明、正常混合模式，
     // 避免任何殘留視覺狀態（例如特效或閃白動畫中途被打斷）造成看起來「隱形」
     sprite.setAlpha(1);
-    sprite.setBlendMode(Phaser.BlendModes.NORMAL);
+    try {
+      sprite.setBlendMode(Phaser.BlendModes.NORMAL);
+    } catch (err) {
+      console.warn('[EnemySystem] setBlendMode 失敗，略過：', err);
+    }
     const scaling = 1 + this.difficultyMinutes * 0.18;
     sprite.setData('typeId', typeId);
     sprite.setData('tier', tier);

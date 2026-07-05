@@ -13,6 +13,17 @@ export default class TextureFactory {
 
   _finish(tex) {
     tex.refresh();
+    // 重要：main.js 裡的 pixelArt:true 只會影響「載入的圖片」預設濾鏡，
+    // 對於這種用 Canvas 動態畫出來、跑時建立的材質，Phaser 不會自動套用最近鄰濾鏡，
+    // 預設會用 LINEAR（線性內插）造成放大時模糊。這裡強制設成 NEAREST，
+    // 讓所有素材（角色、怪物、UI、特效...）放大後都維持清晰銳利的像素風。
+    // 用 try/catch 包起來：就算這一步在某些瀏覽器/渲染模式下出狀況，
+    // 也絕對不能讓後面所有素材（包含怪物）整批生不出來。
+    try {
+      tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    } catch (err) {
+      console.warn('[TextureFactory] setFilter 失敗，改用預設濾鏡：', err);
+    }
   }
 
   // 圓角矩形工具
@@ -27,18 +38,31 @@ export default class TextureFactory {
   }
 
   generateAll() {
-    this.generatePlayers();
-    this.generateEnemies();
-    this.generateBoss();
-    this.generateWeaponIcons();
-    this.generateProjectiles();
-    this.generatePassiveIcons();
-    this.generateTiles();
-    this.generateEffects();
-    this.generateUI();
+    // 每個分類獨立 try/catch：就算某一類素材（例如角色）出了狀況，
+    // 也不能連帶讓後面的怪物、UI、特效等材質整批生不出來。
+    const steps = [
+      ['generatePlayers', () => this.generatePlayers()],
+      ['generateEnemies', () => this.generateEnemies()],
+      ['generateBoss', () => this.generateBoss()],
+      ['generateWeaponIcons', () => this.generateWeaponIcons()],
+      ['generateProjectiles', () => this.generateProjectiles()],
+      ['generatePassiveIcons', () => this.generatePassiveIcons()],
+      ['generateTiles', () => this.generateTiles()],
+      ['generateEffects', () => this.generateEffects()],
+      ['generateUI', () => this.generateUI()],
+    ];
+    for (const [name, fn] of steps) {
+      try {
+        fn();
+      } catch (err) {
+        console.error(`[TextureFactory] ${name} 產生素材時發生錯誤，已跳過並繼續下一批：`, err);
+      }
+    }
   }
 
   // ---------- 玩家四種角色 (Q版圓潤造型，用色區分職業) ----------
+  // 注意：這裡用 64x64（原本 32x32 的兩倍）繪製，讓選角畫面放大顯示時
+  // 有更多細節可看，而不是把一張很小的圖直接暴力放大變得死板。
   generatePlayers() {
     const palette = {
       attacker: { body: '#ff6b5b', trim: '#c73f30', eye: '#2b2b2b' },
@@ -47,31 +71,31 @@ export default class TextureFactory {
       balanced: { body: '#5bff8f', trim: '#2ac25b', eye: '#2b2b2b' },
     };
     for (const [id, c] of Object.entries(palette)) {
-      const { tex, ctx } = this._canvas(`player_${id}`, 32, 32);
+      const { tex, ctx } = this._canvas(`player_${id}`, 64, 64);
       // 陰影
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.beginPath();
-      ctx.ellipse(16, 27, 9, 3.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(32, 54, 18, 7, 0, 0, Math.PI * 2);
       ctx.fill();
       // 身體 (圓潤Q版)
       ctx.fillStyle = c.body;
-      TextureFactory.roundRect(ctx, 7, 8, 18, 18, 8);
+      TextureFactory.roundRect(ctx, 14, 16, 36, 36, 16);
       ctx.fill();
       ctx.strokeStyle = c.trim;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 4;
       ctx.stroke();
       // 頭頂高光
       ctx.fillStyle = 'rgba(255,255,255,0.35)';
-      TextureFactory.roundRect(ctx, 9, 10, 8, 5, 3);
+      TextureFactory.roundRect(ctx, 18, 20, 16, 10, 6);
       ctx.fill();
       // 眼睛
       ctx.fillStyle = c.eye;
-      ctx.beginPath(); ctx.arc(13, 17, 1.6, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(19, 17, 1.6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(26, 34, 3.2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(38, 34, 3.2, 0, Math.PI * 2); ctx.fill();
       // 披風/裝飾 (區分職業)
       ctx.fillStyle = c.trim;
-      ctx.fillRect(6, 12, 3, 10);
-      ctx.fillRect(23, 12, 3, 10);
+      ctx.fillRect(12, 24, 6, 20);
+      ctx.fillRect(46, 24, 6, 20);
       this._finish(tex);
     }
   }

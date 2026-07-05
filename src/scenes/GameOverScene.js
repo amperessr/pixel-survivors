@@ -1,5 +1,6 @@
 import { getPlayerName, setBestScore, getBestScore } from '../managers/SaveManager.js';
 import { submitScore, subscribeLeaderboard } from '../firebase/firebase.js';
+import { textStyle } from '../utils/TextStyle.js';
 
 export default class GameOverScene extends Phaser.Scene {
   constructor() { super('GameOverScene'); }
@@ -15,7 +16,7 @@ export default class GameOverScene extends Phaser.Scene {
   create() {
     const w = this.scale.width, h = this.scale.height;
     this.add.rectangle(w / 2, h / 2, w, h, 0x10131a);
-    this.add.text(w / 2, h * 0.12, '遊戲結束', { fontSize: '72px', color: '#ff6b6b', fontStyle: 'bold' }).setOrigin(0.5);
+    this.add.text(w / 2, h * 0.12, '遊戲結束', textStyle({ fontSize: '72px', color: '#ff6b6b' })).setOrigin(0.5);
 
     const score = this.kills * 10 + this.level * 50 + Math.floor(this.playTime * 0.5);
     setBestScore(score);
@@ -29,9 +30,9 @@ export default class GameOverScene extends Phaser.Scene {
       `擊殺數：${this.kills}`,
       `存活時間：${mm}:${ss}`,
       `歷史最佳：${getBestScore()}`,
-    ].join('\n'), {
+    ].join('\n'), textStyle({
       fontSize: '34px', color: '#fff', align: 'center', lineSpacing: 14,
-    }).setOrigin(0.5);
+    })).setOrigin(0.5);
 
     const name = getPlayerName() || '冒險者';
     submitScore({
@@ -39,10 +40,10 @@ export default class GameOverScene extends Phaser.Scene {
       date: new Date().toISOString(),
     });
 
-    this.add.text(w / 2, h * 0.58, '🏆 即時排行榜 TOP10', { fontSize: '34px', color: '#ffd93d' }).setOrigin(0.5);
-    this.lbText = this.add.text(w / 2, h * 0.58 + 48, '讀取中...', {
+    this.add.text(w / 2, h * 0.58, '🏆 即時排行榜 TOP10', textStyle({ fontSize: '34px', color: '#ffd93d' })).setOrigin(0.5);
+    this.lbText = this.add.text(w / 2, h * 0.58 + 48, '讀取中...', textStyle({
       fontSize: '26px', color: '#cfe9ff', align: 'center', lineSpacing: 8,
-    }).setOrigin(0.5, 0);
+    })).setOrigin(0.5, 0);
 
     this._unsubLeaderboard = subscribeLeaderboard((rows) => {
       if (!this.lbText || !this.lbText.active) return;
@@ -54,7 +55,7 @@ export default class GameOverScene extends Phaser.Scene {
     });
 
     const btn = this.add.image(w / 2, h - 110, 'ui_bar_bg').setDisplaySize(360, 76).setInteractive({ useHandCursor: true });
-    this.add.text(w / 2, h - 110, '重新開始', { fontSize: '32px', color: '#10131a', fontStyle: 'bold' }).setOrigin(0.5);
+    this.add.text(w / 2, h - 110, '重新開始', textStyle({ fontSize: '32px', color: '#10131a' })).setOrigin(0.5);
     btn.on('pointerover', () => btn.setTint(0x6fd3ff));
     btn.on('pointerout', () => btn.clearTint());
     btn.on('pointerdown', () => this.scene.start('CharacterSelectScene'));

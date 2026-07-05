@@ -1,5 +1,6 @@
 import { WEAPON_IDS, WEAPON_DATA } from '../weapons/WeaponData.js';
 import { PASSIVE_IDS, PASSIVE_DATA, passiveLevelValue } from '../skills/PassiveData.js';
+import { textStyle } from '../utils/TextStyle.js';
 
 export default class LevelUpScene extends Phaser.Scene {
   constructor() { super('LevelUpScene'); }
@@ -12,9 +13,9 @@ export default class LevelUpScene extends Phaser.Scene {
   create() {
     const w = this.scale.width, h = this.scale.height;
     this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.78).setScrollFactor(0);
-    this.add.text(w / 2, h * 0.12, '升 級！選擇一項強化', {
-      fontSize: '64px', color: '#6fd3ff', fontStyle: 'bold',
-    }).setOrigin(0.5).setScrollFactor(0);
+    this.add.text(w / 2, h * 0.12, '升 級！選擇一項強化', textStyle({
+      fontSize: '64px', color: '#6fd3ff',
+    })).setOrigin(0.5).setScrollFactor(0);
 
     const options = this._buildOptions();
     const cardW = 460, cardH = 620, gap = 50;
@@ -26,14 +27,14 @@ export default class LevelUpScene extends Phaser.Scene {
       const cx = startX + i * (cardW + gap);
       const card = this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH).setInteractive({ useHandCursor: true }).setScrollFactor(0);
       this.add.image(cx, cy - 190, opt.icon).setScale((opt.iconScale || 1.6) * 2.2).setScrollFactor(0);
-      this.add.text(cx, cy - 70, opt.title, {
-        fontSize: '32px', color: '#fff', fontStyle: 'bold', align: 'center',
+      this.add.text(cx, cy - 70, opt.title, textStyle({
+        fontSize: '32px', color: '#fff', align: 'center',
         wordWrap: { width: cardW - 50, useAdvancedWrap: true },
-      }).setOrigin(0.5).setScrollFactor(0);
-      this.add.text(cx, cy + 100, opt.desc, {
+      })).setOrigin(0.5).setScrollFactor(0);
+      this.add.text(cx, cy + 100, opt.desc, textStyle({
         fontSize: '24px', color: '#9fd3ff', align: 'center', lineSpacing: 8,
         wordWrap: { width: cardW - 60, useAdvancedWrap: true },
-      }).setOrigin(0.5).setScrollFactor(0);
+      })).setOrigin(0.5).setScrollFactor(0);
 
       card.on('pointerover', () => card.setTint(0xbfe9ff));
       card.on('pointerout', () => card.clearTint());
