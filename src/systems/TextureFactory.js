@@ -407,6 +407,7 @@ export default class TextureFactory {
       critDmg: '#ff9d3d',
       atkSpeed: '#5bd4ff',
       moveSpeed: '#5bff8f',
+      defense: '#8fa3b8', // 防禦目前不是被動技能項目，但底部狀態列要用同一套圖示風格顯示防禦力
     };
     for (const [id, color] of Object.entries(passives)) {
       const { tex, ctx } = this._canvas(`icon_${id}`, 22, 22);

@@ -5,6 +5,10 @@ import { audioManager } from '../managers/AudioManager.js';
 const MAX_PACKS = 3; // 同時間地圖上最多存在的血包數量
 const MIN_INTERVAL = 16000; // 最短生成間隔（毫秒）
 const MAX_INTERVAL = 26000; // 最長生成間隔（毫秒）
+// 血包離玩家太遠（例如玩家往反方向跑走了）就直接回收，重新等下一次計時生成在
+// 玩家「現在」附近的位置——不然畫面邊緣的箭頭會一直指向一個越來越遠、
+// 玩家可能要走超久才追得到的舊血包，體感就是「走了很久都沒找到」。
+const MAX_KEEP_DIST = 1400;
 
 // 血包系統：偶爾在地圖上生成愛心圖案的補血道具，走過去即可回復生命值
 export default class HealthPackSystem {
@@ -25,8 +29,14 @@ export default class HealthPackSystem {
   }
 
   update(time) {
-    // 讓血包原地緩慢浮動、發光，比較好被玩家注意到
+    const px = this.player.sprite.x, py = this.player.sprite.y;
+
+    // 讓血包原地緩慢浮動、發光，比較好被玩家注意到；同時檢查是否離玩家太遠該回收了
     this.pool.forEachActive((img) => {
+      if (dist(img.x, img.y, px, py) > MAX_KEEP_DIST) {
+        this.pool.free(img);
+        return;
+      }
       const bob = Math.sin(time / 250 + img.x) * 3;
       img.y = img.getData('baseY') + bob;
     });
@@ -36,7 +46,6 @@ export default class HealthPackSystem {
       this.nextSpawnAt = time + randRange(MIN_INTERVAL, MAX_INTERVAL);
     }
 
-    const px = this.player.sprite.x, py = this.player.sprite.y;
     this.pool.forEachActive((img) => {
       if (dist(img.x, img.y, px, py) < 22) {
         this._pickup(img);

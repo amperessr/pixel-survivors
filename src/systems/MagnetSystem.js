@@ -6,6 +6,9 @@ const MAX_MAGNETS = 1; // 同時間地圖上最多存在的磁鐵數量（比血
 const MIN_INTERVAL = 35000; // 最短生成間隔（毫秒），刻意比血包更久，維持「偶爾掉落」的稀有感
 const MAX_INTERVAL = 55000; // 最長生成間隔（毫秒）
 const MAGNET_EFFECT_MS = 1600; // 拾取後，全地圖經驗值飛向玩家的持續時間
+// 磁鐵離玩家太遠就直接回收，理由跟 HealthPackSystem 一樣：避免畫面邊緣的箭頭
+// 一直指向一個玩家要走超久才追得到的舊磁鐵
+const MAX_KEEP_DIST = 1400;
 
 // 磁鐵系統：偶爾在地圖上生成磁鐵道具，走過去即可把地圖上「目前所有」經驗值瞬間吸過來
 export default class MagnetSystem {
@@ -26,8 +29,15 @@ export default class MagnetSystem {
   }
 
   update(time) {
-    // 讓磁鐵原地緩慢浮動、發光，比較好被玩家注意到（跟血包一致的視覺語言）
+    const px = this.player.sprite.x, py = this.player.sprite.y;
+
+    // 讓磁鐵原地緩慢浮動、發光，比較好被玩家注意到（跟血包一致的視覺語言）；
+    // 同時檢查是否離玩家太遠該回收了
     this.pool.forEachActive((img) => {
+      if (dist(img.x, img.y, px, py) > MAX_KEEP_DIST) {
+        this.pool.free(img);
+        return;
+      }
       const bob = Math.sin(time / 250 + img.x) * 3;
       img.y = img.getData('baseY') + bob;
       img.rotation = Math.sin(time / 400 + img.x) * 0.15;
@@ -38,7 +48,6 @@ export default class MagnetSystem {
       this.nextSpawnAt = time + randRange(MIN_INTERVAL, MAX_INTERVAL);
     }
 
-    const px = this.player.sprite.x, py = this.player.sprite.y;
     this.pool.forEachActive((img) => {
       if (dist(img.x, img.y, px, py) < 22) {
         this._pickup(img);
