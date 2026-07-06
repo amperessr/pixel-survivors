@@ -101,9 +101,10 @@ export default class Player {
   }
 
   // 龍之翼：擊敗紅龍後可選擇的永久強化——移動速度永久 x2
+  // 龍之翼：擊敗紅龍後可選擇的永久強化——移動速度永久 x1.5
   applyDragonWings() {
     this.hasDragonWings = true;
-    this.stats.moveSpeed = Math.round(this.stats.moveSpeed * 2);
+    this.stats.moveSpeed = Math.round(this.stats.moveSpeed * 1.5);
   }
 
   update(time, delta) {
