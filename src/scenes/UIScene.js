@@ -3,6 +3,17 @@ import { EQUIP_SLOTS, EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
 import { getEquipped } from '../managers/SaveManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 
+// 底部數值狀態列的六個項目：圖示 + 中文標籤 + 數值，參考英雄聯盟角色面板
+// 「圖示搭配文字」的呈現方式，取代原本一整串英文縮寫（ATK/DEF/SPD...）的純文字。
+const STAT_DEFS = [
+  { key: 'attack', icon: 'icon_attack', label: '攻擊', color: '#ff5b5b', get: (p) => `${Math.round(p.stats.attack)}` },
+  { key: 'defense', icon: 'icon_defense', label: '防禦', color: '#8fa3b8', get: (p) => `${Math.round(p.stats.defense)}` },
+  { key: 'moveSpeed', icon: 'icon_moveSpeed', label: '移速', color: '#5bff8f', get: (p) => `${Math.round(p.stats.moveSpeed)}` },
+  { key: 'atkSpeed', icon: 'icon_atkSpeed', label: '攻速', color: '#5bd4ff', get: (p) => `+${p.stats.atkSpeed.toFixed(0)}%` },
+  { key: 'critRate', icon: 'icon_critRate', label: '爆擊率', color: '#ffd93d', get: (p) => `${p.stats.critRate.toFixed(0)}%` },
+  { key: 'critDmg', icon: 'icon_critDmg', label: '爆傷', color: '#ff9d3d', get: (p) => `${p.stats.critDmg.toFixed(0)}%` },
+];
+
 export default class UIScene extends Phaser.Scene {
   constructor() { super('UIScene'); }
 
@@ -69,10 +80,23 @@ export default class UIScene extends Phaser.Scene {
       }
     });
 
-    // 數值狀態文字（畫面正中央）
-    this.statsText = this.add.text(w / 2 + 130, bottomBarY, '', textStyle({
-      fontSize: '26px', color: '#cfe9ff', align: 'center', lineSpacing: 6,
-    })).setOrigin(0.5).setScrollFactor(0);
+    // 數值狀態：一排「圖示 + 中文標籤 + 數值」的狀態格，參考英雄聯盟角色面板的呈現方式，
+    // 取代原本 ATK/DEF/SPD 那種英文縮寫的純文字。從裝備區右邊一路排到面板右側。
+    const statAreaStartX = 260;
+    const statAreaEndX = w - 100;
+    const chipGap = (statAreaEndX - statAreaStartX) / (STAT_DEFS.length - 1);
+    this.statChips = {};
+    STAT_DEFS.forEach((def, i) => {
+      const cx = statAreaStartX + i * chipGap;
+      this.add.image(cx - 40, bottomBarY, def.icon).setScale(1.4).setScrollFactor(0);
+      this.add.text(cx - 20, bottomBarY - 14, def.label, textStyle({
+        fontSize: '17px', color: def.color,
+      })).setOrigin(0, 0.5).setScrollFactor(0);
+      const valueText = this.add.text(cx - 20, bottomBarY + 13, '', textStyle({
+        fontSize: '24px', color: '#ffffff',
+      })).setOrigin(0, 0.5).setScrollFactor(0);
+      this.statChips[def.key] = valueText;
+    });
 
     // ---- 畫面邊緣指示箭頭：血包（紅）／磁鐵（藍紫）不在畫面內時，指出方向 ----
     this.healthArrow = this.add.image(0, 0, 'ui_arrow').setTint(0xff5a5a).setScale(1.1)
@@ -111,10 +135,9 @@ export default class UIScene extends Phaser.Scene {
     this.killText.setText(`💀 擊殺 ${this.gs.killCount}`);
     this.fpsText.setText(`FPS ${Math.round(this.game.loop.actualFps)}`);
 
-    this.statsText.setText(
-      `ATK ${p.stats.attack}  DEF ${p.stats.defense}  SPD ${p.stats.moveSpeed}  ` +
-      `AtkSpd +${p.stats.atkSpeed.toFixed(0)}%  Crit ${p.stats.critRate.toFixed(0)}%  CritDmg ${p.stats.critDmg.toFixed(0)}%`
-    );
+    STAT_DEFS.forEach((def) => {
+      this.statChips[def.key].setText(def.get(p));
+    });
 
     this._refreshWeaponPanel();
     this._updatePickupArrows();
