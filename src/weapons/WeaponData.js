@@ -99,7 +99,7 @@ export const WEAPON_KNOCKBACK = {
 export const WEAPON_EVOLUTIONS = {
   fireball: {
     name: '隕石燄爆',
-    desc: '火球術的最終進化。體積與爆炸範圍大幅提升，威力驚人的隕石級火焰。',
+    desc: '火球術的最終進化。不再沿地面飛行，改為鎖定敵人後從天而降砸下巨大隕石，範圍與威力大幅提升。',
     dmgMult: 1.9, extraMult: 1.6,
   },
   lightning: {

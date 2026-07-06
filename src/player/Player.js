@@ -91,6 +91,21 @@ export default class Player {
     }
   }
 
+  // 龍之光環：擊敗 Boss 後玩家可選擇接受的永久強化——生命上限與攻擊力雙雙 x2，
+  // 並直接回滿血，讓玩家馬上感受到「繼承巨龍力量」的爆發感。
+  applyDragonAura() {
+    this.hasDragonAura = true;
+    this.stats.maxHp = Math.round(this.stats.maxHp * 2);
+    this.stats.attack = Math.round(this.stats.attack * 2);
+    this.hp = this.stats.maxHp;
+  }
+
+  // 龍之翼：擊敗紅龍後可選擇的永久強化——移動速度永久 x2
+  applyDragonWings() {
+    this.hasDragonWings = true;
+    this.stats.moveSpeed = Math.round(this.stats.moveSpeed * 2);
+  }
+
   update(time, delta) {
     if (this.hp <= 0) return;
     const speed = this.stats.moveSpeed * (this.isDashing ? 2.6 : 1);

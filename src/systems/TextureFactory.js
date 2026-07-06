@@ -655,6 +655,49 @@ export default class TextureFactory {
     ctx.fillRect(13, 15, 4, 9);
     ctx.fillRect(10.5, 17.5, 9, 4);
     this._finish(tex);
+
+    this._genMagnetPickup();
+  }
+
+  // ---------- 拾取物：磁鐵（吸引地圖上所有經驗值） ----------
+  _genMagnetPickup() {
+    const { tex, ctx } = this._canvas('pickup_magnet', 30, 30);
+    // 外層光暈（電光藍紫色，跟血包的紅色區隔開）
+    const glow = ctx.createRadialGradient(15, 15, 2, 15, 15, 15);
+    glow.addColorStop(0, 'rgba(120,140,255,0.55)');
+    glow.addColorStop(1, 'rgba(120,140,255,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, 30, 30);
+    // 馬蹄形磁鐵造型：紅藍雙色兩腳 + 銀灰色橋身
+    ctx.save();
+    ctx.translate(15, 16);
+    // 銀灰橋身（磁鐵頂部弧形本體）
+    ctx.fillStyle = '#c7ccd6';
+    ctx.beginPath();
+    ctx.arc(0, -1, 8, Math.PI, 0, false);
+    ctx.lineTo(8, 9);
+    ctx.lineTo(4.5, 9);
+    ctx.lineTo(4.5, -1);
+    ctx.arc(0, -1, 4.5, 0, Math.PI, true);
+    ctx.lineTo(-4.5, 9);
+    ctx.lineTo(-8, 9);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#6b7080';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    // 左腳（紅色磁極）
+    ctx.fillStyle = '#ff4d4d';
+    ctx.fillRect(-8, 9, 3.5, 6);
+    // 右腳（藍色磁極）
+    ctx.fillStyle = '#4d7cff';
+    ctx.fillRect(4.5, 9, 3.5, 6);
+    // 磁極端頭高光
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillRect(-8, 9, 3.5, 1.4);
+    ctx.fillRect(4.5, 9, 3.5, 1.4);
+    ctx.restore();
+    this._finish(tex);
   }
 
   // ---------- UI 元件 (血條框、經驗條框、按鈕背景) ----------

@@ -133,21 +133,34 @@ export default class WeaponSystem {
     // Attack 越高，體積(scale)與 aoe 越大
     const scaleBonus = (1 + stats.attack * 0.01) * (data.evolved ? 1.3 : 1);
     const px = this.player.sprite.x, py = this.player.sprite.y;
+    const dmg = data.dmg * (1 + stats.attack * 0.02);
+    const aoe = data.aoe * scaleBonus;
+
+    if (data.evolved) {
+      // 進化「隕石燄爆」：不再沿地面飛行，改成直接鎖定目標敵人所在位置，
+      // 從天而降砸下一顆隕石（見 GameScene.spawnMeteorStrike()）
+      const kb = WEAPON_KNOCKBACK.fireball;
+      this.scene.spawnMeteorStrike(enemy.x, enemy.y, dmg, aoe, stats.critRate, stats.critDmg, {
+        force: kb.force, duration: kb.duration,
+      });
+      return;
+    }
+
     const ang = angleTo(px, py, enemy.x, enemy.y);
     const proj = this.projectilePool.spawn();
     proj.setTexture('proj_fireball');
     proj.setPosition(px, py);
     proj.setScale(scaleBonus);
-    if (data.evolved) proj.setTint(0xffe066); else proj.clearTint();
-    proj.setData('dmg', data.dmg * (1 + stats.attack * 0.02));
-    proj.setData('aoe', data.aoe * scaleBonus);
+    proj.clearTint();
+    proj.setData('dmg', dmg);
+    proj.setData('aoe', aoe);
     proj.setData('pierce', data.pierce);
     proj.setData('exploded', false);
     proj.setData('kind', 'fireball');
-    proj.setData('evolved', !!data.evolved);
+    proj.setData('evolved', false);
     proj.setData('expireAt', this.scene.time.now + 2500);
     proj.body.setVelocity(Math.cos(ang) * data.speed, Math.sin(ang) * data.speed);
-    this.scene.spawnCastFx(px, py, 'fireball', ang, 0, data.evolved);
+    this.scene.spawnCastFx(px, py, 'fireball', ang, 0, false);
   }
 
   _fireLightning(data, stats, enemy) {
@@ -205,16 +218,23 @@ export default class WeaponSystem {
     const knockback = { force: kb.force, duration: kb.duration };
 
     if (data.evolved) {
-      // 進化：6 根冰柱同時以自身為中心向外環繞噴發
-      const count = 6;
-      const pillarDist = totalRadius * 0.65;
-      for (let i = 0; i < count; i++) {
-        const ang = (i / count) * Math.PI * 2;
-        const x = px + Math.cos(ang) * pillarDist;
-        const y = py + Math.sin(ang) * pillarDist;
-        this.scene.time.delayedCall(i * 35, () => {
-          this.scene.spawnIcePillar(x, y, data.dmg, data.slow, data.slowDuration, stats.critRate, stats.critDmg, knockback, true);
-        });
+      // 進化：改成跟一般版一樣「由內到外」一根接一根冒出來的節奏，
+      // 只是同時往六個方向（六邊形）噴發，而不是只有一個方向——
+      // 每個方向各自從近到遠分 4 階段，同一階段的 6 個方向會同時冒出來，
+      // 但不同階段之間仍保留 120ms 的間隔，維持「由內到外」的視覺節奏。
+      const directions = 6;
+      const steps = 4;
+      const stepDist = totalRadius / steps;
+      for (let s = 1; s <= steps; s++) {
+        const pillarDist = stepDist * s;
+        for (let d = 0; d < directions; d++) {
+          const ang = (d / directions) * Math.PI * 2;
+          const x = px + Math.cos(ang) * pillarDist;
+          const y = py + Math.sin(ang) * pillarDist;
+          this.scene.time.delayedCall((s - 1) * 120, () => {
+            this.scene.spawnIcePillar(x, y, data.dmg, data.slow, data.slowDuration, stats.critRate, stats.critDmg, knockback, true);
+          });
+        }
       }
     } else {
       // 一般：從自己所在位置，往最近敵人的方向，一根接一根冒出冰柱

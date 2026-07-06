@@ -3,7 +3,7 @@ import CharacterSelectScene from './src/scenes/CharacterSelectScene.js';
 import GameScene from './src/scenes/GameScene.js';
 import UIScene from './src/scenes/UIScene.js';
 import LevelUpScene from './src/scenes/LevelUpScene.js';
-import DragonAuraScene from './src/scenes/DragonAuraScene.js';
+import RelicChoiceScene from './src/scenes/RelicChoiceScene.js';
 import GameOverScene from './src/scenes/GameOverScene.js';
 
 const config = {
@@ -17,7 +17,7 @@ const config = {
     default: 'arcade',
     arcade: { gravity: { x: 0, y: 0 }, debug: false },
   },
-  scene: [BootScene, CharacterSelectScene, GameScene, UIScene, LevelUpScene, DragonAuraScene, GameOverScene],
+  scene: [BootScene, CharacterSelectScene, GameScene, UIScene, LevelUpScene, RelicChoiceScene, GameOverScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

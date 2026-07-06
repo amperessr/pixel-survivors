@@ -1,5 +1,5 @@
 import ObjectPool from '../managers/ObjectPool.js';
-import { ENEMY_TYPES, ENEMY_IDS, ENEMY_TIERS, rollEnemyTier } from './EnemyData.js';
+import { ENEMY_TYPES, ENEMY_IDS, ENEMY_TIERS, rollEnemyTier, enemyScalingMultiplier } from './EnemyData.js';
 import { dist, choice, randRange } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 
@@ -41,6 +41,13 @@ export default class EnemySystem {
       (g, x, y, amount) => this._resetGem(g, x, y, amount),
       80
     );
+
+    this.magnetUntil = 0; // 磁鐵效果持續到的時間戳，期間內所有經驗寶石都會被強制吸過來
+  }
+
+  // 磁鐵拾取物觸發：讓地圖上「目前所有」經驗寶石在接下來這段時間內飛向玩家並被吸收
+  activateMagnet(duration = 1600) {
+    this.magnetUntil = this.scene.time.now + duration;
   }
 
   _resetEnemy(sprite, typeId, x, y, tier = 'normal') {
@@ -58,13 +65,16 @@ export default class EnemySystem {
     } catch (err) {
       console.warn('[EnemySystem] setBlendMode 失敗，略過：', err);
     }
-    const scaling = 1 + this.difficultyMinutes * 0.18;
+    // 怪物強化倍率統一改用 EnemyData.js 的 enemyScalingMultiplier() 曲線
+    // （0 分鐘 1.0x／3 分鐘 1.3x／5 分鐘 1.8x／7 分鐘 2.6x／10 分鐘 5.0x，
+    //  之後依同樣的成長率持續往上疊加），HP 與傷害套用同一條曲線。
+    const scaling = enemyScalingMultiplier(this.difficultyMinutes);
     sprite.setData('typeId', typeId);
     sprite.setData('tier', tier);
     sprite.setData('tierTint', tierDef.tint);
     sprite.setData('hp', def.hp * scaling * tierDef.mult);
     sprite.setData('maxHp', def.hp * scaling * tierDef.mult);
-    sprite.setData('dmg', def.dmg * (1 + this.difficultyMinutes * 0.1) * tierDef.mult);
+    sprite.setData('dmg', def.dmg * scaling * tierDef.mult);
     sprite.setData('speed', def.speed);
     sprite.setData('exp', Math.round(def.exp * tierDef.expMult));
     sprite.setData('slowUntil', 0);
@@ -171,8 +181,15 @@ export default class EnemySystem {
       }
     });
 
+    const magnetActive = time < this.magnetUntil;
     this.expGemPool.forEachActive((g) => {
-      if (dist(g.x, g.y, px, py) < 60) {
+      const d = dist(g.x, g.y, px, py);
+      if (magnetActive) {
+        // 磁鐵效果期間：不論距離多遠，全部寶石都朝玩家飛（距離越遠飛得越快，才追得上）
+        const ang = Math.atan2(py - g.y, px - g.x);
+        const speed = Math.min(1400, 380 + d * 2.2);
+        g.body.setVelocity(Math.cos(ang) * speed, Math.sin(ang) * speed);
+      } else if (d < 60) {
         const ang = Math.atan2(py - g.y, px - g.x);
         g.body.setVelocity(Math.cos(ang) * 380, Math.sin(ang) * 380);
       }

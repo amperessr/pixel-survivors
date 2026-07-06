@@ -1,5 +1,5 @@
 import { WEAPON_IDS, WEAPON_DATA, WEAPON_EVOLUTIONS } from '../weapons/WeaponData.js';
-import { PASSIVE_IDS, PASSIVE_DATA, passiveLevelValue } from '../skills/PassiveData.js';
+import { PASSIVE_IDS, PASSIVE_DATA, MAX_PASSIVE_LEVEL, passiveLevelValue } from '../skills/PassiveData.js';
 import { textStyle } from '../utils/TextStyle.js';
 
 export default class LevelUpScene extends Phaser.Scene {
@@ -85,7 +85,7 @@ export default class LevelUpScene extends Phaser.Scene {
     // 被動能力選項
     for (const id of PASSIVE_IDS) {
       const lvl = this.gs.player.passiveLevels[id] || 0;
-      if (lvl < 5) {
+      if (lvl < MAX_PASSIVE_LEVEL) {
         pool.push({
           type: 'passive', id,
           title: `${PASSIVE_DATA[id].name} Lv${lvl + 1}`,
@@ -96,7 +96,10 @@ export default class LevelUpScene extends Phaser.Scene {
       }
     }
 
-    // 隨機挑選 3 個不重複選項；進化選項優先出現（比較稀有、值得凸顯）；若不足則以回復生命補足
+    // 隨機挑選 3 個不重複選項；進化選項優先出現（比較稀有、值得凸顯）；
+    // 若所有武器都已進化封頂、所有被動也都滿 10 級，選項會不足 3 個——
+    // 這種「全部技能都點滿」的情況下，剩餘選項一律補上血包（立即回復生命），
+    // 讓玩家不會卡在空白選項，也符合「全滿之後升級變成血包」的設計。
     const evolveOpts = pool.filter((o) => o.type === 'evolveWeapon');
     const otherOpts = pool.filter((o) => o.type !== 'evolveWeapon').sort(() => Math.random() - 0.5);
     const shuffled = [...evolveOpts, ...otherOpts];
@@ -109,10 +112,10 @@ export default class LevelUpScene extends Phaser.Scene {
     while (picked.length < 3) {
       picked.push({
         type: 'heal', id: 'heal',
-        title: '生命藥水',
-        desc: '立即回復 40% 最大生命值',
-        icon: 'icon_moveSpeed',
-        iconScale: 3,
+        title: '血包',
+        desc: '所有技能已滿級！立即回復 40% 最大生命值',
+        icon: 'pickup_heart',
+        iconScale: 2.2,
       });
     }
     return picked;
@@ -128,7 +131,9 @@ export default class LevelUpScene extends Phaser.Scene {
       this.gs.player.applyPassiveBonus(opt.id, value);
     } else if (opt.type === 'heal') {
       const p = this.gs.player;
-      p.hp = Math.min(p.stats.maxHp, p.hp + p.stats.maxHp * 0.4);
+      const healAmount = Math.round(p.stats.maxHp * 0.4);
+      p.hp = Math.min(p.stats.maxHp, p.hp + healAmount);
+      this.gs.spawnHealFx(p.sprite.x, p.sprite.y, healAmount);
     }
     this.gs.resumeFromLevelUp();
     this.scene.stop();

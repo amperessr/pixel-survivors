@@ -105,16 +105,17 @@ https://game-text-cd3c2-default-rtdb.asia-southeast1.firebasedatabase.app/
 │   ├── fonts/
 │   └── shaders/
 ├── src/
-│   ├── scenes/              # BootScene / CharacterSelectScene / GameScene / UIScene / LevelUpScene / GameOverScene
+│   ├── scenes/              # BootScene / CharacterSelectScene / GameScene / UIScene / LevelUpScene / RelicChoiceScene / GameOverScene
 │   ├── player/               # Player.js：角色數值、四職業設定、移動與衝刺
 │   ├── enemy/                 # EnemyData.js / EnemySystem.js：怪物 AI 與物件池
-│   ├── boss/                  # Boss.js：三種技能與血條
-│   ├── weapons/               # WeaponData.js / WeaponSystem.js：五武器五階與聯動
-│   ├── skills/                # PassiveData.js：五被動五階
+│   ├── boss/                  # Boss.js：黑藍巨龍／血色紅龍兩種型態，三種技能與血條
+│   ├── weapons/               # WeaponData.js / WeaponSystem.js：五武器五階＋進化與聯動
+│   ├── skills/                # PassiveData.js：五被動十階
+│   ├── relics/                # RelicData.js：擊敗 Boss 後可拿取的永久遺物（龍之光環／龍之翼）
 │   ├── ui/                    # （保留擴充：可拆分更細的 UI 元件）
 │   ├── firebase/              # firebase.js：Realtime Database 排行榜
 │   ├── managers/               # ObjectPool.js / AudioManager.js / SaveManager.js
-│   ├── systems/                # TextureFactory.js（Canvas 程式生成美術）/ MapGenerator.js（無限地圖）
+│   ├── systems/                # TextureFactory.js（Canvas 程式生成美術）/ MapGenerator.js（無限地圖）/ HealthPackSystem.js / MagnetSystem.js
 │   └── utils/                  # MathUtils.js
 ├── docs/
 ├── save/
