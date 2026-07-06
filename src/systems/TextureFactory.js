@@ -869,6 +869,20 @@ export default class TextureFactory {
       TextureFactory.roundRect(ctx, 1.5, 1.5, 93, 93, 10);
       ctx.stroke();
     });
+    // 畫面邊緣提示箭頭：純白三角形，遊戲內用 setTint() 分別染成血包（紅）跟磁鐵（藍紫）的顏色
+    mk('ui_arrow', 40, 40, (ctx) => {
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.beginPath();
+      ctx.moveTo(36, 20);
+      ctx.lineTo(6, 4);
+      ctx.lineTo(14, 20);
+      ctx.lineTo(6, 36);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(20,20,20,0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
   }
 
   // 裝備圖示：五種基本裝備各畫一個簡單好辨識的剪影圖示，統一用白色描邊＋半透明填色，
