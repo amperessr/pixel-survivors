@@ -102,6 +102,11 @@ export default class Boss {
       fontSize: '22px', color: '#ffffff',
     })).setScrollFactor(0).setDepth(30002).setOrigin(0.5);
 
+    // 頭頂血條：跟著 Boss 移動的世界座標血條，讓玩家不用一直看畫面上方，
+    // 近戰纏鬥時也能直接看到 Boss 目前的血量比例（跟畫面固定的頂部血條並存，不衝突）
+    this.headBarBg = scene.add.image(x, y - 90, 'ui_bar_bg').setDisplaySize(120, 12).setDepth(29996);
+    this.headBarFill = scene.add.image(x - 58, y - 90, 'ui_bar_fill_boss').setOrigin(0, 0.5).setDisplaySize(116, 8).setDepth(29997);
+
     // 登場震撼效果：閃光＋巨大陰影光環，凸顯體型巨大（不用鏡頭震動）
     scene.cameras.main.flash(300, 255, 255, 255);
     const shadow = scene.add.image(x, y, 'fx_bossdeath').setTint(this.baseTint || 0x1a2a6c).setAlpha(0.5).setScale(0.5).setDepth(y - 1);
@@ -137,6 +142,12 @@ export default class Boss {
     this.sprite.setDepth(by);
     this.barFill.setDisplaySize(Math.max(0, this.hp / this.maxHp) * 580, 32);
     this.hpText.setText(`${Math.ceil(Math.max(0, this.hp))} / ${Math.round(this.maxHp)}`);
+
+    // 頭頂血條跟著 Boss 移動，並同步血量比例
+    const headY = by - 90;
+    this.headBarBg.setPosition(bx, headY).setDepth(headY - 1);
+    const hpRatio = Math.max(0, this.hp / this.maxHp);
+    this.headBarFill.setPosition(bx - 58, headY).setDisplaySize(116 * hpRatio, 8).setDepth(headY);
   }
 
   _chooseSkill(time) {
@@ -259,21 +270,37 @@ export default class Boss {
   _die() {
     this.alive = false;
     audioManager.bossDeath();
-    this.scene.cameras.main.flash(400, 255, 255, 255);
-    this.scene.hitStop(120);
-    // 巨大體型死亡時要有相對應的盛大爆炸效果
-    for (let i = 0; i < 3; i++) {
-      const fx = this.scene.add.image(this.sprite.x, this.sprite.y, 'fx_bossdeath').setDepth(20001).setScale(0.6);
+    this.scene.cameras.main.flash(500, 255, 255, 255);
+    this.scene.hitStop(150);
+
+    const dx = this.sprite.x, dy = this.sprite.y;
+    const themeColor = this.typeDef.aoeColor;
+
+    // 巨大體型死亡要有相對應的盛大特效：四層依序擴散的光環（原本只有 3 層）
+    for (let i = 0; i < 4; i++) {
+      const fx = this.scene.add.image(dx, dy, 'fx_bossdeath').setDepth(20001).setScale(0.6);
       this.scene.tweens.add({
-        targets: fx, scale: 5 + i * 1.5, alpha: 0, duration: 800 + i * 200, delay: i * 120,
+        targets: fx, scale: 6 + i * 1.8, alpha: 0, duration: 900 + i * 220, delay: i * 130,
         onComplete: () => fx.destroy(),
       });
     }
+    // 型態專屬色的衝擊波（跟這隻龍的範圍技能同一種顏色，強化「同一隻龍」的視覺一致性）
+    // + 一圈純白的內層閃光，讓爆炸有明暗層次而不是單一顏色的色塊
+    this.scene.spawnGlowRing(dx, dy, 'fx_frost', themeColor, 0.6, 11, 950, 20002);
+    this.scene.spawnGlowRing(dx, dy, 'fx_frost', 0xffffff, 0.5, 6, 650, 20003);
+    // 大量四散碎片分兩批噴發，做出「還沒完全炸完、殘骸持續飛濺」的層次感
+    this.scene.spawnBurstFx(dx, dy, themeColor, 30, 'fx_crit', 260);
+    this.scene.time.delayedCall(160, () => {
+      if (this.scene && this.scene.spawnBurstFx) this.scene.spawnBurstFx(dx, dy, 0xffffff, 20, 'fx_bossdeath', 210);
+    });
+
     this.sprite.destroy();
     this.barBg.destroy();
     this.barFill.destroy();
     this.label.destroy();
     this.hpText.destroy();
+    this.headBarBg.destroy();
+    this.headBarFill.destroy();
     this.scene.onBossDefeated(this.bossType, this.relicId);
   }
 
@@ -283,5 +310,7 @@ export default class Boss {
     this.barFill.destroy();
     this.label.destroy();
     this.hpText.destroy();
+    this.headBarBg.destroy();
+    this.headBarFill.destroy();
   }
 }
