@@ -1,6 +1,6 @@
 import ObjectPool from '../managers/ObjectPool.js';
 import { getWeaponLevelData, WEAPON_EVOLUTIONS, WEAPON_KNOCKBACK } from './WeaponData.js';
-import { dist, angleTo } from '../utils/MathUtils.js';
+import { angleTo } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 
 export default class WeaponSystem {
@@ -158,7 +158,8 @@ export default class WeaponSystem {
     const proj = this.projectilePool.spawn();
     proj.setTexture('proj_lightning');
     proj.setPosition(px, py);
-    if (data.evolved) proj.setTint(0xffe066); else proj.clearTint();
+    // 改成電光藍白色調（類似英雄聯盟史提克彈簧刀電刀的連鎖閃電配色）
+    proj.setTint(data.evolved ? 0xffe066 : 0x7ef7ff);
     proj.setData('dmg', data.dmg);
     proj.setData('chains', data.chains + bonusChains);
     proj.setData('range', data.range);
@@ -198,20 +199,38 @@ export default class WeaponSystem {
   _fireFrost(data, stats) {
     // Defense 越高，範圍越大
     const bonusRadius = stats.defense * 1.2;
-    const radius = data.radius + bonusRadius;
+    const totalRadius = data.radius + bonusRadius;
     const px = this.player.sprite.x, py = this.player.sprite.y;
-    this.scene.spawnCastFx(px, py, 'frost', 0, radius, data.evolved);
     const kb = WEAPON_KNOCKBACK.frost;
-    this.enemySystem.queryNear(px, py, radius, (e) => {
-      if (dist(px, py, e.x, e.y) <= radius) {
-        this.enemySystem.damageEnemy(e, data.dmg, stats.critRate, stats.critDmg, {
-          fromX: px, fromY: py, force: kb.force, duration: kb.duration,
+    const knockback = { force: kb.force, duration: kb.duration };
+
+    if (data.evolved) {
+      // 進化：6 根冰柱同時以自身為中心向外環繞噴發
+      const count = 6;
+      const pillarDist = totalRadius * 0.65;
+      for (let i = 0; i < count; i++) {
+        const ang = (i / count) * Math.PI * 2;
+        const x = px + Math.cos(ang) * pillarDist;
+        const y = py + Math.sin(ang) * pillarDist;
+        this.scene.time.delayedCall(i * 35, () => {
+          this.scene.spawnIcePillar(x, y, data.dmg, data.slow, data.slowDuration, stats.critRate, stats.critDmg, knockback, true);
         });
-        e.setData('slowUntil', this.scene.time.now + data.slowDuration);
-        e.setData('slowFactor', 1 - data.slow);
-        this.scene.spawnImpactFx(e.x, e.y, 'frost');
       }
-    });
+    } else {
+      // 一般：從自己所在位置，往最近敵人的方向，一根接一根冒出冰柱
+      const enemy = this.enemySystem.findNearest(px, py);
+      const ang = enemy ? angleTo(px, py, enemy.x, enemy.y) : Math.random() * Math.PI * 2;
+      const count = 4;
+      const step = totalRadius / count;
+      for (let i = 1; i <= count; i++) {
+        const pillarDist = step * i;
+        const x = px + Math.cos(ang) * pillarDist;
+        const y = py + Math.sin(ang) * pillarDist;
+        this.scene.time.delayedCall((i - 1) * 120, () => {
+          this.scene.spawnIcePillar(x, y, data.dmg, data.slow, data.slowDuration, stats.critRate, stats.critDmg, knockback, false);
+        });
+      }
+    }
   }
 
   _rebuildSawblades() {

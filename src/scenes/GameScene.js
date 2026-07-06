@@ -223,6 +223,8 @@ export default class GameScene extends Phaser.Scene {
         const ang = Math.atan2(next.y - hitY, next.x - hitX);
         p.body.setVelocity(Math.cos(ang) * 420, Math.sin(ang) * 420);
         p.setData('expireAt', this.time.now + 500);
+        // 電光連鎖視覺：在兩個目標之間畫出一道鋸齒狀電弧，就像史提克彈簧刀的連鎖閃電
+        this.spawnChainLightningFx(hitX, hitY, next.x, next.y, evolved);
         return;
       }
     }
@@ -439,9 +441,9 @@ export default class GameScene extends Phaser.Scene {
       }
       case 'lightning': {
         const fx = this.add.image(x, y, 'fx_bolt').setDepth(6001).setScale(evolved ? 2.4 : 1.5).setAlpha(1).setRotation(angle);
-        if (evolved) fx.setTint(evoTint);
+        fx.setTint(evolved ? evoTint : 0x7ef7ff);
         this.tweens.add({ targets: fx, scale: (evolved ? 2.4 : 1.5) * 1.6, alpha: 0, duration: 160, onComplete: () => fx.destroy() });
-        this.spawnGlowRing(x, y, 'fx_bolt', evolved ? evoTint : 0xfff27a, 0.4, evolved ? 2.2 : 1.4, 200, 6000);
+        this.spawnGlowRing(x, y, 'fx_bolt', evolved ? evoTint : 0x7ef7ff, 0.4, evolved ? 2.2 : 1.4, 200, 6000);
         if (evolved) this.spawnBurstFx(x, y, evoTint, 10, 'fx_bolt', 120);
         break;
       }
@@ -483,10 +485,10 @@ export default class GameScene extends Phaser.Scene {
       }
       case 'lightning': {
         const fx = this.add.image(x, y, 'fx_bolt').setDepth(29999).setScale(evolved ? 1.8 : 1.15).setAlpha(0.95);
-        if (evolved) fx.setTint(evoTint);
+        fx.setTint(evolved ? evoTint : 0x7ef7ff);
         this.tweens.add({ targets: fx, scale: (evolved ? 1.8 : 1.15) * 1.6, alpha: 0, duration: 190, onComplete: () => fx.destroy() });
-        this.spawnGlowRing(x, y, 'fx_bolt', evolved ? evoTint : 0xfff27a, 0.3, evolved ? 2.4 : 1.5, 220);
-        this.spawnBurstFx(x, y, evolved ? evoTint : 0xfff9c4, evolved ? 10 : 5, 'fx_bolt', 110);
+        this.spawnGlowRing(x, y, 'fx_bolt', evolved ? evoTint : 0x7ef7ff, 0.3, evolved ? 2.4 : 1.5, 220);
+        this.spawnBurstFx(x, y, evolved ? evoTint : 0xaef9ff, evolved ? 10 : 5, 'fx_bolt', 110);
         break;
       }
       case 'knife': {
@@ -512,5 +514,86 @@ export default class GameScene extends Phaser.Scene {
         this.spawnKillFx(x, y);
       }
     }
+  }
+
+  // 電光連鎖特效：模仿英雄聯盟「史提克彈簧刀」電刀的連鎖閃電視覺——
+  // 兩個命中點之間畫出一道鋸齒狀、會發光的電弧
+  spawnChainLightningFx(x1, y1, x2, y2, evolved = false) {
+    const color = evolved ? 0xffe066 : 0x7ef7ff;
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len; // 垂直於連線方向的法線，用來做鋸齒偏移
+
+    const graphics = this.add.graphics().setDepth(30000);
+    graphics.setBlendMode(Phaser.BlendModes.ADD);
+    const segments = 6;
+    const drawBolt = (lineWidth, alpha, jagAmount) => {
+      graphics.lineStyle(lineWidth, color, alpha);
+      graphics.beginPath();
+      graphics.moveTo(x1, y1);
+      for (let i = 1; i < segments; i++) {
+        const t = i / segments;
+        const jag = (Math.random() - 0.5) * jagAmount;
+        graphics.lineTo(x1 + dx * t + nx * jag, y1 + dy * t + ny * jag);
+      }
+      graphics.lineTo(x2, y2);
+      graphics.strokePath();
+    };
+    drawBolt(evolved ? 5 : 3.5, 0.9, 16); // 外層粗光暈
+    drawBolt(evolved ? 2 : 1.5, 1, 10);   // 內層細亮線
+
+    this.tweens.add({
+      targets: graphics, alpha: 0, duration: 160,
+      onComplete: () => graphics.destroy(),
+    });
+    // 兩端各來一個電光閃爍
+    this.spawnGlowRing(x1, y1, 'fx_bolt', color, 0.3, evolved ? 1.6 : 1.1, 150);
+    this.spawnGlowRing(x2, y2, 'fx_bolt', color, 0.3, evolved ? 1.8 : 1.2, 170);
+  }
+
+  // 冰柱特效：從地面冒出一根結晶冰柱，命中範圍內敵人並造成減速。
+  // knockback 為 null 時不造成擊退；evolved 為 true 時用金色系並附加更強效果
+  spawnIcePillar(x, y, dmg, slow, slowDuration, critRate, critDmg, knockback, evolved = false) {
+    const tint = evolved ? 0xffe066 : null;
+
+    // 地面裂痕／冰霜擴散提示，讓玩家注意到冰柱要冒出來的位置
+    const crack = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setScale(0.25).setAlpha(0.6);
+    if (tint) crack.setTint(tint);
+    this.tweens.add({ targets: crack, scale: 1.3, alpha: 0, duration: 260, onComplete: () => crack.destroy() });
+
+    // 冰柱由下往上「刺」出來的動畫（用 Back.easeOut 做出衝出地面的彈跳感）
+    const pillarScale = evolved ? 1.5 : 1.15;
+    const pillar = this.add.image(x, y, 'fx_ice_pillar').setOrigin(0.5, 1).setDepth(y + 1).setScale(pillarScale, 0.05).setAlpha(0.95);
+    if (tint) pillar.setTint(tint);
+
+    this.tweens.add({
+      targets: pillar,
+      scaleY: pillarScale,
+      duration: 150,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        if (!pillar.active) return;
+        // 冰柱冒出的瞬間造成傷害＋減速＋擊退
+        const hitRadius = evolved ? 44 : 36;
+        this.enemySystem.queryNear(x, y, hitRadius, (e) => {
+          if (dist(x, y, e.x, e.y) > hitRadius) return;
+          this.enemySystem.damageEnemy(e, dmg, critRate, critDmg, knockback ? {
+            fromX: x, fromY: y, force: knockback.force, duration: knockback.duration,
+          } : null);
+          e.setData('slowUntil', this.time.now + slowDuration);
+          e.setData('slowFactor', 1 - slow);
+        });
+        if (this.boss && this.boss.alive && dist(x, y, this.boss.sprite.x, this.boss.sprite.y) <= hitRadius + 20) {
+          this.boss.takeDamage(dmg, critRate, critDmg);
+        }
+        this.spawnImpactFx(x, y, 'frost', hitRadius, evolved);
+
+        // 停留一小段時間後縮回地面消失
+        this.tweens.add({
+          targets: pillar, scaleY: 0, alpha: 0, duration: 220, delay: 260,
+          onComplete: () => pillar.destroy(),
+        });
+      },
+    });
   }
 }

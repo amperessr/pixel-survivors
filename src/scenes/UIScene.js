@@ -25,9 +25,24 @@ export default class UIScene extends Phaser.Scene {
     this.killText = this.add.text(w - 32, 74, '', textStyle({ fontSize: '28px', color: '#ffd93d' })).setOrigin(1, 0).setScrollFactor(0);
     this.fpsText = this.add.text(w - 32, 112, '', textStyle({ fontSize: '20px', color: '#999' })).setOrigin(1, 0).setScrollFactor(0);
 
-    // ---- 右側：目前技能 ----
-    this.weaponPanel = this.add.container(w - 220, 220).setScrollFactor(0);
-    this.add.text(w - 340, 180, '武器', textStyle({ fontSize: '26px', color: '#bbb' })).setScrollFactor(0);
+    // ---- 右側：目前技能（用面板框把整塊「技能」區域框起來）----
+    const PANEL_W = 380;
+    this.panelX = w - 220;
+    this.panelTop = 150;
+    const TITLE_H = 70;
+
+    this.weaponPanelBg = this.add.image(this.panelX, this.panelTop, 'ui_panel')
+      .setOrigin(0.5, 0).setScrollFactor(0).setDisplaySize(PANEL_W, 140).setDepth(-1);
+    this.weaponPanelTitle = this.add.text(this.panelX, this.panelTop + 16, '技能', textStyle({
+      fontSize: '28px', color: '#6fd3ff',
+    })).setOrigin(0.5, 0).setScrollFactor(0);
+    this.weaponPanelDivider = this.add.rectangle(
+      this.panelX, this.panelTop + TITLE_H - 12, PANEL_W - 44, 2, 0x6fd3ff, 0.4
+    ).setScrollFactor(0);
+
+    this.weaponPanel = this.add.container(this.panelX - 70, this.panelTop + TITLE_H).setScrollFactor(0);
+    this._panelW = PANEL_W;
+    this._titleH = TITLE_H;
 
     // ---- 下方：角色能力值 ----
     this.statsText = this.add.text(w / 2, h - 36, '', textStyle({
@@ -81,9 +96,15 @@ export default class UIScene extends Phaser.Scene {
     if (this._lastKeyStr === stateStr) return;
     this._lastKeyStr = stateStr;
 
+    // 面板高度依技能數量自動調整，讓「技能」框永遠剛好包住目前所有武器
+    const rowH = 88;
+    const rows = Math.max(keys.length, 1);
+    const panelH = this._titleH + rows * rowH + 24;
+    this.weaponPanelBg.setDisplaySize(this._panelW, panelH);
+
     this.weaponPanel.removeAll(true);
     keys.forEach((id, i) => {
-      const y = i * 88;
+      const y = i * rowH;
       const evolved = ws.isEvolved(id);
       const icon = this.add.image(-60, y, `weapon_${id}_lv${owned[id]}`).setScale(2.6);
       if (evolved) icon.setTint(0xffe066);
