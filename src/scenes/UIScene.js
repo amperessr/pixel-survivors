@@ -103,10 +103,15 @@ export default class UIScene extends Phaser.Scene {
     this.weaponPanelBg.setDisplaySize(this._panelW, panelH);
 
     this.weaponPanel.removeAll(true);
+    const iconSize = 60; // 統一圖示顯示大小；不用 setScale 直接放大原始材質，
+                          // 否則等級越高（材質本身越大）圖示會越畫越大，容易超出框外
     keys.forEach((id, i) => {
-      const y = i * rowH;
+      // 每一列的圖示改成「垂直置中在該列的區塊內」，而不是貼在列的最上緣——
+      // 原本第一列圖示的中心點剛好卡在標題分隔線的位置，導致圖示上半部整個超出面板框，
+      // 疊到「技能」標題那一行去了。
+      const y = i * rowH + rowH / 2;
       const evolved = ws.isEvolved(id);
-      const icon = this.add.image(-60, y, `weapon_${id}_lv${owned[id]}`).setScale(2.6);
+      const icon = this.add.image(-60, y, `weapon_${id}_lv${owned[id]}`).setDisplaySize(iconSize, iconSize);
       if (evolved) icon.setTint(0xffe066);
       const labelStr = evolved ? `⭐${WEAPON_EVOLUTIONS[id].name}` : `${WEAPON_DATA[id].name} Lv${owned[id]}`;
       const label = this.add.text(-10, y, labelStr, textStyle({

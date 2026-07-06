@@ -102,7 +102,7 @@ export default class GameScene extends Phaser.Scene {
       // 第 1、3、5...次是黑藍巨龍，第 2、4、6...次是血色紅龍
       const bossType = this.bossSpawnCount % 2 === 0 ? 'blue' : 'red';
       this.bossSpawnCount++;
-      this.boss = new Boss(this, this.player, elapsedMin, bossType);
+      this.boss = new Boss(this, this.player, elapsedMin, bossType, this.bossSpawnCount);
     }
 
     this.bossBoltGroup.children.iterate((bolt) => {
@@ -830,8 +830,8 @@ export default class GameScene extends Phaser.Scene {
           trailTimer.remove();
           meteor.destroy();
 
-          // 落地爆炸：鏡頭震動＋巨大爆炸特效＋範圍傷害（比照一般火球的 AOE 判定）
-          this.cameras.main.shake(260, 0.012);
+          // 落地爆炸：巨大爆炸特效＋範圍傷害（比照一般火球的 AOE 判定），
+          // 不加鏡頭震動——跟火球一般命中一樣，震動太頻繁會干擾遊玩體驗
           this.spawnImpactFx(x, y, 'fireball', aoe, true);
           this.spawnBurstFx(x, y, 0xff6a2d, 20, 'fx_flame', 190);
 

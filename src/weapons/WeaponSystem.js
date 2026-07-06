@@ -92,7 +92,12 @@ export default class WeaponSystem {
     // 鋸片環繞更新
     if (this.owned.sawblade) {
       const data = this._getEffectiveData('sawblade');
-      const rot = data.rotSpeed * (1 + this.player.stats.atkSpeed * 0.3);
+      // 原本 `1 + atkSpeed * 0.3` 完全沒有上限：被動攻速現在可以疊到 10 級
+      // （單一被動就 +80），乘出來的轉速倍率會誇張到 25 倍以上，看起來像失控轉輪。
+      // 改成係數 0.02 並加上 3.5 倍的硬上限，跟冷卻公式（`_scaledCooldown` 有 80ms 下限）
+      // 一樣走「遞增但有天花板」的設計，數值更合理，高攻速也還是看得出旋轉動作。
+      const atkSpeedMult = Math.min(3.5, 1 + this.player.stats.atkSpeed * 0.02);
+      const rot = data.rotSpeed * atkSpeedMult;
       this.sawbladeAngle += rot * (delta / 1000);
       const n = this.sawbladeSprites.length;
       for (let i = 0; i < n; i++) {

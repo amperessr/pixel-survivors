@@ -194,6 +194,18 @@ Attack／CritRate／CritDmg／AttackSpeed／MoveSpeed，各 5 級。
   `_updateDragonAura()` / `_updateDragonWings()`），不是只靠間歇性粒子噴發假裝跟隨。
   若擊殺 Boss 的經驗值剛好觸發升級，會先讓 `LevelUpScene` 跑完，
   透過 `_pendingRelic` 排隊，等升級選單關閉後才跳遺物視窗，避免兩個彈窗疊在一起。
+- **技能面板圖示超框修正**（`UIScene._refreshWeaponPanel()`）：圖示改用固定
+  `setDisplaySize()`（不再用 `setScale()` 直接放大原始材質，否則等級越高圖示越大越容易爆框），
+  且每一列的 y 座標改成置中在該列區塊內（`i*rowH + rowH/2`），
+  修正第一列圖示中心點卡在標題分隔線、上半部超出面板框的問題。
+- **Boss 強度改用「第幾隻王」計算，不再用存活分鐘數線性公式**：`Boss.js` 的
+  `bossStrengthMultiplier(bossIndex)` 走費氏數列變體（1, 2, 3, 5, 8, 13, 21...），
+  對應第 1～N 隻王（每 5 分鐘一隻）：5min 1x／10min 2x／15min 3x／20min 5x／25min 8x…，
+  HP 與傷害都套用同一個倍率。`GameScene` 用 `bossSpawnCount` 算出 `bossIndex` 傳進去。
+- **隕石落地不再有鏡頭震動**（`GameScene.spawnMeteorStrike()`），跟一般火球一樣避免過度干擾。
+- **鋸片轉速公式調整**：原本 `1 + atkSpeed * 0.3` 沒有上限，被動攻速衝到高等級時
+  （被動上限拉到 10 級後單一被動就 +80）會讓鋸片轉速誇張到 25 倍以上。
+  改成係數 0.02＋硬上限 3.5 倍（`WeaponSystem.update()` 內鋸片更新區塊），數值更合理。
 
 
 ## 設計常數速查

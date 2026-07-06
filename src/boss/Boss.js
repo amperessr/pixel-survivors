@@ -38,10 +38,28 @@ const BOSS_TYPES = {
   },
 };
 
+// Boss 強度倍率：依「這是第幾隻王」(bossIndex，從 1 開始，每 5 分鐘一隻)決定，
+// 不再用存活分鐘數線性計算。數列從 1, 2 開始，之後每項是前兩項相加（費氏數列變體）：
+// 第1隻(5分鐘) 1x／第2隻(10分鐘) 2x／第3隻(15分鐘) 3x／第4隻(20分鐘) 5x／
+// 第5隻(25分鐘) 8x／第6隻(30分鐘) 13x……以此類推，越後面成長越快。
+function bossStrengthMultiplier(bossIndex) {
+  const n = Math.max(1, Math.floor(bossIndex));
+  if (n === 1) return 1;
+  if (n === 2) return 2;
+  let a = 1, b = 2;
+  for (let i = 3; i <= n; i++) {
+    const c = a + b;
+    a = b;
+    b = c;
+  }
+  return b;
+}
+
 // Boss 系統：西方龍造型，具備衝撞 / 範圍衝擊波 / 龍息遠距攻擊 三種技能，血條與死亡動畫。
-// bossType 決定外觀配色、龍息屬性（冰／火）以及死亡後提供的遺物種類。
+// bossType 決定外觀配色、龍息屬性（冰／火）以及死亡後提供的遺物種類；
+// bossIndex 決定強度倍率（見上方 bossStrengthMultiplier）。
 export default class Boss {
-  constructor(scene, player, difficultyMinutes, bossType = 'blue') {
+  constructor(scene, player, difficultyMinutes, bossType = 'blue', bossIndex = 1) {
     this.scene = scene;
     this.player = player;
     this.alive = true;
@@ -50,10 +68,10 @@ export default class Boss {
     this.relicId = this.typeDef.relicId;
     this.baseTint = this.typeDef.tint;
 
-    const scaling = 1 + difficultyMinutes * 0.35;
+    const scaling = bossStrengthMultiplier(bossIndex);
     this.maxHp = BOSS_BASE_HP * scaling;
     this.hp = this.maxHp;
-    this.dmg = BOSS_BASE_DMG * (1 + difficultyMinutes * 0.15);
+    this.dmg = BOSS_BASE_DMG * scaling;
 
     const px = player.sprite.x, py = player.sprite.y;
     const angle = Math.random() * Math.PI * 2;
