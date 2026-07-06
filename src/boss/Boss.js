@@ -4,13 +4,13 @@ import { textStyle } from '../utils/TextStyle.js';
 
 const BOSS_BASE_HP = 900;
 const BOSS_BASE_DMG = 22;
-// Boss 體型：至少要比一般小怪大 5 倍以上（一般小怪顯示大小約 24~48px，
-// Boss 材質原生 64x64，用 4.0 倍縮放後顯示約 256px，安全超過 5 倍）
-const BOSS_SCALE = 4.0;
-const BOSS_TOUCH_RADIUS = 95;   // Boss 對玩家造成接觸傷害的判定半徑（跟著體型放大）
+// Boss 材質已改成 128x128（原本 64x64 太模糊），
+// 用 2.1 倍縮放後顯示約 269px，安全超過一般小怪 5 倍以上的體型需求
+const BOSS_SCALE = 2.1;
+const BOSS_TOUCH_RADIUS = 100;   // Boss 對玩家造成接觸傷害的判定半徑（跟著體型放大）
 const BOSS_AOE_HIT_RADIUS = 220; // Boss 範圍技能命中玩家的判定半徑
 
-// Boss 系統：具備衝撞 / 範圍攻擊 / 遠距攻擊 三種技能，血條與死亡動畫
+// Boss 系統：黑藍色西方龍，具備衝撞 / 範圍衝擊波 / 龍息遠距攻擊 三種技能，血條與死亡動畫
 export default class Boss {
   constructor(scene, player, difficultyMinutes) {
     this.scene = scene;
@@ -29,7 +29,7 @@ export default class Boss {
 
     this.sprite = scene.physics.add.sprite(x, y, 'boss_main');
     this.sprite.setScale(BOSS_SCALE);
-    this.sprite.body.setCircle(24, 8, 8);
+    this.sprite.body.setCircle(40, 24, 30);
     this.sprite.setDepth(y);
 
     this.phase = 'chase'; // chase | charge | aoe | ranged
@@ -42,13 +42,13 @@ export default class Boss {
       .setScrollFactor(0).setDepth(30000).setDisplaySize(600, 36);
     this.barFill = scene.add.image(scene.scale.width / 2 - 290, 130, 'ui_bar_fill_boss')
       .setScrollFactor(0).setDepth(30001).setOrigin(0, 0.5).setDisplaySize(580, 32);
-    this.label = scene.add.text(scene.scale.width / 2, 88, '⚠ 巨型 Boss 降臨！ ⚠', textStyle({
-      fontSize: '34px', color: '#ff6b6b',
+    this.label = scene.add.text(scene.scale.width / 2, 88, '⚠ 黑藍巨龍降臨！ ⚠', textStyle({
+      fontSize: '34px', color: '#6fd3ff',
     })).setScrollFactor(0).setDepth(30001).setOrigin(0.5);
 
     // 登場震撼效果：鏡頭震動＋巨大陰影光環，凸顯體型巨大
     scene.cameras.main.shake(400, 0.01);
-    const shadow = scene.add.image(x, y, 'fx_bossdeath').setTint(0x330000).setAlpha(0.5).setScale(0.5).setDepth(y - 1);
+    const shadow = scene.add.image(x, y, 'fx_bossdeath').setTint(0x1a2a6c).setAlpha(0.5).setScale(0.5).setDepth(y - 1);
     scene.tweens.add({ targets: shadow, scale: 3.2, alpha: 0, duration: 500, onComplete: () => shadow.destroy() });
 
     audioManager.bossRoar();
@@ -93,8 +93,8 @@ export default class Boss {
   _startCharge(time) {
     this.phase = 'charge';
     this.chargeTarget = { x: this.player.sprite.x, y: this.player.sprite.y };
-    this.sprite.setTint(0xffaaaa);
-    this.scene.cameras.main.flash(150, 255, 100, 100);
+    this.sprite.setTint(0xaaccff);
+    this.scene.cameras.main.flash(150, 100, 150, 255);
     this._chargeStartAt = time;
   }
 
@@ -109,11 +109,11 @@ export default class Boss {
     this.sprite.body.setVelocity(Math.cos(ang) * 480, Math.sin(ang) * 480);
   }
 
-  // 技能二：範圍攻擊（視覺範圍跟著巨大體型放大）
+  // 技能二：範圍衝擊波（視覺範圍跟著巨大體型放大）
   _startAoe(time) {
     this.phase = 'aoe';
     const ring = this.scene.add.image(this.sprite.x, this.sprite.y, 'fx_frost')
-      .setTint(0xff5b5b).setScale(1).setAlpha(0.8).setDepth(19999);
+      .setTint(0x3355ff).setScale(1).setAlpha(0.8).setDepth(19999);
     this.scene.cameras.main.shake(200, 0.006);
     this.scene.tweens.add({
       targets: ring, scale: 16, alpha: 0, duration: 700,
@@ -130,18 +130,37 @@ export default class Boss {
     });
   }
 
-  // 技能三：遠距攻擊 (發射多發彈幕)
+  // 技能三：龍息遠距攻擊 —— 朝玩家方向噴出一道扇形冰藍色龍息，而不是漫無目的的全方位彈幕，
+  // 更符合西方龍的形象，也讓玩家能靠移動閃避
   _startRanged(time) {
     this.phase = 'ranged';
-    const count = 10;
+    const bx = this.sprite.x, by = this.sprite.y;
+    const px = this.player.sprite.x, py = this.player.sprite.y;
+    const baseAng = angleTo(bx, by, px, py);
+
+    // 龍息噴發視覺：從龍口延伸出的長條光柱，沿瞄準方向拉長
+    const breath = this.scene.add.image(bx, by, 'fx_frost')
+      .setTint(0x3d6bff).setAlpha(0.55).setDepth(19998).setOrigin(0, 0.5)
+      .setRotation(baseAng).setScale(6, 2.2);
+    this.scene.tweens.add({
+      targets: breath, alpha: 0, scaleX: 8, duration: 450,
+      onComplete: () => breath.destroy(),
+    });
+    this.scene.cameras.main.flash(120, 60, 100, 255);
+    audioManager.bossRoar();
+
+    // 扇形彈幕：以瞄準方向為中心，左右展開一個錐形
+    const count = 7;
+    const spreadTotal = 0.55; // 錐形總張角（弧度）
     for (let i = 0; i < count; i++) {
-      const ang = (i / count) * Math.PI * 2;
-      const bolt = this.scene.physics.add.image(this.sprite.x, this.sprite.y, 'proj_frost').setTint(0xff8888).setScale(1.4);
-      bolt.body.setVelocity(Math.cos(ang) * 220, Math.sin(ang) * 220);
-      bolt.setData('dmg', this.dmg * 0.5);
+      const off = (i - (count - 1) / 2) * (spreadTotal / (count - 1));
+      const ang = baseAng + off;
+      const bolt = this.scene.physics.add.image(bx, by, 'proj_frost').setTint(0x3d6bff).setScale(1.8);
+      bolt.body.setVelocity(Math.cos(ang) * 400, Math.sin(ang) * 400);
+      bolt.setData('dmg', this.dmg * 0.55);
       bolt.setData('kind', 'bossBolt');
       this.scene.bossBoltGroup.add(bolt);
-      this.scene.time.delayedCall(3000, () => { if (bolt.active) bolt.destroy(); });
+      this.scene.time.delayedCall(2200, () => { if (bolt.active) bolt.destroy(); });
     }
     this.scene.time.delayedCall(400, () => {
       this.phase = 'chase';

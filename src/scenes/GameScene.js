@@ -1,12 +1,14 @@
 import Player from '../player/Player.js';
 import MapGenerator from '../systems/MapGenerator.js';
 import EnemySystem from '../enemy/EnemySystem.js';
+import HealthPackSystem from '../systems/HealthPackSystem.js';
 import WeaponSystem from '../weapons/WeaponSystem.js';
 import Boss from '../boss/Boss.js';
 import { WEAPON_IDS, WEAPON_KNOCKBACK } from '../weapons/WeaponData.js';
 import { PASSIVE_IDS } from '../skills/PassiveData.js';
 import { dist } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
+import { textStyle } from '../utils/TextStyle.js';
 
 const BOSS_INTERVAL_MS = 5 * 60 * 1000; // 每 5 分鐘一隻 Boss
 // Boss 現在體型大幅放大，命中/接觸判定半徑也要跟著放大，這裡統一定義方便调整
@@ -31,6 +33,7 @@ export default class GameScene extends Phaser.Scene {
 
     this.map = new MapGenerator(this);
     this.enemySystem = new EnemySystem(this, this.player);
+    this.healthPackSystem = new HealthPackSystem(this, this.player);
     this.weaponSystem = new WeaponSystem(this, this.player, this.enemySystem);
     this.weaponSystem.addOrUpgrade(WEAPON_IDS[0]); // 起始武器：火球術
 
@@ -67,6 +70,7 @@ export default class GameScene extends Phaser.Scene {
     const elapsedMin = (time - this.startTime) / 60000;
     this.enemySystem.setDifficultyMinutes(elapsedMin);
     this.enemySystem.update(time, delta);
+    this.healthPackSystem.update(time);
     this.weaponSystem.update(time, delta);
 
     this._updateCollisions(time);
@@ -346,6 +350,35 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  // 火焰餘燼：命中/爆炸後幾顆小火星緩緩往上飄散，很多其他遊戲的火屬性技能都有這種收尾效果
+  spawnEmbersFx(x, y, count = 6, color = 0xffb066) {
+    for (let i = 0; i < count; i++) {
+      const ember = this.add.image(
+        x + (Math.random() - 0.5) * 20,
+        y + (Math.random() - 0.5) * 10,
+        'fx_flame'
+      ).setDepth(30002).setScale(0.15 + Math.random() * 0.15).setAlpha(0.85).setTint(color);
+      ember.setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({
+        targets: ember,
+        y: ember.y - 30 - Math.random() * 20,
+        x: ember.x + (Math.random() - 0.5) * 16,
+        alpha: 0,
+        duration: 500 + Math.random() * 300,
+        ease: 'Sine.easeOut',
+        onComplete: () => ember.destroy(),
+      });
+    }
+  }
+
+  // 發光外環：用疊加（ADD）混合模式做出「發光暈染」的效果，是很多遊戲元素技能的標準做法
+  spawnGlowRing(x, y, texture, color, startScale, endScale, duration, depth = 29999) {
+    const ring = this.add.image(x, y, texture).setDepth(depth).setScale(startScale).setAlpha(0.8).setTint(color);
+    ring.setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: ring, scale: endScale, alpha: 0, duration, onComplete: () => ring.destroy() });
+    return ring;
+  }
+
   spawnCritFx(x, y) {
     const fx = this.add.image(x, y - 10, 'fx_crit').setDepth(30000).setScale(1.3);
     this.tweens.add({ targets: fx, y: y - 34, alpha: 0, scale: 1.9, duration: 380, onComplete: () => fx.destroy() });
@@ -354,6 +387,16 @@ export default class GameScene extends Phaser.Scene {
   spawnKillFx(x, y) {
     const fx = this.add.image(x, y, 'fx_kill').setDepth(29999).setScale(0.5);
     this.tweens.add({ targets: fx, scale: 1.4, alpha: 0, duration: 300, onComplete: () => fx.destroy() });
+  }
+  // 血包拾取特效：綠色系爆裂碎片 + 浮動的「+HP」數字
+  spawnHealFx(x, y, amount) {
+    this.spawnBurstFx(x, y, 0x5bff8f, 12, 'pickup_heart', 90);
+    const ring = this.add.image(x, y, 'fx_levelup').setDepth(30000).setScale(0.3).setAlpha(0.9).setTint(0x5bff8f);
+    this.tweens.add({ targets: ring, scale: 2, alpha: 0, duration: 450, onComplete: () => ring.destroy() });
+    const text = this.add.text(x, y - 10, `+${amount} HP`, textStyle({
+      fontSize: '20px', color: '#5bff8f',
+    })).setOrigin(0.5).setDepth(30001);
+    this.tweens.add({ targets: text, y: y - 46, alpha: 0, duration: 700, onComplete: () => text.destroy() });
   }
   spawnFlameFx(x, y) {
     const fx = this.add.image(x, y, 'fx_flame').setDepth(29999);
@@ -386,24 +429,26 @@ export default class GameScene extends Phaser.Scene {
     const evoTint = 0xffe066;
     switch (kind) {
       case 'fireball': {
-        const scale = evolved ? 1.1 : 0.7;
+        const scale = evolved ? 1.3 : 0.85;
         const fx = this.add.image(x, y, 'fx_flame').setDepth(6001).setScale(scale).setAlpha(0.95);
         if (evolved) fx.setTint(evoTint);
-        this.tweens.add({ targets: fx, scale: scale * 1.9, alpha: 0, duration: 200, onComplete: () => fx.destroy() });
-        this.spawnBurstFx(x, y, evolved ? evoTint : 0xff8a3d, evolved ? 10 : 5, 'fx_flame', evolved ? 110 : 70);
+        this.tweens.add({ targets: fx, scale: scale * 2, alpha: 0, duration: 220, onComplete: () => fx.destroy() });
+        this.spawnGlowRing(x, y, 'fx_flame', evolved ? evoTint : 0xff6a2d, 0.3, evolved ? 2.6 : 1.8, 260, 6000);
+        this.spawnBurstFx(x, y, evolved ? evoTint : 0xff8a3d, evolved ? 12 : 6, 'fx_flame', evolved ? 130 : 85);
         break;
       }
       case 'lightning': {
-        const fx = this.add.image(x, y, 'fx_bolt').setDepth(6001).setScale(evolved ? 2 : 1.3).setAlpha(1).setRotation(angle);
+        const fx = this.add.image(x, y, 'fx_bolt').setDepth(6001).setScale(evolved ? 2.4 : 1.5).setAlpha(1).setRotation(angle);
         if (evolved) fx.setTint(evoTint);
-        this.tweens.add({ targets: fx, scale: (evolved ? 2 : 1.3) * 1.5, alpha: 0, duration: 160, onComplete: () => fx.destroy() });
-        if (evolved) this.spawnBurstFx(x, y, evoTint, 8, 'fx_bolt', 100);
+        this.tweens.add({ targets: fx, scale: (evolved ? 2.4 : 1.5) * 1.6, alpha: 0, duration: 160, onComplete: () => fx.destroy() });
+        this.spawnGlowRing(x, y, 'fx_bolt', evolved ? evoTint : 0xfff27a, 0.4, evolved ? 2.2 : 1.4, 200, 6000);
+        if (evolved) this.spawnBurstFx(x, y, evoTint, 10, 'fx_bolt', 120);
         break;
       }
       case 'knife': {
-        const fx = this.add.image(x, y, 'fx_crit').setDepth(6001).setScale(evolved ? 1.6 : 1).setAlpha(0.95)
+        const fx = this.add.image(x, y, 'fx_crit').setDepth(6001).setScale(evolved ? 1.9 : 1.15).setAlpha(0.95)
           .setRotation(angle).setTint(evolved ? evoTint : 0xdfefff);
-        this.tweens.add({ targets: fx, scale: (evolved ? 1.6 : 1) * 1.6, alpha: 0, duration: 160, onComplete: () => fx.destroy() });
+        this.tweens.add({ targets: fx, scale: (evolved ? 1.9 : 1.15) * 1.7, alpha: 0, duration: 160, onComplete: () => fx.destroy() });
         break;
       }
       case 'frost': {
@@ -413,50 +458,54 @@ export default class GameScene extends Phaser.Scene {
           targets: ring, alpha: 0, scale: radius / 20,
           duration: 400, onComplete: () => ring.destroy(),
         });
-        // 二次擴散光環，讓範圍感更明顯
+        // 二次擴散光環，讓範圍感更明顯，加上外圈發光層
         const ring2 = this.add.image(x, y, 'fx_frost').setDepth(6000).setScale(radius / 60).setAlpha(0.5);
         this.tweens.add({ targets: ring2, alpha: 0, scale: radius / 22, duration: 550, delay: 60, onComplete: () => ring2.destroy() });
+        this.spawnGlowRing(x, y, 'fx_frost', evolved ? evoTint : 0x8fe3ff, radius / 80, radius / 26, 500, 5999);
         break;
       }
     }
   }
 
-  // 攻擊「命中瞬間」特效：依武器種類顯示不同的命中視覺回饋，並附加碎片噴射與震動
+  // 攻擊「命中瞬間」特效：依武器種類顯示不同的命中視覺回饋，並附加碎片噴射與發光層
   spawnImpactFx(x, y, kind, radius = 0, evolved = false) {
     const evoTint = 0xffe066;
     switch (kind) {
       case 'fireball': {
-        const scale = evolved ? 2.1 : 1.6;
-        const fx = this.add.image(x, y, 'fx_flame').setDepth(29999).setScale(scale * 0.6);
+        const scale = evolved ? 2.6 : 1.9;
+        const fx = this.add.image(x, y, 'fx_flame').setDepth(29999).setScale(scale * 0.55);
         if (evolved) fx.setTint(evoTint);
-        this.tweens.add({ targets: fx, scale, alpha: 0, duration: 260, onComplete: () => fx.destroy() });
-        this.spawnBurstFx(x, y, evolved ? evoTint : 0xff8a3d, evolved ? 14 : 8, 'fx_flame', evolved ? 150 : 100);
-        // 大範圍爆炸加上鏡頭震動，命中感更強烈
-        this.cameras.main.shake(evolved ? 160 : 100, evolved ? 0.008 : 0.004);
+        this.tweens.add({ targets: fx, scale, alpha: 0, duration: 280, onComplete: () => fx.destroy() });
+        this.spawnGlowRing(x, y, 'fx_flame', evolved ? evoTint : 0xff6a2d, 0.4, evolved ? 3.2 : 2.2, 340);
+        this.spawnBurstFx(x, y, evolved ? evoTint : 0xff8a3d, evolved ? 16 : 10, 'fx_flame', evolved ? 170 : 115);
+        this.spawnEmbersFx(x, y, evolved ? 10 : 6, evolved ? evoTint : 0xffb066);
         break;
       }
       case 'lightning': {
-        const fx = this.add.image(x, y, 'fx_bolt').setDepth(29999).setScale(evolved ? 1.4 : 0.9).setAlpha(0.95);
+        const fx = this.add.image(x, y, 'fx_bolt').setDepth(29999).setScale(evolved ? 1.8 : 1.15).setAlpha(0.95);
         if (evolved) fx.setTint(evoTint);
-        this.tweens.add({ targets: fx, scale: (evolved ? 1.4 : 0.9) * 1.5, alpha: 0, duration: 180, onComplete: () => fx.destroy() });
-        this.spawnBurstFx(x, y, evolved ? evoTint : 0xfff9c4, evolved ? 8 : 4, 'fx_bolt', 90);
+        this.tweens.add({ targets: fx, scale: (evolved ? 1.8 : 1.15) * 1.6, alpha: 0, duration: 190, onComplete: () => fx.destroy() });
+        this.spawnGlowRing(x, y, 'fx_bolt', evolved ? evoTint : 0xfff27a, 0.3, evolved ? 2.4 : 1.5, 220);
+        this.spawnBurstFx(x, y, evolved ? evoTint : 0xfff9c4, evolved ? 10 : 5, 'fx_bolt', 110);
         break;
       }
       case 'knife': {
-        const fx = this.add.image(x, y, 'fx_crit').setDepth(29999).setScale(evolved ? 1.1 : 0.7).setTint(evolved ? evoTint : 0xffffff);
-        this.tweens.add({ targets: fx, scale: (evolved ? 1.1 : 0.7) * 1.6, alpha: 0, duration: 150, onComplete: () => fx.destroy() });
+        const fx = this.add.image(x, y, 'fx_crit').setDepth(29999).setScale(evolved ? 1.5 : 0.95).setTint(evolved ? evoTint : 0xffffff);
+        this.tweens.add({ targets: fx, scale: (evolved ? 1.5 : 0.95) * 1.7, alpha: 0, duration: 160, onComplete: () => fx.destroy() });
+        this.spawnBurstFx(x, y, evolved ? evoTint : 0xdfefff, evolved ? 6 : 3, 'fx_crit', 90);
         break;
       }
       case 'sawblade': {
-        const fx = this.add.image(x, y, 'fx_crit').setDepth(29999).setScale(evolved ? 1 : 0.6).setTint(evolved ? evoTint : 0xcfcfcf);
-        this.tweens.add({ targets: fx, scale: (evolved ? 1 : 0.6) * 1.7, alpha: 0, duration: 130, onComplete: () => fx.destroy() });
+        const fx = this.add.image(x, y, 'fx_crit').setDepth(29999).setScale(evolved ? 1.3 : 0.8).setTint(evolved ? evoTint : 0xcfcfcf);
+        this.tweens.add({ targets: fx, scale: (evolved ? 1.3 : 0.8) * 1.8, alpha: 0, duration: 140, onComplete: () => fx.destroy() });
         break;
       }
       case 'frost': {
-        const fx = this.add.image(x, y, 'fx_frost').setDepth(29999).setScale(evolved ? 1 : 0.6).setAlpha(0.85);
+        const fx = this.add.image(x, y, 'fx_frost').setDepth(29999).setScale(evolved ? 1.4 : 0.85).setAlpha(0.85);
         if (evolved) fx.setTint(evoTint);
-        this.tweens.add({ targets: fx, scale: (evolved ? 1 : 0.6) * 1.8, alpha: 0, duration: 220, onComplete: () => fx.destroy() });
-        this.spawnBurstFx(x, y, evolved ? evoTint : 0x8fe3ff, evolved ? 8 : 4, 'fx_frost', 70);
+        this.tweens.add({ targets: fx, scale: (evolved ? 1.4 : 0.85) * 1.9, alpha: 0, duration: 240, onComplete: () => fx.destroy() });
+        this.spawnGlowRing(x, y, 'fx_frost', evolved ? evoTint : 0x8fe3ff, 0.3, evolved ? 2.4 : 1.5, 300);
+        this.spawnBurstFx(x, y, evolved ? evoTint : 0x8fe3ff, evolved ? 10 : 5, 'fx_frost', 90);
         break;
       }
       default: {

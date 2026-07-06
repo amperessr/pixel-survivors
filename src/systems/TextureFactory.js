@@ -49,6 +49,7 @@ export default class TextureFactory {
       ['generatePassiveIcons', () => this.generatePassiveIcons()],
       ['generateTiles', () => this.generateTiles()],
       ['generateEffects', () => this.generateEffects()],
+      ['generatePickups', () => this.generatePickups()],
       ['generateUI', () => this.generateUI()],
     ];
     for (const [name, fn] of steps) {
@@ -176,41 +177,138 @@ export default class TextureFactory {
   }
 
   // ---------- Boss (大型、威嚴、發光) ----------
+  // Boss：黑藍色系西方龍。用 128x128 高解析度繪製（原本只有 64x64 太模糊），
+  // 具備翅膀、龍角、發光雙眼、尖刺背脊與捲曲尾巴。
   generateBoss() {
-    const { tex, ctx } = this._canvas('boss_main', 64, 64);
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.beginPath(); ctx.ellipse(32, 58, 20, 5, 0, 0, Math.PI * 2); ctx.fill();
-    // 光暈
-    const grad = ctx.createRadialGradient(32, 32, 5, 32, 32, 34);
-    grad.addColorStop(0, 'rgba(255,80,80,0.35)');
-    grad.addColorStop(1, 'rgba(255,80,80,0)');
+    const { tex, ctx } = this._canvas('boss_main', 128, 128);
+    const cx = 64, cy = 66;
+
+    // 深藍光暈
+    const grad = ctx.createRadialGradient(cx, cy, 10, cx, cy, 70);
+    grad.addColorStop(0, 'rgba(70,110,255,0.4)');
+    grad.addColorStop(1, 'rgba(70,110,255,0)');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 64, 64);
-    // 身體
-    ctx.fillStyle = '#7a2130';
-    TextureFactory.roundRect(ctx, 14, 16, 36, 34, 10);
+    ctx.fillRect(0, 0, 128, 128);
+
+    // 尾巴（從身體後方向下捲起）
+    ctx.strokeStyle = '#141c33';
+    ctx.lineWidth = 11;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx + 6, cy + 32);
+    ctx.quadraticCurveTo(cx + 34, cy + 52, cx + 14, cy + 72);
+    ctx.stroke();
+    ctx.fillStyle = '#0a0e1c';
+    ctx.beginPath();
+    ctx.moveTo(cx + 14, cy + 72); ctx.lineTo(cx + 22, cy + 64); ctx.lineTo(cx + 24, cy + 78);
+    ctx.closePath(); ctx.fill();
+
+    // 翅膀（蝙蝠翼狀，左右對稱）
+    const drawWing = (dir) => {
+      ctx.fillStyle = '#0d1226';
+      ctx.beginPath();
+      ctx.moveTo(cx + dir * 16, cy - 10);
+      ctx.lineTo(cx + dir * 62, cy - 40);
+      ctx.lineTo(cx + dir * 50, cy - 8);
+      ctx.lineTo(cx + dir * 66, cy + 4);
+      ctx.lineTo(cx + dir * 44, cy + 8);
+      ctx.lineTo(cx + dir * 50, cy + 26);
+      ctx.lineTo(cx + dir * 22, cy + 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#33488a';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // 翼膜紋路
+      ctx.strokeStyle = 'rgba(80,110,200,0.5)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(cx + dir * 16, cy - 10); ctx.lineTo(cx + dir * 50, cy - 8);
+      ctx.moveTo(cx + dir * 16, cy - 10); ctx.lineTo(cx + dir * 44, cy + 8);
+      ctx.stroke();
+    };
+    drawWing(-1);
+    drawWing(1);
+
+    // 身體（漸層深藍到近黑）
+    const bodyGrad = ctx.createLinearGradient(cx, cy - 34, cx, cy + 34);
+    bodyGrad.addColorStop(0, '#2d3f73');
+    bodyGrad.addColorStop(1, '#12192e');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 8, 28, 34, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#ffcf4d';
+    ctx.strokeStyle = '#080b16';
     ctx.lineWidth = 3;
     ctx.stroke();
-    // 角
-    ctx.fillStyle = '#2b2b2b';
-    ctx.beginPath(); ctx.moveTo(18, 18); ctx.lineTo(10, 4); ctx.lineTo(24, 14); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(46, 18); ctx.lineTo(54, 4); ctx.lineTo(40, 14); ctx.fill();
-    // 眼
-    ctx.fillStyle = '#ffe14d';
-    ctx.beginPath(); ctx.arc(25, 30, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(39, 30, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#1a1a1a';
-    ctx.beginPath(); ctx.arc(25, 30, 1.3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(39, 30, 1.3, 0, Math.PI * 2); ctx.fill();
-    // 嘴
-    ctx.fillStyle = '#1a1a1a';
-    ctx.beginPath(); ctx.ellipse(32, 42, 8, 4, 0, 0, Math.PI); ctx.fill();
-    ctx.fillStyle = '#fff';
-    for (let i = -6; i <= 6; i += 4) {
-      ctx.fillRect(32 + i, 40, 2, 3);
+
+    // 腹部亮藍鱗片
+    ctx.fillStyle = '#3f62a8';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 18, 13, 22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(20,30,60,0.5)';
+    ctx.lineWidth = 1;
+    for (let i = -1; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 4 + i * 9, 13 - i, 5, 0, 0, Math.PI * 2);
+      ctx.stroke();
     }
+
+    // 背脊尖刺
+    ctx.fillStyle = '#080b16';
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(cx + i * 12 - 5, cy - 20);
+      ctx.lineTo(cx + i * 12, cy - 36);
+      ctx.lineTo(cx + i * 12 + 5, cy - 20);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 頭部
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 32, 19, 17, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#080b16';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // 龍角
+    ctx.fillStyle = '#cbd5e0';
+    ctx.beginPath(); ctx.moveTo(cx - 15, cy - 42); ctx.lineTo(cx - 25, cy - 64); ctx.lineTo(cx - 8, cy - 45); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx + 15, cy - 42); ctx.lineTo(cx + 25, cy - 64); ctx.lineTo(cx + 8, cy - 45); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#8a97a8';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // 鼻吻／嘴部
+    ctx.fillStyle = '#101830';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 19, 10, 8, 0, 0, Math.PI);
+    ctx.fill();
+    ctx.fillStyle = '#dfe6ee';
+    for (let i = -6; i <= 6; i += 4) {
+      ctx.fillRect(cx + i, cy - 21, 2, 4);
+    }
+
+    // 發光雙眼（冰藍色，符合黑藍龍設定）
+    const drawEye = (dx) => {
+      ctx.fillStyle = '#8fe3ff';
+      ctx.beginPath(); ctx.arc(cx + dx, cy - 34, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#eafcff';
+      ctx.beginPath(); ctx.arc(cx + dx, cy - 34, 1.7, 0, Math.PI * 2); ctx.fill();
+    };
+    drawEye(-8);
+    drawEye(8);
+
+    // 陰影
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 46, 26, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
     this._finish(tex);
   }
 
@@ -486,6 +584,40 @@ export default class TextureFactory {
       ctx.lineWidth = 1;
       ctx.stroke();
     });
+  }
+
+  // ---------- 拾取物：血包 ----------
+  generatePickups() {
+    const { tex, ctx } = this._canvas('pickup_heart', 30, 30);
+    // 外層光暈
+    const glow = ctx.createRadialGradient(15, 15, 2, 15, 15, 15);
+    glow.addColorStop(0, 'rgba(255,90,110,0.55)');
+    glow.addColorStop(1, 'rgba(255,90,110,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, 30, 30);
+    // 愛心形狀
+    ctx.fillStyle = '#ff3d5a';
+    ctx.beginPath();
+    ctx.moveTo(15, 12);
+    ctx.bezierCurveTo(15, 8, 9, 6, 6, 10);
+    ctx.bezierCurveTo(2, 15, 8, 20, 15, 26);
+    ctx.bezierCurveTo(22, 20, 28, 15, 24, 10);
+    ctx.bezierCurveTo(21, 6, 15, 8, 15, 12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#a30020';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // 高光
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.ellipse(10, 12, 2.6, 1.8, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+    // 十字白色標記，讓玩家一眼認出是補血道具
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillRect(13, 15, 4, 9);
+    ctx.fillRect(10.5, 17.5, 9, 4);
+    this._finish(tex);
   }
 
   // ---------- UI 元件 (血條框、經驗條框、按鈕背景) ----------
