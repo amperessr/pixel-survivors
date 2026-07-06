@@ -65,6 +65,17 @@ export default class GameScene extends Phaser.Scene {
 
   update(time, delta) {
     if (this.paused) return;
+    // 防呆：任何未預期的例外都只印出錯誤並跳過這一幀，而不是讓 Phaser 的
+    // update 迴圈整個中斷、畫面卡住不動（Boss 那個卡死 bug就是活生生的例子，
+    // 這裡多一層保護，以後就算有新的類似疏漏也不會直接讓整個遊戲當掉）。
+    try {
+      this._update(time, delta);
+    } catch (err) {
+      console.error('[GameScene] update() 發生未預期錯誤，已跳過本幀：', err);
+    }
+  }
+
+  _update(time, delta) {
 
     this.player.update(time, delta);
     this.map.update(this.player.sprite.x, this.player.sprite.y);
@@ -93,6 +104,8 @@ export default class GameScene extends Phaser.Scene {
         if (died) this.onPlayerDeath();
       }
     });
+
+    this._updateSuperSaiyanAura(time);
   }
 
   // 統一處理武器投射物 / 鋸片 對敵人與 Boss 的碰撞
@@ -302,6 +315,7 @@ export default class GameScene extends Phaser.Scene {
     this.boss = null;
     this.registerKill();
     this.onGainExp(30);
+    this.spawnSuperSaiyanAura();
   }
 
   onPlayerDeath() {
@@ -414,6 +428,38 @@ export default class GameScene extends Phaser.Scene {
     })).setOrigin(0.5).setDepth(30001);
     this.tweens.add({ targets: text, y: y - 46, alpha: 0, duration: 700, onComplete: () => text.destroy() });
   }
+  // 擊敗 Boss 的瞬間：玩家進入短暫的「超級賽亞人」狀態——
+  // 角色染成金色、腳邊爆出金色衝擊波，接下來幾秒持續有金色氣場光環與往上竄的能量粒子環繞。
+  spawnSuperSaiyanAura(duration = 4000) {
+    const p = this.player.sprite;
+    const auraTint = 0xffe066;
+    p.setTint(auraTint);
+    this.cameras.main.flash(320, 255, 224, 100);
+    this.cameras.main.shake(250, 0.008);
+    // 覺醒瞬間的爆發特效：一圈往外炸開的金色衝擊波 + 碎片
+    this.spawnGlowRing(p.x, p.y, 'fx_levelup', auraTint, 0.4, 5, 700, 29997);
+    this.spawnBurstFx(p.x, p.y, auraTint, 26, 'fx_levelup', 210);
+    this.saiyanAuraUntil = this.time.now + duration;
+    this._nextAuraFxAt = 0;
+  }
+
+  // 光環持續期間，每隔一小段時間補一次「氣場環」＋往上飄的金色能量粒子，
+  // 結束後把玩家身上的金色 tint 清掉，恢復原本外觀
+  _updateSuperSaiyanAura(time) {
+    if (!this.saiyanAuraUntil) return;
+    const p = this.player.sprite;
+    if (time >= this.saiyanAuraUntil) {
+      this.saiyanAuraUntil = null;
+      if (p.active) p.clearTint();
+      return;
+    }
+    if (time >= this._nextAuraFxAt) {
+      this._nextAuraFxAt = time + 90;
+      this.spawnGlowRing(p.x, p.y + 14, 'fx_levelup', 0xffe066, 0.5, 1.7, 320, 5998);
+      this.spawnEmbersFx(p.x, p.y, 3, 0xffe066);
+    }
+  }
+
   spawnFlameFx(x, y) {
     const fx = this.add.image(x, y, 'fx_flame').setDepth(29999);
     this.tweens.add({ targets: fx, scale: 1.6, alpha: 0, duration: 250, onComplete: () => fx.destroy() });

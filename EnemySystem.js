@@ -1,5 +1,5 @@
 import ObjectPool from '../managers/ObjectPool.js';
-import { ENEMY_TYPES, ENEMY_IDS, ENEMY_TIERS, rollEnemyTier } from './EnemyData.js';
+import { ENEMY_TYPES, ENEMY_IDS, ENEMY_TIERS, rollEnemyTier, enemyScalingMultiplier } from './EnemyData.js';
 import { dist, choice, randRange } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 
@@ -65,13 +65,16 @@ export default class EnemySystem {
     } catch (err) {
       console.warn('[EnemySystem] setBlendMode 失敗，略過：', err);
     }
-    const scaling = 1 + this.difficultyMinutes * 0.18;
+    // 怪物強化倍率統一改用 EnemyData.js 的 enemyScalingMultiplier() 曲線
+    // （0 分鐘 1.0x／3 分鐘 1.3x／5 分鐘 1.8x／7 分鐘 2.6x／10 分鐘 5.0x，
+    //  之後依同樣的成長率持續往上疊加），HP 與傷害套用同一條曲線。
+    const scaling = enemyScalingMultiplier(this.difficultyMinutes);
     sprite.setData('typeId', typeId);
     sprite.setData('tier', tier);
     sprite.setData('tierTint', tierDef.tint);
     sprite.setData('hp', def.hp * scaling * tierDef.mult);
     sprite.setData('maxHp', def.hp * scaling * tierDef.mult);
-    sprite.setData('dmg', def.dmg * (1 + this.difficultyMinutes * 0.1) * tierDef.mult);
+    sprite.setData('dmg', def.dmg * scaling * tierDef.mult);
     sprite.setData('speed', def.speed);
     sprite.setData('exp', Math.round(def.exp * tierDef.expMult));
     sprite.setData('slowUntil', 0);
