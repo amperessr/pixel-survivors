@@ -19,7 +19,7 @@ export const RELICS = {
     id: 'dragonWings',
     name: '龍之翼',
     subtitle: '擊敗血色紅龍的獎賞',
-    desc: '移動速度永久提升 2 倍！\n從此健步如飛，來去如風',
+    desc: '移動速度永久提升 1.5 倍！\n從此健步如飛，來去如風',
     icon: 'boss_main',
     iconTint: 0xff5a3d,
     apply(gameScene) {
