@@ -579,6 +579,26 @@ export default class TextureFactory {
     // 龍之翼遺物特效改用真實美術圖片（見 BootScene.preload() 載入的
     // 'fx_dragon_wing_pair'），這裡不再用 Canvas 畫近似形狀。
 
+    // 龍爪招式專用材質：一道帶弧度的金色爪痕，兩端漸層透明、中段最亮，
+    // 遊戲內會用三條疊出「三爪同時劃過」的效果
+    {
+      const { tex, ctx } = this._canvas('fx_claw_slash', 120, 16);
+      const grad = ctx.createLinearGradient(0, 0, 120, 0);
+      grad.addColorStop(0, 'rgba(255,224,102,0)');
+      grad.addColorStop(0.18, 'rgba(255,224,102,0.9)');
+      grad.addColorStop(0.5, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.82, 'rgba(255,224,102,0.9)');
+      grad.addColorStop(1, 'rgba(255,224,102,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(0, 8);
+      ctx.quadraticCurveTo(60, 0, 120, 8);
+      ctx.quadraticCurveTo(60, 16, 0, 8);
+      ctx.closePath();
+      ctx.fill();
+      this._finish(tex);
+    }
+
     // 經驗寶石
     mk('gem_exp', 12, (ctx, s) => {
       ctx.fillStyle = '#6fe3ff';
