@@ -8,7 +8,6 @@ const BOSS_BASE_DMG = 22;
 // 用 2.1 倍縮放後顯示約 269px，安全超過一般小怪 5 倍以上的體型需求
 const BOSS_SCALE = 2.1;
 const BOSS_TOUCH_RADIUS = 100;   // Boss 對玩家造成接觸傷害的判定半徑（跟著體型放大）
-const BOSS_AOE_HIT_RADIUS = 220; // Boss 範圍技能命中玩家的判定半徑
 
 // 兩種 Boss 型態的外觀／技能配色與死亡時提供的遺物設定。
 // 黑藍巨龍沿用原本的冰系龍息，紅龍則改成火系龍息，死亡後提供的遺物也不同，
@@ -23,6 +22,7 @@ const BOSS_TYPES = {
     breathTexture: 'fx_frost',
     boltTexture: 'proj_frost',
     chargeTint: 0xaaccff,
+    windColor: 0x24242c, // 黑龍衝刺時周圍的黑色風系粒子
     relicId: 'dragonAura',
   },
   red: {
@@ -34,6 +34,7 @@ const BOSS_TYPES = {
     breathTexture: 'fx_flame',
     boltTexture: 'proj_fireball',
     chargeTint: 0xffcfa0,
+    windColor: 0xcc2200, // 紅龍衝刺時周圍的紅色風系粒子
     relicId: 'dragonWings',
   },
 };
@@ -150,24 +151,29 @@ export default class Boss {
     this.headBarFill.setPosition(bx - 58, headY).setDisplaySize(116 * hpRatio, 8).setDepth(headY);
   }
 
+  // 三個技能輪流隨機挑選：龍之吐息（遠距噴火/噴冰）／衝刺（續力衝撞）／龍爪（三爪金色斬擊）
   _chooseSkill(time) {
     const r = Math.random();
     if (r < 0.34) this._startCharge(time);
-    else if (r < 0.67) this._startAoe(time);
-    else this._startRanged(time);
+    else if (r < 0.67) this._startClaw(time);
+    else this._startBreath(time);
   }
 
-  // 技能一：衝撞
+  // 技能一：衝刺 —— 鎖定玩家當下位置衝過去，持續 2 秒的續力衝刺（不是一瞬間衝撞完就結束），
+  // 衝刺期間身邊會持續冒出型態專屬色的風系粒子（紅龍是紅色、黑龍是黑色），
+  // 讓玩家提前看出「牠正在衝刺」，方便閃避
   _startCharge(time) {
     this.phase = 'charge';
     this.chargeTarget = { x: this.player.sprite.x, y: this.player.sprite.y };
     this.sprite.setTint(this.typeDef.chargeTint);
     this.scene.cameras.main.flash(150, 100, 150, 255);
     this._chargeStartAt = time;
+    this._nextWindFxAt = 0;
   }
 
   _updateCharge(time) {
-    if (time - this._chargeStartAt > 900) {
+    const CHARGE_DURATION = 2000; // 續力衝刺持續 2 秒
+    if (time - this._chargeStartAt > CHARGE_DURATION) {
       this.phase = 'chase';
       this._restoreTint();
       this.nextSkillAt = time + 2800;
@@ -175,6 +181,16 @@ export default class Boss {
     }
     const ang = angleTo(this.sprite.x, this.sprite.y, this.chargeTarget.x, this.chargeTarget.y);
     this.sprite.body.setVelocity(Math.cos(ang) * 480, Math.sin(ang) * 480);
+
+    // 衝刺期間持續在身邊冒出風系粒子，做出「捲起一陣風」的視覺提示
+    if (time >= this._nextWindFxAt) {
+      this._nextWindFxAt = time + 55;
+      const windAng = Math.random() * Math.PI * 2;
+      const wr = 30 + Math.random() * 30;
+      const wx = this.sprite.x + Math.cos(windAng) * wr;
+      const wy = this.sprite.y + Math.sin(windAng) * wr;
+      this.scene.spawnEmbersFx(wx, wy, 2, this.typeDef.windColor);
+    }
   }
 
   // 恢復到這隻 Boss 原本的基底色調（紅龍是紅色 tint，藍龍則是完全不上色），
@@ -184,38 +200,52 @@ export default class Boss {
     else this.sprite.clearTint();
   }
 
-  // 技能二：範圍衝擊波（視覺範圍跟著巨大體型放大，顏色依 Boss 型態而定）
-  _startAoe(time) {
-    this.phase = 'aoe';
-    const ring = this.scene.add.image(this.sprite.x, this.sprite.y, 'fx_frost')
-      .setTint(this.typeDef.aoeColor).setScale(1).setAlpha(0.8).setDepth(19999);
-    this.scene.cameras.main.flash(150, 100, 150, 255);
-    this.scene.hitStop(70);
-    this.scene.tweens.add({
-      targets: ring, scale: 16, alpha: 0, duration: 700,
-      onComplete: () => {
-        ring.destroy();
-        // 重要 bug 修正（造成「王出現一段時間後遊戲卡死」的元凶）：
-        // AOE 環形特效播放需要 700ms，這段期間玩家仍可能用其他武器把 Boss 打死，
-        // 屆時 this.sprite 已經在 _die() 被 destroy()，若這裡沒檢查 this.alive
-        // 就直接讀取 this.sprite.x/y，會對已銷毀的 GameObject 存取座標拋出例外，
-        // 讓 Phaser 的 update/render 迴圈整個中斷，畫面卡住不動且不再有任何反應。
-        if (!this.alive) return;
-        const d = dist(this.sprite.x, this.sprite.y, this.player.sprite.x, this.player.sprite.y);
-        if (d < BOSS_AOE_HIT_RADIUS) {
-          const died = this.player.takeDamage(this.dmg, this.scene.time.now);
-          if (died) this.scene.onPlayerDeath();
-        }
-        this.phase = 'chase';
-        this.nextSkillAt = this.scene.time.now + 3200;
-      },
+  // 技能二：龍爪 —— 往玩家方向的前方揮出三條金色爪痕，短暫延遲後在揮擊點造成範圍傷害。
+  // 三條爪痕垂直排列、依序些微延遲出現，模擬「三根爪子同時劃過」的斬擊感。
+  _startClaw(time) {
+    this.phase = 'claw';
+    const bx = this.sprite.x, by = this.sprite.y;
+    const px = this.player.sprite.x, py = this.player.sprite.y;
+    const ang = angleTo(bx, by, px, py);
+    const reach = 130; // 爪擊點距離 Boss 中心多遠（往玩家方向前撲一段距離）
+    const cx = bx + Math.cos(ang) * reach;
+    const cy = by + Math.sin(ang) * reach;
+    const hitRadius = 95;
+
+    this.scene.cameras.main.flash(150, 255, 224, 130);
+    this.scene.hitStop(90);
+    audioManager.bossRoar();
+
+    const perpAng = ang + Math.PI / 2;
+    for (let i = -1; i <= 1; i++) {
+      const off = i * 26;
+      const sx = cx + Math.cos(perpAng) * off;
+      const sy = cy + Math.sin(perpAng) * off;
+      const claw = this.scene.add.image(sx, sy, 'fx_claw_slash')
+        .setDepth(20005).setRotation(ang).setScale(0.4, 1).setAlpha(0.95);
+      this.scene.tweens.add({
+        targets: claw, scaleX: 1.3, alpha: 0, duration: 260, delay: Math.abs(i) * 40,
+        onComplete: () => claw.destroy(),
+      });
+    }
+
+    this.scene.time.delayedCall(140, () => {
+      if (!this.alive) return; // 動畫播放期間 Boss 可能已被打死，避免存取已銷毀的物件
+      const d = dist(cx, cy, this.player.sprite.x, this.player.sprite.y);
+      if (d < hitRadius) {
+        const died = this.player.takeDamage(this.dmg * 1.1, this.scene.time.now);
+        if (died) this.scene.onPlayerDeath();
+      }
+      this.phase = 'chase';
+      this.nextSkillAt = this.scene.time.now + 3200;
     });
   }
 
-  // 技能三：龍息遠距攻擊 —— 朝玩家方向噴出一道扇形龍息（藍龍是冰息、紅龍是火息），
+  // 技能三：龍之吐息 —— 朝玩家方向噴出一道扇形龍息（藍龍是冰息、紅龍是火息），
+  // 沿瞄準方向連續噴出好幾波往前衝的火焰/冰霜粒子，做出「持續吐息」的感覺，
   // 而不是漫無目的的全方位彈幕，更符合西方龍的形象，也讓玩家能靠移動閃避
-  _startRanged(time) {
-    this.phase = 'ranged';
+  _startBreath(time) {
+    this.phase = 'breath';
     const bx = this.sprite.x, by = this.sprite.y;
     const px = this.player.sprite.x, py = this.player.sprite.y;
     const baseAng = angleTo(bx, by, px, py);
@@ -231,6 +261,16 @@ export default class Boss {
     });
     this.scene.cameras.main.flash(120, 60, 100, 255);
     audioManager.bossRoar();
+
+    // 沿瞄準方向連續噴出好幾波往前衝的粒子，強化「持續吐息」而不是單發特效的感覺
+    for (let wave = 0; wave < 5; wave++) {
+      this.scene.time.delayedCall(wave * 70, () => {
+        if (!this.alive) return;
+        const wx = bx + Math.cos(baseAng) * (20 + wave * 22);
+        const wy = by + Math.sin(baseAng) * (20 + wave * 22);
+        this.scene.spawnEmbersFx(wx, wy, 3, t.breathColor);
+      });
+    }
 
     // 扇形彈幕：以瞄準方向為中心，左右展開一個錐形
     const count = 7;
