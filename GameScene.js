@@ -7,6 +7,7 @@ import WeaponSystem from '../weapons/WeaponSystem.js';
 import Boss from '../boss/Boss.js';
 import { WEAPON_IDS, WEAPON_KNOCKBACK } from '../weapons/WeaponData.js';
 import { PASSIVE_IDS } from '../skills/PassiveData.js';
+import { RELICS } from '../relics/RelicData.js';
 import { dist } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { textStyle } from '../utils/TextStyle.js';
@@ -42,13 +43,15 @@ export default class GameScene extends Phaser.Scene {
     this.bossBoltGroup = this.physics.add.group();
     this.boss = null;
     this.nextBossAt = BOSS_INTERVAL_MS;
+    this.bossSpawnCount = 0; // 用來讓黑藍巨龍／血色紅龍輪流出現
 
     this.startTime = this.time.now;
     this.killCount = 0;
     this.paused = false;
     this.escPaused = false; // 僅代表玩家手動按 ESC 暫停（用於顯示「已暫停」遮罩）
     this.dragonAuraActive = false; // 是否已接受龍之光環（永久跟隨光環視覺開關）
-    this._pendingDragonAura = false; // 擊敗 Boss 順便升級時，排隊等升級選單關閉後再跳龍之光環視窗
+    this.dragonWingsActive = false; // 是否已接受龍之翼（永久跟隨風之尾跡視覺開關）
+    this._pendingRelic = null; // 擊敗 Boss 順便升級時，排隊等升級選單關閉後再跳遺物選擇視窗
 
     // 滑鼠瞄準方向（用於飛刀等以滑鼠為準的武器，此處以世界座標更新提供 UI 之用）
     this.input.on('pointermove', () => {});
@@ -95,7 +98,11 @@ export default class GameScene extends Phaser.Scene {
       this.boss.update(time, delta);
     } else if (time - this.startTime > this.nextBossAt) {
       this.nextBossAt += BOSS_INTERVAL_MS;
-      this.boss = new Boss(this, this.player, elapsedMin);
+      // 每 5 分鐘出現一隻 Boss，兩種型態輪流出現：
+      // 第 1、3、5...次是黑藍巨龍，第 2、4、6...次是血色紅龍
+      const bossType = this.bossSpawnCount % 2 === 0 ? 'blue' : 'red';
+      this.bossSpawnCount++;
+      this.boss = new Boss(this, this.player, elapsedMin, bossType, this.bossSpawnCount);
     }
 
     this.bossBoltGroup.children.iterate((bolt) => {
@@ -109,6 +116,7 @@ export default class GameScene extends Phaser.Scene {
 
     this._updateSuperSaiyanAura(time);
     this._updateDragonAura(time);
+    this._updateDragonWings(time);
   }
 
   // 統一處理武器投射物 / 鋸片 對敵人與 Boss 的碰撞
@@ -315,34 +323,43 @@ export default class GameScene extends Phaser.Scene {
     this.paused = false;
     this.physics.world.resume();
     // 若這次升級是「擊敗 Boss 拿到經驗值」順便觸發的，等升級選單關掉後
-    // 再接著跳龍之光環選擇視窗，避免兩個選單同時疊在畫面上
-    if (this._pendingDragonAura) {
-      this._pendingDragonAura = false;
-      this._openDragonAuraPrompt();
+    // 再接著跳遺物選擇視窗，避免兩個選單同時疊在畫面上
+    if (this._pendingRelic) {
+      const relic = this._pendingRelic;
+      this._pendingRelic = null;
+      this._openRelicChoicePrompt(relic);
     }
   }
 
-  onBossDefeated() {
+  // Boss 死亡時由 Boss._die() 呼叫，帶入這隻 Boss 的型態與對應遺物 id
+  onBossDefeated(bossType, relicId) {
     this.boss = null;
     this.registerKill();
     // 慶祝特效一定會播放，不受任何選單開關影響
     this.spawnSuperSaiyanAura();
+
+    const relic = RELICS[relicId];
+    // 每個遺物只能拿一次：如果玩家已經擁有這個遺物，就不用再跳出選擇視窗詢問了
+    const alreadyOwned = relic && relic.hasIt(this.player);
+
     const leveledUp = this.onGainExp(30);
-    if (leveledUp) {
-      // 升級選單已經在暫停/開啟中，先排隊，等它關閉後再跳龍之光環視窗
-      this._pendingDragonAura = true;
-    } else {
-      this._openDragonAuraPrompt();
+    if (relic && !alreadyOwned) {
+      if (leveledUp) {
+        // 升級選單已經在暫停/開啟中，先排隊，等它關閉後再跳遺物選擇視窗
+        this._pendingRelic = relic;
+      } else {
+        this._openRelicChoicePrompt(relic);
+      }
     }
   }
 
-  _openDragonAuraPrompt() {
+  _openRelicChoicePrompt(relic) {
     this.paused = true;
     this.physics.world.pause();
-    this.scene.launch('DragonAuraScene', { gameScene: this });
+    this.scene.launch('RelicChoiceScene', { gameScene: this, relic });
   }
 
-  resumeFromDragonAura() {
+  resumeFromRelicChoice() {
     this.paused = false;
     this.physics.world.resume();
   }
@@ -481,7 +498,7 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  // 龍之光環（永久版）：玩家接受 DragonAuraScene 的提議後呼叫，
+  // 龍之光環（永久版）：玩家在 RelicChoiceScene 選擇拿取「龍之光環」後呼叫，
   // 建立一個「持續跟著玩家」的金色氣場光環，每一幀都重新對齊玩家座標，
   // 而不是只靠間歇性的粒子噴發假裝跟隨——這是這次要修正的重點。
   enableDragonAuraVisual() {
@@ -513,6 +530,44 @@ export default class GameScene extends Phaser.Scene {
     if (time >= this._nextDragonEmberAt) {
       this._nextDragonEmberAt = time + 220;
       this.spawnEmbersFx(p.x, p.y, 2, 0xffe066);
+    }
+  }
+
+  // 龍之翼（永久版）：玩家接受紅龍遺物後呼叫，建立一個淡藍白色、持續跟著玩家的
+  // 氣流光環，並在移動時往身後噴出風之尾跡，視覺語言跟龍之光環一致（都是每幀貼齊玩家），
+  // 只是顏色與粒子噴發方向不同，用來跟龍之光環做出區隔。
+  enableDragonWingsVisual() {
+    this.dragonWingsActive = true;
+    this._nextWingsFxAt = 0;
+    if (!this.dragonWingsRing) {
+      this.dragonWingsRing = this.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_frost')
+        .setBlendMode(Phaser.BlendModes.ADD).setTint(0xcfe9ff).setAlpha(0.4).setScale(1.1).setDepth(9996);
+      this.tweens.add({
+        targets: this.dragonWingsRing,
+        scale: { from: 0.9, to: 1.4 },
+        alpha: { from: 0.25, to: 0.45 },
+        duration: 700,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+    this.dragonWingsRing.setVisible(true);
+  }
+
+  _updateDragonWings(time) {
+    if (!this.dragonWingsActive) return;
+    const p = this.player.sprite;
+    this.dragonWingsRing.setPosition(p.x, p.y);
+    this.dragonWingsRing.setDepth(p.depth - 1);
+    if (time >= this._nextWingsFxAt) {
+      this._nextWingsFxAt = time + 160;
+      // 風之尾跡：往「移動方向的反方向」噴出淡藍白色粒子，靜止不動時就隨機方向飄
+      const vx = p.body.velocity.x, vy = p.body.velocity.y;
+      const speed = Math.hypot(vx, vy);
+      const backAng = speed > 5 ? Math.atan2(-vy, -vx) : Math.random() * Math.PI * 2;
+      const bx = p.x + Math.cos(backAng) * 16, by = p.y + Math.sin(backAng) * 16;
+      this.spawnEmbersFx(bx, by, 2, 0xcfe9ff);
     }
   }
 
@@ -737,6 +792,60 @@ export default class GameScene extends Phaser.Scene {
           onComplete: () => pillar.destroy(),
         });
       },
+    });
+  }
+
+  // 隕石襲擊（火球術進化「隕石燄爆」專用）：先在目標腳下標出警戒圈，
+  // 短暫停頓後一顆巨大隕石從畫面上方直直砸下來，落地瞬間造成範圍爆炸傷害＋擊退。
+  // 跟一般火球不同，這裡完全不經過投射物池／每幀碰撞判定，落點與爆炸都是直接算好的。
+  spawnMeteorStrike(x, y, dmg, aoe, critRate, critDmg, knockback) {
+    const warnColor = 0xff5a2d;
+
+    // 警戒圈：在地面上標出即將被砸中的範圍，讓玩家有機會看到並閃避
+    const warn = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setScale(0.2).setAlpha(0.55).setTint(warnColor);
+    this.tweens.add({
+      targets: warn, scale: aoe / 24, alpha: 0.28, duration: 380, ease: 'Cubic.easeOut',
+    });
+
+    this.time.delayedCall(420, () => {
+      warn.destroy();
+      if (!this.player || !this.player.sprite.active) return;
+
+      // 隕石本體：從畫面上方直直墜落到目標位置，用加速的 easeIn 模擬重力墜落感
+      const meteor = this.add.image(x, y - 620, 'proj_fireball')
+        .setDepth(30003).setScale(3.2).setTint(0xff6a2d).setRotation(0.4);
+      const trailTimer = this.time.addEvent({
+        delay: 40, loop: true,
+        callback: () => {
+          if (meteor.active) this.spawnEmbersFx(meteor.x, meteor.y - 10, 2, 0xff8a3d);
+        },
+      });
+
+      this.tweens.add({
+        targets: meteor,
+        y,
+        duration: 430,
+        ease: 'Cubic.easeIn',
+        onComplete: () => {
+          trailTimer.remove();
+          meteor.destroy();
+
+          // 落地爆炸：巨大爆炸特效＋範圍傷害（比照一般火球的 AOE 判定），
+          // 不加鏡頭震動——跟火球一般命中一樣，震動太頻繁會干擾遊玩體驗
+          this.spawnImpactFx(x, y, 'fireball', aoe, true);
+          this.spawnBurstFx(x, y, 0xff6a2d, 20, 'fx_flame', 190);
+
+          this.enemySystem.queryNear(x, y, aoe, (e) => {
+            if (dist(x, y, e.x, e.y) > aoe) return;
+            this.enemySystem.damageEnemy(e, dmg, critRate, critDmg, knockback ? {
+              fromX: x, fromY: y, force: knockback.force, duration: knockback.duration,
+            } : null);
+          });
+          if (this.boss && this.boss.alive && dist(x, y, this.boss.sprite.x, this.boss.sprite.y) <= aoe) {
+            this.boss.takeDamage(dmg, critRate, critDmg);
+          }
+        },
+      });
     });
   }
 }

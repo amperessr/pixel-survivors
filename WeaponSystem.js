@@ -92,7 +92,12 @@ export default class WeaponSystem {
     // 鋸片環繞更新
     if (this.owned.sawblade) {
       const data = this._getEffectiveData('sawblade');
-      const rot = data.rotSpeed * (1 + this.player.stats.atkSpeed * 0.3);
+      // 原本 `1 + atkSpeed * 0.3` 完全沒有上限：被動攻速現在可以疊到 10 級
+      // （單一被動就 +80），乘出來的轉速倍率會誇張到 25 倍以上，看起來像失控轉輪。
+      // 改成係數 0.02 並加上 3.5 倍的硬上限，跟冷卻公式（`_scaledCooldown` 有 80ms 下限）
+      // 一樣走「遞增但有天花板」的設計，數值更合理，高攻速也還是看得出旋轉動作。
+      const atkSpeedMult = Math.min(3.5, 1 + this.player.stats.atkSpeed * 0.02);
+      const rot = data.rotSpeed * atkSpeedMult;
       this.sawbladeAngle += rot * (delta / 1000);
       const n = this.sawbladeSprites.length;
       for (let i = 0; i < n; i++) {
@@ -133,21 +138,34 @@ export default class WeaponSystem {
     // Attack 越高，體積(scale)與 aoe 越大
     const scaleBonus = (1 + stats.attack * 0.01) * (data.evolved ? 1.3 : 1);
     const px = this.player.sprite.x, py = this.player.sprite.y;
+    const dmg = data.dmg * (1 + stats.attack * 0.02);
+    const aoe = data.aoe * scaleBonus;
+
+    if (data.evolved) {
+      // 進化「隕石燄爆」：不再沿地面飛行，改成直接鎖定目標敵人所在位置，
+      // 從天而降砸下一顆隕石（見 GameScene.spawnMeteorStrike()）
+      const kb = WEAPON_KNOCKBACK.fireball;
+      this.scene.spawnMeteorStrike(enemy.x, enemy.y, dmg, aoe, stats.critRate, stats.critDmg, {
+        force: kb.force, duration: kb.duration,
+      });
+      return;
+    }
+
     const ang = angleTo(px, py, enemy.x, enemy.y);
     const proj = this.projectilePool.spawn();
     proj.setTexture('proj_fireball');
     proj.setPosition(px, py);
     proj.setScale(scaleBonus);
-    if (data.evolved) proj.setTint(0xffe066); else proj.clearTint();
-    proj.setData('dmg', data.dmg * (1 + stats.attack * 0.02));
-    proj.setData('aoe', data.aoe * scaleBonus);
+    proj.clearTint();
+    proj.setData('dmg', dmg);
+    proj.setData('aoe', aoe);
     proj.setData('pierce', data.pierce);
     proj.setData('exploded', false);
     proj.setData('kind', 'fireball');
-    proj.setData('evolved', !!data.evolved);
+    proj.setData('evolved', false);
     proj.setData('expireAt', this.scene.time.now + 2500);
     proj.body.setVelocity(Math.cos(ang) * data.speed, Math.sin(ang) * data.speed);
-    this.scene.spawnCastFx(px, py, 'fireball', ang, 0, data.evolved);
+    this.scene.spawnCastFx(px, py, 'fireball', ang, 0, false);
   }
 
   _fireLightning(data, stats, enemy) {
