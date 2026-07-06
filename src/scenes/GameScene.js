@@ -428,20 +428,54 @@ export default class GameScene extends Phaser.Scene {
     this.gameEnded = true;
     this.paused = true;
 
-    // 下面這幾步各自包 try/catch：不管哪一步意外拋錯，都不能連累到
-    // 最後「切換到 GameOverScene」那一行沒有執行到——這正是之前
-    // 「血量歸零但畫面卡住不結束」的成因（某個步驟拋例外，被外層 update()
-    // 的 try/catch 吃掉，導致 scene.start() 永遠沒機會被呼叫到）。
-    try { audioManager.stopBgm(); } catch (err) { console.error('[GameScene] stopBgm 失敗：', err); }
-    try { audioManager.gameOver(); } catch (err) { console.error('[GameScene] gameOver 音效失敗：', err); }
-    try { this.scene.stop('UIScene'); } catch (err) { console.error('[GameScene] 關閉 UIScene 失敗：', err); }
-
+    const kills = this.killCount;
+    const level = this.player.level;
     const elapsed = Math.floor((this.time.now - this.startTime) / 1000);
-    this.scene.start('GameOverScene', {
-      kills: this.killCount,
-      level: this.player.level,
-      time: elapsed,
-    });
+
+    // 保底：不管上面的死亡特效／淡黑效果發生什麼意外，這個函式一定要被呼叫到，
+    // 而且只會真正執行一次——這是延續之前「血量歸零但畫面卡住不結束」的防呆精神。
+    const goToGameOver = () => {
+      if (this._wentToGameOver) return;
+      this._wentToGameOver = true;
+      try { this.scene.stop('UIScene'); } catch (err) { console.error('[GameScene] 關閉 UIScene 失敗：', err); }
+      this.scene.start('GameOverScene', { kills, level, time: elapsed });
+    };
+
+    try {
+      audioManager.stopBgm();
+      audioManager.gameOver();
+      this.physics.world.pause();
+      const px = this.player.sprite.x, py = this.player.sprite.y;
+      this._spawnPlayerDeathExplosion(px, py);
+      // 原地爆炸播完之後，畫面慢慢淡成黑幕，淡黑完成才真的切換到結算畫面，
+      // 而不是像之前那樣一斷氣馬上跳畫面
+      this.cameras.main.fade(1300, 0, 0, 0);
+      this.time.delayedCall(1400, goToGameOver);
+    } catch (err) {
+      console.error('[GameScene] 死亡特效發生錯誤，直接切換到結算畫面：', err);
+      goToGameOver();
+    }
+  }
+
+  // 玩家死亡瞬間的原地爆炸特效：紅白兩色碎片＋擴散光環＋角色本體淡出放大消失，
+  // 讓「死亡」這件事有足夠的視覺份量，而不是直接卡在原地一動也不動。
+  _spawnPlayerDeathExplosion(x, y) {
+    this.cameras.main.flash(220, 255, 90, 90);
+    this.hitStop(140);
+    this.spawnBurstFx(x, y, 0xff5a3d, 26, 'fx_flame', 230);
+    this.spawnBurstFx(x, y, 0xffffff, 16, 'fx_crit', 170);
+    const ring = this.add.image(x, y, 'fx_bossdeath').setDepth(30005).setScale(0.5).setTint(0xff5a3d);
+    this.tweens.add({ targets: ring, scale: 3.6, alpha: 0, duration: 520, onComplete: () => ring.destroy() });
+
+    if (this.player.sprite.active) {
+      this.tweens.add({
+        targets: this.player.sprite,
+        alpha: 0,
+        scaleX: this.player.sprite.scaleX * 1.6,
+        scaleY: this.player.sprite.scaleY * 1.6,
+        duration: 380,
+      });
+    }
   }
 
   _togglePause() {
