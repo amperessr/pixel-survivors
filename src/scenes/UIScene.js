@@ -1,4 +1,6 @@
 import { WEAPON_DATA, WEAPON_EVOLUTIONS } from '../weapons/WeaponData.js';
+import { EQUIP_SLOTS, EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
+import { getEquipped } from '../managers/SaveManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 
 export default class UIScene extends Phaser.Scene {
@@ -44,10 +46,39 @@ export default class UIScene extends Phaser.Scene {
     this._panelW = PANEL_W;
     this._titleH = TITLE_H;
 
-    // ---- 下方：角色能力值 ----
-    this.statsText = this.add.text(w / 2, h - 36, '', textStyle({
-      fontSize: '26px', color: '#cfe9ff', align: 'center',
+    // ---- 下方：狀態列（裝備 + 數值狀態）----
+    // 底板：一條橫跨畫面下方的半透明面板，把裝備圖示跟數值都放在同一列
+    const bottomBarH = 96;
+    const bottomBarY = h - bottomBarH / 2 - 10;
+    this.add.image(w / 2, bottomBarY, 'ui_panel').setDisplaySize(w - 60, bottomBarH).setScrollFactor(0).setDepth(-1);
+
+    // 裝備圖示（讀開局當下的存檔裝備，整場遊戲不會變，只顯示一次即可）
+    const equipped = getEquipped();
+    const equipStartX = 70;
+    this.add.text(equipStartX, bottomBarY - 34, '裝備', textStyle({
+      fontSize: '20px', color: '#ffe066',
     })).setOrigin(0.5, 1).setScrollFactor(0);
+    EQUIP_SLOTS.forEach((slot, i) => {
+      const ex = equipStartX + i * 60 - (EQUIP_SLOTS.length - 1) * 30;
+      const itemId = equipped[slot];
+      const slotBg = this.add.image(ex, bottomBarY, 'ui_equip_slot').setDisplaySize(52, 52).setScrollFactor(0);
+      if (itemId && EQUIPMENT_DATA[itemId]) {
+        this.add.image(ex, bottomBarY, EQUIPMENT_DATA[itemId].icon).setScale(0.85).setScrollFactor(0);
+      } else {
+        slotBg.setAlpha(0.35);
+      }
+    });
+
+    // 數值狀態文字（畫面正中央）
+    this.statsText = this.add.text(w / 2 + 130, bottomBarY, '', textStyle({
+      fontSize: '26px', color: '#cfe9ff', align: 'center', lineSpacing: 6,
+    })).setOrigin(0.5).setScrollFactor(0);
+
+    // ---- 畫面邊緣指示箭頭：血包（紅）／磁鐵（藍紫）不在畫面內時，指出方向 ----
+    this.healthArrow = this.add.image(0, 0, 'ui_arrow').setTint(0xff5a5a).setScale(1.1)
+      .setScrollFactor(0).setDepth(20000).setVisible(false);
+    this.magnetArrow = this.add.image(0, 0, 'ui_arrow').setTint(0x7ea0ff).setScale(1.1)
+      .setScrollFactor(0).setDepth(20000).setVisible(false);
 
     // ---- 暫停覆蓋層 ----
     this.pauseOverlay = this.add.container(0, 0).setScrollFactor(0).setDepth(50000).setVisible(false);
@@ -86,6 +117,58 @@ export default class UIScene extends Phaser.Scene {
     );
 
     this._refreshWeaponPanel();
+    this._updatePickupArrows();
+  }
+
+  // 血包／磁鐵不在目前畫面範圍內時，在畫面邊緣顯示一個指向它的箭頭；
+  // 畫面內能直接看到就不用箭頭了。兩種各自只找「離玩家最近的一個」來指示，
+  // 避免畫面上箭頭太多反而分散注意力。
+  _updatePickupArrows() {
+    const cam = this.cameras.main;
+    const p = this.gs.player.sprite;
+
+    this._pointArrowAt(this.healthArrow, this._nearestOffscreen(this.gs.healthPackSystem, p, cam));
+    this._pointArrowAt(this.magnetArrow, this._nearestOffscreen(this.gs.magnetSystem, p, cam));
+  }
+
+  // 從一個系統（HealthPackSystem / MagnetSystem）的物件池裡，找出「不在畫面範圍內
+  // 的最近一個」，回傳世界座標 {x,y}；如果全部都在畫面內或根本沒有，回傳 null
+  _nearestOffscreen(system, player, cam) {
+    if (!system || !system.pool) return null;
+    const halfW = cam.width / (2 * cam.zoom), halfH = cam.height / (2 * cam.zoom);
+    const margin = 40; // 留一點邊界，避免物件才剛超出畫面邊緣就急著顯示箭頭
+    let best = null, bestDist = Infinity;
+    system.pool.forEachActive((obj) => {
+      const dx = obj.x - cam.midPoint.x, dy = obj.y - cam.midPoint.y;
+      const onScreen = Math.abs(dx) < halfW - margin && Math.abs(dy) < halfH - margin;
+      if (onScreen) return;
+      const d = Math.hypot(obj.x - player.x, obj.y - player.y);
+      if (d < bestDist) { bestDist = d; best = obj; }
+    });
+    return best ? { x: best.x, y: best.y } : null;
+  }
+
+  // 把箭頭放在畫面邊緣、朝著目標方向；沒有目標就隱藏
+  _pointArrowAt(arrowImg, target) {
+    if (!target) { arrowImg.setVisible(false); return; }
+    const w = this.scale.width, h = this.scale.height;
+    const cx = w / 2, cy = h / 2;
+    const cam = this.cameras.main;
+    const dx = target.x - cam.midPoint.x, dy = target.y - cam.midPoint.y;
+    const ang = Math.atan2(dy, dx);
+
+    // 用畫面矩形跟射線的交點，把箭頭釘在螢幕邊緣（留一點邊距，不要貼到最邊邊）
+    const margin = 60;
+    const halfW = cx - margin, halfH = cy - margin;
+    const scaleX = halfW / Math.abs(Math.cos(ang) || 1e-6);
+    const scaleY = halfH / Math.abs(Math.sin(ang) || 1e-6);
+    const scale = Math.min(scaleX, scaleY);
+    const ax = cx + Math.cos(ang) * scale;
+    const ay = cy + Math.sin(ang) * scale;
+
+    arrowImg.setPosition(ax, ay);
+    arrowImg.setRotation(ang);
+    arrowImg.setVisible(true);
   }
 
   _refreshWeaponPanel() {
