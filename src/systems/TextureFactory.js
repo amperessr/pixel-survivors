@@ -574,6 +574,42 @@ export default class TextureFactory {
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, s, s);
     });
+
+    // 龍之翼遺物專用材質：畫「一片」翅膀，材質是純白色方便套用任何 tint，
+    // 遊戲內只需要這一張圖，左邊用 setFlipX(true) 鏡射就能湊出左右對稱的一對翅膀，
+    // 不用畫兩張。錨點（翅膀跟身體連接的關節）刻意放在畫布左下角附近，
+    // 方便遊戲內用 setOrigin(0, 1) 直接把關節對齊到玩家背後的位置。
+    {
+      const { tex, ctx } = this._canvas('fx_dragon_wing', 104, 92);
+      const ox = 4, oy = 88; // 翅膀根部關節在畫布內的座標
+      ctx.save();
+      ctx.translate(ox, oy);
+      // 翼膜主體（半透明白色，讓 setTint() 可以整片染成任何顏色）
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.beginPath();
+      ctx.moveTo(0, -8);
+      ctx.lineTo(62, -48);
+      ctx.lineTo(46, -10);
+      ctx.lineTo(74, 0);
+      ctx.lineTo(42, 10);
+      ctx.lineTo(52, 36);
+      ctx.lineTo(16, 16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // 翼骨紋路：從關節放射出去的幾道線條，讓翅膀有膜狀質感（而不是一片死板色塊）
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(0, -8); ctx.lineTo(46, -10);
+      ctx.moveTo(0, -8); ctx.lineTo(42, 10);
+      ctx.moveTo(0, -8); ctx.lineTo(52, 36);
+      ctx.stroke();
+      ctx.restore();
+      this._finish(tex);
+    }
     // 經驗寶石
     mk('gem_exp', 12, (ctx, s) => {
       ctx.fillStyle = '#6fe3ff';
