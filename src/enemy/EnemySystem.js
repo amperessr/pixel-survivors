@@ -298,6 +298,10 @@ export default class EnemySystem {
     this.scene.spawnKillFx(enemy.x, enemy.y);
     audioManager.kill();
     this.scene.registerKill();
+    // 擊殺時有 10% 機率直接在原地掉落血包（跟原本地圖上定時生成的血包共用同一個系統）
+    if (Math.random() < 0.1 && this.scene.healthPackSystem) {
+      this.scene.healthPackSystem.forceSpawn(enemy.x, enemy.y);
+    }
     this.pool.free(enemy);
   }
 
