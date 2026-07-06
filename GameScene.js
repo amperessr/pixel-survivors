@@ -47,6 +47,8 @@ export default class GameScene extends Phaser.Scene {
     this.killCount = 0;
     this.paused = false;
     this.escPaused = false; // 僅代表玩家手動按 ESC 暫停（用於顯示「已暫停」遮罩）
+    this.dragonAuraActive = false; // 是否已接受龍之光環（永久跟隨光環視覺開關）
+    this._pendingDragonAura = false; // 擊敗 Boss 順便升級時，排隊等升級選單關閉後再跳龍之光環視窗
 
     // 滑鼠瞄準方向（用於飛刀等以滑鼠為準的武器，此處以世界座標更新提供 UI 之用）
     this.input.on('pointermove', () => {});
@@ -106,6 +108,7 @@ export default class GameScene extends Phaser.Scene {
     });
 
     this._updateSuperSaiyanAura(time);
+    this._updateDragonAura(time);
   }
 
   // 統一處理武器投射物 / 鋸片 對敵人與 Boss 的碰撞
@@ -294,7 +297,9 @@ export default class GameScene extends Phaser.Scene {
       audioManager.levelUp();
       this.spawnLevelUpFx(this.player.sprite.x, this.player.sprite.y);
       this._openLevelUp();
+      return true;
     }
+    return false;
   }
 
   _openLevelUp() {
@@ -309,13 +314,37 @@ export default class GameScene extends Phaser.Scene {
   resumeFromLevelUp() {
     this.paused = false;
     this.physics.world.resume();
+    // 若這次升級是「擊敗 Boss 拿到經驗值」順便觸發的，等升級選單關掉後
+    // 再接著跳龍之光環選擇視窗，避免兩個選單同時疊在畫面上
+    if (this._pendingDragonAura) {
+      this._pendingDragonAura = false;
+      this._openDragonAuraPrompt();
+    }
   }
 
   onBossDefeated() {
     this.boss = null;
     this.registerKill();
-    this.onGainExp(30);
+    // 慶祝特效一定會播放，不受任何選單開關影響
     this.spawnSuperSaiyanAura();
+    const leveledUp = this.onGainExp(30);
+    if (leveledUp) {
+      // 升級選單已經在暫停/開啟中，先排隊，等它關閉後再跳龍之光環視窗
+      this._pendingDragonAura = true;
+    } else {
+      this._openDragonAuraPrompt();
+    }
+  }
+
+  _openDragonAuraPrompt() {
+    this.paused = true;
+    this.physics.world.pause();
+    this.scene.launch('DragonAuraScene', { gameScene: this });
+  }
+
+  resumeFromDragonAura() {
+    this.paused = false;
+    this.physics.world.resume();
   }
 
   onPlayerDeath() {
@@ -428,35 +457,62 @@ export default class GameScene extends Phaser.Scene {
     })).setOrigin(0.5).setDepth(30001);
     this.tweens.add({ targets: text, y: y - 46, alpha: 0, duration: 700, onComplete: () => text.destroy() });
   }
-  // 擊敗 Boss 的瞬間：玩家進入短暫的「超級賽亞人」狀態——
-  // 角色染成金色、腳邊爆出金色衝擊波，接下來幾秒持續有金色氣場光環與往上竄的能量粒子環繞。
-  spawnSuperSaiyanAura(duration = 4000) {
+  // 擊敗 Boss 瞬間的慶祝爆閃：角色短暫染金、爆一圈金色衝擊波。
+  // 這段純粹是「打贏了！」的視覺回饋，跟後面要不要接受龍之光環的永久加成無關，
+  // 所以持續時間很短（1.2 秒），不會一直跟著玩家。
+  spawnSuperSaiyanAura(duration = 1200) {
     const p = this.player.sprite;
     const auraTint = 0xffe066;
     p.setTint(auraTint);
     this.cameras.main.flash(320, 255, 224, 100);
     this.cameras.main.shake(250, 0.008);
-    // 覺醒瞬間的爆發特效：一圈往外炸開的金色衝擊波 + 碎片
     this.spawnGlowRing(p.x, p.y, 'fx_levelup', auraTint, 0.4, 5, 700, 29997);
     this.spawnBurstFx(p.x, p.y, auraTint, 26, 'fx_levelup', 210);
-    this.saiyanAuraUntil = this.time.now + duration;
-    this._nextAuraFxAt = 0;
+    this.saiyanBurstUntil = this.time.now + duration;
   }
 
-  // 光環持續期間，每隔一小段時間補一次「氣場環」＋往上飄的金色能量粒子，
-  // 結束後把玩家身上的金色 tint 清掉，恢復原本外觀
+  // 慶祝爆閃結束後把玩家身上暫時的金色 tint 清掉
+  // （如果玩家後來接受了龍之光環，_updateDragonAura 會接手處理視覺，不會被這裡蓋掉）
   _updateSuperSaiyanAura(time) {
-    if (!this.saiyanAuraUntil) return;
-    const p = this.player.sprite;
-    if (time >= this.saiyanAuraUntil) {
-      this.saiyanAuraUntil = null;
-      if (p.active) p.clearTint();
-      return;
+    if (!this.saiyanBurstUntil) return;
+    if (time >= this.saiyanBurstUntil) {
+      this.saiyanBurstUntil = null;
+      if (!this.dragonAuraActive && this.player.sprite.active) this.player.sprite.clearTint();
     }
-    if (time >= this._nextAuraFxAt) {
-      this._nextAuraFxAt = time + 90;
-      this.spawnGlowRing(p.x, p.y + 14, 'fx_levelup', 0xffe066, 0.5, 1.7, 320, 5998);
-      this.spawnEmbersFx(p.x, p.y, 3, 0xffe066);
+  }
+
+  // 龍之光環（永久版）：玩家接受 DragonAuraScene 的提議後呼叫，
+  // 建立一個「持續跟著玩家」的金色氣場光環，每一幀都重新對齊玩家座標，
+  // 而不是只靠間歇性的粒子噴發假裝跟隨——這是這次要修正的重點。
+  enableDragonAuraVisual() {
+    this.dragonAuraActive = true;
+    this._nextDragonEmberAt = 0;
+    if (!this.dragonAuraRing) {
+      this.dragonAuraRing = this.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_levelup')
+        .setBlendMode(Phaser.BlendModes.ADD).setTint(0xffe066).setAlpha(0.5).setScale(1.5).setDepth(9997);
+      this.tweens.add({
+        targets: this.dragonAuraRing,
+        scale: { from: 1.3, to: 1.9 },
+        alpha: { from: 0.35, to: 0.6 },
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+    this.dragonAuraRing.setVisible(true);
+  }
+
+  // 每幀更新：把光環釘在玩家目前座標上（永遠跟著玩家跑），
+  // 並每隔一小段時間補幾顆往上竄的金色能量粒子，強化「持續繚繞」的感覺
+  _updateDragonAura(time) {
+    if (!this.dragonAuraActive) return;
+    const p = this.player.sprite;
+    this.dragonAuraRing.setPosition(p.x, p.y);
+    this.dragonAuraRing.setDepth(p.depth - 1);
+    if (time >= this._nextDragonEmberAt) {
+      this._nextDragonEmberAt = time + 220;
+      this.spawnEmbersFx(p.x, p.y, 2, 0xffe066);
     }
   }
 
@@ -563,11 +619,13 @@ export default class GameScene extends Phaser.Scene {
         break;
       }
       case 'frost': {
-        const fx = this.add.image(x, y, 'fx_frost').setDepth(29999).setScale(evolved ? 1.4 : 0.85).setAlpha(0.85);
-        if (evolved) fx.setTint(evoTint);
-        this.tweens.add({ targets: fx, scale: (evolved ? 1.4 : 0.85) * 1.9, alpha: 0, duration: 240, onComplete: () => fx.destroy() });
-        this.spawnGlowRing(x, y, 'fx_frost', evolved ? evoTint : 0x8fe3ff, 0.3, evolved ? 2.4 : 1.5, 300);
-        this.spawnBurstFx(x, y, evolved ? evoTint : 0x8fe3ff, evolved ? 10 : 5, 'fx_frost', 90);
+        // 冰系刻意不跟其他武器共用金色進化色，維持藍色系（進化版用更亮的冰藍白）
+        const frostEvoTint = 0xbfe9ff;
+        const fx = this.add.image(x, y, 'fx_frost').setDepth(29999).setScale(evolved ? 1.5 : 0.85).setAlpha(0.85);
+        if (evolved) fx.setTint(frostEvoTint);
+        this.tweens.add({ targets: fx, scale: (evolved ? 1.5 : 0.85) * 1.9, alpha: 0, duration: 240, onComplete: () => fx.destroy() });
+        this.spawnGlowRing(x, y, 'fx_frost', evolved ? frostEvoTint : 0x8fe3ff, 0.3, evolved ? 2.6 : 1.5, 300);
+        this.spawnBurstFx(x, y, evolved ? frostEvoTint : 0x8fe3ff, evolved ? 12 : 5, 'fx_frost', evolved ? 110 : 90);
         break;
       }
       default: {
@@ -612,17 +670,34 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // 冰柱特效：從地面冒出一根結晶冰柱，命中範圍內敵人並造成減速。
-  // knockback 為 null 時不造成擊退；evolved 為 true 時用金色系並附加更強效果
+  // knockback 為 null 時不造成擊退；evolved 為 true 時體型更大、特效更華麗，
+  // 但刻意「不」套用其他武器共用的金色進化配色——冰系維持一貫的藍色系，
+  // 用更亮更飽和的冰藍白（0xbfe9ff）來區分一般版與進化版。
   spawnIcePillar(x, y, dmg, slow, slowDuration, critRate, critDmg, knockback, evolved = false) {
-    const tint = evolved ? 0xffe066 : null;
+    const tint = evolved ? 0xbfe9ff : null;
 
     // 地面裂痕／冰霜擴散提示，讓玩家注意到冰柱要冒出來的位置
-    const crack = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setScale(0.25).setAlpha(0.6);
-    if (tint) crack.setTint(tint);
-    this.tweens.add({ targets: crack, scale: 1.3, alpha: 0, duration: 260, onComplete: () => crack.destroy() });
+    const crack = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setScale(evolved ? 0.4 : 0.25).setAlpha(0.6);
+    crack.setTint(evolved ? 0x8fd6ff : 0x8fe3ff);
+    this.tweens.add({ targets: crack, scale: evolved ? 1.9 : 1.3, alpha: 0, duration: 260, onComplete: () => crack.destroy() });
 
-    // 冰柱由下往上「刺」出來的動畫（用 Back.easeOut 做出衝出地面的彈跳感）
-    const pillarScale = evolved ? 1.5 : 1.15;
+    // 進化版限定：地面額外噴出幾道放射狀碎冰，堆疊出比一般版更華麗的地面特效
+    if (evolved) {
+      for (let i = 0; i < 6; i++) {
+        const ang = (i / 6) * Math.PI * 2 + Math.random() * 0.3;
+        const shard = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setScale(0.16).setAlpha(0.55).setTint(0xdff6ff);
+        this.tweens.add({
+          targets: shard,
+          x: x + Math.cos(ang) * 30, y: y + Math.sin(ang) * 30,
+          scale: 0.55, alpha: 0, duration: 340,
+          onComplete: () => shard.destroy(),
+        });
+      }
+    }
+
+    // 冰柱由下往上「刺」出來的動畫（用 Back.easeOut 做出衝出地面的彈跳感），
+    // 一般版跟進化版都是同一套「由內到外」的冒出邏輯，進化版只是體型更大
+    const pillarScale = evolved ? 1.9 : 1.15;
     const pillar = this.add.image(x, y, 'fx_ice_pillar').setOrigin(0.5, 1).setDepth(y + 1).setScale(pillarScale, 0.05).setAlpha(0.95);
     if (tint) pillar.setTint(tint);
 
@@ -634,7 +709,7 @@ export default class GameScene extends Phaser.Scene {
       onComplete: () => {
         if (!pillar.active) return;
         // 冰柱冒出的瞬間造成傷害＋減速＋擊退
-        const hitRadius = evolved ? 44 : 36;
+        const hitRadius = evolved ? 50 : 36;
         this.enemySystem.queryNear(x, y, hitRadius, (e) => {
           if (dist(x, y, e.x, e.y) > hitRadius) return;
           this.enemySystem.damageEnemy(e, dmg, critRate, critDmg, knockback ? {
@@ -647,6 +722,14 @@ export default class GameScene extends Phaser.Scene {
           this.boss.takeDamage(dmg, critRate, critDmg);
         }
         this.spawnImpactFx(x, y, 'frost', hitRadius, evolved);
+
+        if (evolved) {
+          // 進化版收尾：頂端補一圈亮白冰晶閃光＋額外藍白碎片噴射，強調「更華麗」
+          const flash = this.add.image(x, y - pillarScale * 34, 'fx_frost')
+            .setDepth(y + 2).setScale(0.5).setAlpha(0.9).setTint(0xffffff).setBlendMode(Phaser.BlendModes.ADD);
+          this.tweens.add({ targets: flash, scale: 1.7, alpha: 0, duration: 280, onComplete: () => flash.destroy() });
+          this.spawnBurstFx(x, y - 10, 0xbfe9ff, 12, 'fx_frost', 120);
+        }
 
         // 停留一小段時間後縮回地面消失
         this.tweens.add({
