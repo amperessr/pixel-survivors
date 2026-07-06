@@ -44,6 +44,15 @@ export default class HealthPackSystem {
     });
   }
 
+  // 讓外部（例如擊殺怪物時）直接在指定座標生成一個血包，不受一般的計時器限制，
+  // 但仍然遵守 MAX_PACKS 上限（避免同時間地圖上血包爆量）
+  forceSpawn(x, y) {
+    if (this.pool.activeCount >= MAX_PACKS) return;
+    const img = this.pool.spawn(x, y);
+    img.setData('baseY', y);
+    img.setDepth(y);
+  }
+
   _trySpawn() {
     const cam = this.scene.cameras.main;
     const halfW = cam.width / (2 * cam.zoom);
