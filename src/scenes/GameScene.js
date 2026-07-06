@@ -533,41 +533,50 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  // 龍之翼（永久版）：玩家接受紅龍遺物後呼叫，建立一個淡藍白色、持續跟著玩家的
-  // 氣流光環，並在移動時往身後噴出風之尾跡，視覺語言跟龍之光環一致（都是每幀貼齊玩家），
-  // 只是顏色與粒子噴發方向不同，用來跟龍之光環做出區隔。
+  // 龍之翼（永久版）：玩家接受紅龍遺物後呼叫，在玩家背後掛上「一對真正的翅膀」
+  // （用 fx_dragon_wing 材質，左邊鏡射右邊），每幀貼齊玩家位置並持續拍動，
+  // 移動時還會往身後噴出淡淡的火焰色粒子尾跡，呼應紅龍血統。
   enableDragonWingsVisual() {
     this.dragonWingsActive = true;
     this._nextWingsFxAt = 0;
-    if (!this.dragonWingsRing) {
-      this.dragonWingsRing = this.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_frost')
-        .setBlendMode(Phaser.BlendModes.ADD).setTint(0xcfe9ff).setAlpha(0.4).setScale(1.1).setDepth(9996);
-      this.tweens.add({
-        targets: this.dragonWingsRing,
-        scale: { from: 0.9, to: 1.4 },
-        alpha: { from: 0.25, to: 0.45 },
-        duration: 700,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
+    const wingTint = 0xff6a3d;
+    if (!this.dragonWingLeft) {
+      this.dragonWingLeft = this.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_dragon_wing')
+        .setOrigin(0, 1).setFlipX(true).setTint(wingTint).setAlpha(0.88).setScale(1.15)
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(9996);
+      this.dragonWingRight = this.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_dragon_wing')
+        .setOrigin(0, 1).setTint(wingTint).setAlpha(0.88).setScale(1.15)
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(9996);
     }
-    this.dragonWingsRing.setVisible(true);
+    this.dragonWingLeft.setVisible(true);
+    this.dragonWingRight.setVisible(true);
   }
 
   _updateDragonWings(time) {
     if (!this.dragonWingsActive) return;
     const p = this.player.sprite;
-    this.dragonWingsRing.setPosition(p.x, p.y);
-    this.dragonWingsRing.setDepth(p.depth - 1);
+
+    // 拍動動畫：用 sin 波讓翅膀角度持續小幅擺盪，靜止時也有基礎下垂角度，
+    // 不會呆板地完全不動
+    const flap = Math.sin(time / 130) * 0.22 - 0.08;
+    const depth = p.depth - 1;
+
+    this.dragonWingLeft.setPosition(p.x - 6, p.y - 2);
+    this.dragonWingLeft.setRotation(-flap);
+    this.dragonWingLeft.setDepth(depth);
+
+    this.dragonWingRight.setPosition(p.x + 6, p.y - 2);
+    this.dragonWingRight.setRotation(flap);
+    this.dragonWingRight.setDepth(depth);
+
     if (time >= this._nextWingsFxAt) {
-      this._nextWingsFxAt = time + 160;
-      // 風之尾跡：往「移動方向的反方向」噴出淡藍白色粒子，靜止不動時就隨機方向飄
+      this._nextWingsFxAt = time + 220;
+      // 風之尾跡：往「移動方向的反方向」噴出火焰色粒子，靜止不動時就隨機方向飄
       const vx = p.body.velocity.x, vy = p.body.velocity.y;
       const speed = Math.hypot(vx, vy);
       const backAng = speed > 5 ? Math.atan2(-vy, -vx) : Math.random() * Math.PI * 2;
       const bx = p.x + Math.cos(backAng) * 16, by = p.y + Math.sin(backAng) * 16;
-      this.spawnEmbersFx(bx, by, 2, 0xcfe9ff);
+      this.spawnEmbersFx(bx, by, 2, 0xff8a3d);
     }
   }
 
