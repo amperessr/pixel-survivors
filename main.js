@@ -1,5 +1,7 @@
 import BootScene from './src/scenes/BootScene.js';
-import CharacterSelectScene from './src/scenes/CharacterSelectScene.js';
+import MainMenuScene from './src/scenes/MainMenuScene.js';
+import InventoryScene from './src/scenes/InventoryScene.js';
+import ShopScene from './src/scenes/ShopScene.js';
 import GameScene from './src/scenes/GameScene.js';
 import UIScene from './src/scenes/UIScene.js';
 import LevelUpScene from './src/scenes/LevelUpScene.js';
@@ -17,7 +19,7 @@ const config = {
     default: 'arcade',
     arcade: { gravity: { x: 0, y: 0 }, debug: false },
   },
-  scene: [BootScene, CharacterSelectScene, GameScene, UIScene, LevelUpScene, RelicChoiceScene, GameOverScene],
+  scene: [BootScene, MainMenuScene, InventoryScene, ShopScene, GameScene, UIScene, LevelUpScene, RelicChoiceScene, GameOverScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

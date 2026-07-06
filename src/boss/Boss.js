@@ -102,8 +102,8 @@ export default class Boss {
       fontSize: '22px', color: '#ffffff',
     })).setScrollFactor(0).setDepth(30002).setOrigin(0.5);
 
-    // 登場震撼效果：鏡頭震動＋巨大陰影光環，凸顯體型巨大
-    scene.cameras.main.shake(400, 0.01);
+    // 登場震撼效果：閃光＋巨大陰影光環，凸顯體型巨大（不用鏡頭震動）
+    scene.cameras.main.flash(300, 255, 255, 255);
     const shadow = scene.add.image(x, y, 'fx_bossdeath').setTint(this.baseTint || 0x1a2a6c).setAlpha(0.5).setScale(0.5).setDepth(y - 1);
     scene.tweens.add({ targets: shadow, scale: 3.2, alpha: 0, duration: 500, onComplete: () => shadow.destroy() });
 
@@ -178,7 +178,8 @@ export default class Boss {
     this.phase = 'aoe';
     const ring = this.scene.add.image(this.sprite.x, this.sprite.y, 'fx_frost')
       .setTint(this.typeDef.aoeColor).setScale(1).setAlpha(0.8).setDepth(19999);
-    this.scene.cameras.main.shake(200, 0.006);
+    this.scene.cameras.main.flash(150, 100, 150, 255);
+    this.scene.hitStop(70);
     this.scene.tweens.add({
       targets: ring, scale: 16, alpha: 0, duration: 700,
       onComplete: () => {
@@ -258,7 +259,8 @@ export default class Boss {
   _die() {
     this.alive = false;
     audioManager.bossDeath();
-    this.scene.cameras.main.shake(500, 0.015);
+    this.scene.cameras.main.flash(400, 255, 255, 255);
+    this.scene.hitStop(120);
     // 巨大體型死亡時要有相對應的盛大爆炸效果
     for (let i = 0; i < 3; i++) {
       const fx = this.scene.add.image(this.sprite.x, this.sprite.y, 'fx_bossdeath').setDepth(20001).setScale(0.6);

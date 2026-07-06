@@ -206,6 +206,10 @@ Attack／CritRate／CritDmg／AttackSpeed／MoveSpeed，各 5 級。
 - **鋸片轉速公式調整**：原本 `1 + atkSpeed * 0.3` 沒有上限，被動攻速衝到高等級時
   （被動上限拉到 10 級後單一被動就 +80）會讓鋸片轉速誇張到 25 倍以上。
   改成係數 0.02＋硬上限 3.5 倍（`WeaponSystem.update()` 內鋸片更新區塊），數值更合理。
+- **龍之翼特效改成真正的翅膀**：原本是抽象的淡藍光環，現在改用 `TextureFactory.js`
+  新增的 `fx_dragon_wing` 材質（畫一片白色翅膀，遊戲內套色＋鏡射湊成左右對稱一對），
+  `GameScene.enableDragonWingsVisual()` / `_updateDragonWings()` 讓兩片翅膀每幀貼在
+  玩家背後並用 sin 波做拍動動畫，顏色改成火焰橘紅（`0xff6a3d`）呼應紅龍血統。
 
 
 ## 設計常數速查
@@ -229,3 +233,47 @@ Attack／CritRate／CritDmg／AttackSpeed／MoveSpeed，各 5 級。
 - 若要上架手機 App：程式碼不需重寫，用 Capacitor 把網頁包裝成 Android/iOS App 是最快的路徑
   （比重寫成 Unity 快很多），但最終編譯 APK／上架仍需要使用者自己的電腦上有 Android Studio
   （iOS 則需要 Mac + Xcode + Apple 開發者帳號），無法在這個純文字沙盒環境完成
+
+## 重大改版：主選單／背包／商店／裝備／金幣系統（這輪新增）
+
+- **不再有選角畫面**：初始角色固定是「平衡型」(`CHARACTERS.balanced`)。
+  原本的 `CharacterSelectScene.js` 已刪除，改成 `src/scenes/MainMenuScene.js`，
+  `GameScene.init()` 沒收到 `characterId` 時本來就會 fallback 成 `'balanced'`，
+  所以「開始遊戲」按鈕直接 `this.scene.start('GameScene')`，不用帶參數。
+- **主選單三個入口**：背包／商店／開始遊戲（`MainMenuScene.js`），
+  暱稱輸入（`promptPlayerName()`）跟排行榜預覽都搬過來延續使用，行為不變。
+- **裝備系統**（`src/equipment/EquipmentData.js`）：五個欄位固定
+  `weapon / helmet / clothes / pants / shoes`，目前商店只賣各一件「基本」款，
+  各 3000 元，效果都是小數值加成（攻擊力／防禦力／生命上限／移動速度）。
+  之後要加新裝備，直接在 `EQUIPMENT_DATA` 加項目、`TextureFactory.generateEquipmentIcons()`
+  補一個對應圖示（`equip_xxx`）即可，`ShopScene` / `InventoryScene` 都是讀資料表動態產生，不用改 UI 邏輯。
+- **背包場景**（`src/scenes/InventoryScene.js`）：左邊是角色目前身上五個裝備欄
+  （點擊＝卸下，卸下的裝備放回背包第一個空格；背包滿了會擋下並提示，不會讓裝備憑空消失），
+  右邊是 5x10（50 格）的物品格（`ui_slot` 材質），點格子裡的裝備＝穿上，
+  原本穿的那件會換回同一格（不會覆蓋掉，是真的交換）。
+- **商店場景**（`src/scenes/ShopScene.js`）：五張卡片各賣一件基本裝備，
+  買了直接塞進背包第一個空格；金幣不夠或背包滿了都會擋下並退款/提示。
+- **金幣系統**（`SaveManager.js` 新增 `getGold/setGold/addGold/spendGold`，
+  以及 `getInventory/setInventory/addItemToInventory`、`getEquipped/setEquipped`，
+  全部存在 localStorage，換場景/重開瀏覽器都會保留，跟暱稱、歷史最佳分數同一套機制）：
+  `GameOverScene` 結算時「擊殺數＝金幣數」直接 `addGold(this.kills)` 累加進永久存款。
+- **裝備加成套用時機**：`GameScene._applyEquipmentBonuses()` 在 `create()`
+  剛建立完 `Player` 之後執行一次，讀 `getEquipped()` 把五個欄位的 `bonus` 疊加到
+  `player.stats` 上（生命上限的加成會同時補血，不會讓玩家一開局就掉血）。
+  之後被動／遺物的加成都是在這個基礎之上再疊加，彼此互不影響。
+- **BootScene** 開場改跳轉到 `'MainMenuScene'`（原本是 `'CharacterSelectScene'`）。
+- **main.js** 場景清單新增 `MainMenuScene / InventoryScene / ShopScene`，移除 `CharacterSelectScene`。
+
+## 打擊感優化：拿掉所有鏡頭震動，改用「打擊停頓」+ 受擊擠壓動畫
+
+- 全專案的 `cameras.main.shake()` 都拿掉了（Boss 登場／範圍衝擊波／死亡、
+  超級賽亞人光環爆閃），改用 `cameras.main.flash()`（純閃光，不會讓畫面位移）
+  以及新增的 `GameScene.hitStop(duration, scaleTo)`：短暫把
+  `physics.world.timeScale` 降到接近 0 再還原，做出「這一下很重」的停頓感，
+  比畫面震動更有份量、也不會讓人頭暈。目前用在 Boss 範圍衝擊波／死亡兩個重擊時刻。
+- **一般敵人受擊**（`EnemySystem.damageEnemy()`）新增「擠壓→彈回」的縮放動畫
+  （爆擊時擠壓幅度更大），取代原本只有閃白＋擊退的單薄回饋。
+  重要細節：敵人的縮放基準值存在 `sprite.getData('baseScale')`，
+  在 `_resetEnemy()`（物件池重生時）就會同步更新，避免這隻敵人被回收後
+  下一輪重生成不同種類/tier 時，擠壓動畫還沿用上一輪生命週期的舊縮放值。
+

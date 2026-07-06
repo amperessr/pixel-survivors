@@ -56,6 +56,7 @@ export default class EnemySystem {
     sprite.setTexture(def.texture);
     sprite.setPosition(x, y);
     sprite.setScale(def.scale * tierDef.scaleMult);
+    sprite.setData('baseScale', def.scale * tierDef.scaleMult); // 給受擊擠壓動畫用，避免沿用到上一輪生命週期的縮放
     sprite.setDepth(y);
     // 防呆重置：確保從物件池取出的怪物一定是完全不透明、正常混合模式，
     // 避免任何殘留視覺狀態（例如特效或閃白動畫中途被打斷）造成看起來「隱形」
@@ -246,6 +247,22 @@ export default class EnemySystem {
     const hp = enemy.getData('hp') - dmg;
     enemy.setData('hp', hp);
     enemy.setTintFill(0xffffff);
+
+    // 受擊瞬間做一個「擠壓→彈回」的縮放動畫，加強打擊的份量感（取代鏡頭震動）。
+    // 用 baseScale 記錄敵人原本的縮放，動畫結束要準確恢復，不會越打越扁。
+    const baseScale = enemy.getData('baseScale') || enemy.scaleX || 1;
+    enemy.setData('baseScale', baseScale);
+    this.scene.tweens.killTweensOf(enemy);
+    this.scene.tweens.add({
+      targets: enemy,
+      scaleX: baseScale * (isCrit ? 1.35 : 1.2),
+      scaleY: baseScale * (isCrit ? 0.7 : 0.82),
+      duration: 60,
+      yoyo: true,
+      ease: 'Quad.easeOut',
+      onComplete: () => { if (enemy.active) { enemy.setScale(baseScale); } },
+    });
+
     // 用一個遞增的 token 標記「這是第幾次閃白」，避免同一隻怪物在極短時間內
     // 被連續打好幾下時，較早的那次 delayedCall 事後又把顏色蓋回去、或誤判已死亡的物件
     const token = (enemy.getData('flashToken') || 0) + 1;

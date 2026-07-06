@@ -52,6 +52,7 @@ export default class TextureFactory {
       ['generateIcePillars', () => this.generateIcePillars()],
       ['generatePickups', () => this.generatePickups()],
       ['generateUI', () => this.generateUI()],
+      ['generateEquipmentIcons', () => this.generateEquipmentIcons()],
     ];
     for (const [name, fn] of steps) {
       try {
@@ -575,38 +576,95 @@ export default class TextureFactory {
       ctx.fillRect(0, 0, s, s);
     });
 
-    // 龍之翼遺物專用材質：畫「一片」翅膀，材質是純白色方便套用任何 tint，
-    // 遊戲內只需要這一張圖，左邊用 setFlipX(true) 鏡射就能湊出左右對稱的一對翅膀，
-    // 不用畫兩張。錨點（翅膀跟身體連接的關節）刻意放在畫布左下角附近，
-    // 方便遊戲內用 setOrigin(0, 1) 直接把關節對齊到玩家背後的位置。
+    // 龍之翼遺物專用材質：改成參考圖片的深紅翼膜＋暗色骨架＋米白骨爪配色，
+    // 直接畫好固定顏色（不再是白色可調色版本），遊戲內也不再套用 tint。
+    // 錨點（翅膀跟身體連接的關節）放在畫布左上角附近，遊戲內用 setOrigin(0, 0)
+    // 對齊到玩家肩膀，翅膀主體往右下方展開，下緣是參差不齊的破損狀，
+    // 左邊翅膀直接用 setFlipX(true) 鏡射這張圖就好，不用再畫一張。
     {
-      const { tex, ctx } = this._canvas('fx_dragon_wing', 104, 92);
-      const ox = 4, oy = 88; // 翅膀根部關節在畫布內的座標
+      const { tex, ctx } = this._canvas('fx_dragon_wing', 130, 110);
+      const ox = 6, oy = 6; // 翅膀根部關節在畫布內的座標（留一點邊界避免骨頭畫到裁切）
       ctx.save();
       ctx.translate(ox, oy);
-      // 翼膜主體（半透明白色，讓 setTint() 可以整片染成任何顏色）
-      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+
+      // 翼膜主體（深紅漸層，靠近骨頭比較亮、邊緣比較暗）
+      const membraneGrad = ctx.createLinearGradient(0, 0, 90, 80);
+      membraneGrad.addColorStop(0, '#b3202a');
+      membraneGrad.addColorStop(1, '#5c0f14');
+      ctx.fillStyle = membraneGrad;
       ctx.beginPath();
-      ctx.moveTo(0, -8);
-      ctx.lineTo(62, -48);
-      ctx.lineTo(46, -10);
-      ctx.lineTo(74, 0);
-      ctx.lineTo(42, 10);
-      ctx.lineTo(52, 36);
-      ctx.lineTo(16, 16);
+      ctx.moveTo(0, 0);
+      ctx.lineTo(70, 14); // 主骨末端（翼尖爪）
+      ctx.lineTo(58, 34);
+      ctx.lineTo(84, 44); // 第二指骨末端
+      ctx.lineTo(60, 52);
+      ctx.lineTo(78, 66); // 第三指骨末端
+      ctx.lineTo(46, 66);
+      // 參差不齊的下緣（破損滴落狀鋸齒）
+      ctx.lineTo(50, 78);
+      ctx.lineTo(38, 72);
+      ctx.lineTo(34, 86);
+      ctx.lineTo(24, 74);
+      ctx.lineTo(18, 84);
+      ctx.lineTo(10, 68);
+      ctx.lineTo(0, 60);
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+      ctx.strokeStyle = '#2c0608';
       ctx.lineWidth = 2;
       ctx.stroke();
-      // 翼骨紋路：從關節放射出去的幾道線條，讓翅膀有膜狀質感（而不是一片死板色塊）
-      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-      ctx.lineWidth = 1.4;
+
+      // 翼膜上的破洞（呼應參考圖裡的兩個小洞）
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.beginPath(); ctx.arc(30, 58, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(50, 62, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+
+      // 指骨紋路（暗紅線條，從關節放射到各末端，做出膜狀肋線）
+      ctx.strokeStyle = 'rgba(40,10,10,0.6)';
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.moveTo(0, -8); ctx.lineTo(46, -10);
-      ctx.moveTo(0, -8); ctx.lineTo(42, 10);
-      ctx.moveTo(0, -8); ctx.lineTo(52, 36);
+      ctx.moveTo(0, 0); ctx.lineTo(58, 34);
+      ctx.moveTo(0, 0); ctx.lineTo(60, 52);
+      ctx.moveTo(0, 0); ctx.lineTo(46, 66);
       ctx.stroke();
+
+      // 主骨（沿翅膀頂端弧線的暗色骨頭，帶米白色關節點，呼應參考圖的骨節紋理）
+      ctx.strokeStyle = '#2a1c14';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(40, -6, 70, 14);
+      ctx.stroke();
+      ctx.fillStyle = '#d8c39a';
+      for (let t = 0.15; t <= 0.95; t += 0.16) {
+        const x = (1 - t) * (1 - t) * 0 + 2 * (1 - t) * t * 40 + t * t * 70;
+        const y = (1 - t) * (1 - t) * 0 + 2 * (1 - t) * t * -6 + t * t * 14;
+        ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // 翼尖與各指骨末端的骨爪（米白色彎鉤狀）
+      const drawClaw = (x, y, ang) => {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(ang);
+        ctx.fillStyle = '#d8c39a';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(14, -4, 20, 6);
+        ctx.quadraticCurveTo(10, 2, 0, 4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#7a6440';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      };
+      drawClaw(70, 14, -0.3);
+      drawClaw(84, 44, 0.15);
+      drawClaw(78, 66, 0.5);
+
       ctx.restore();
       this._finish(tex);
     }
@@ -788,6 +846,111 @@ export default class TextureFactory {
       ctx.fill();
       ctx.strokeStyle = '#6fd3ff';
       ctx.lineWidth = 3;
+      ctx.stroke();
+    });
+    // 背包格子：空格用的方形底板，5x10 格子共用同一張材質
+    mk('ui_slot', 72, 72, (ctx) => {
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      TextureFactory.roundRect(ctx, 0, 0, 72, 72, 8);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(111,211,255,0.5)';
+      ctx.lineWidth = 2;
+      TextureFactory.roundRect(ctx, 1, 1, 70, 70, 8);
+      ctx.stroke();
+    });
+    // 裝備欄位（角色左側 5 個欄位）用的底板，比背包格子大一點、顏色也不同，
+    // 方便玩家一眼分辨「這是身上穿的」跟「這是包包裡的」
+    mk('ui_equip_slot', 96, 96, (ctx) => {
+      ctx.fillStyle = 'rgba(255,224,102,0.08)';
+      TextureFactory.roundRect(ctx, 0, 0, 96, 96, 10);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,224,102,0.65)';
+      ctx.lineWidth = 3;
+      TextureFactory.roundRect(ctx, 1.5, 1.5, 93, 93, 10);
+      ctx.stroke();
+    });
+  }
+
+  // 裝備圖示：五種基本裝備各畫一個簡單好辨識的剪影圖示，統一用白色描邊＋半透明填色，
+  // 風格跟武器技能圖示（generateWeaponIcons）一致
+  generateEquipmentIcons() {
+    const mk = (key, size, draw) => {
+      const { tex, ctx } = this._canvas(key, size, size);
+      draw(ctx, size);
+      this._finish(tex);
+    };
+    mk('equip_weapon', 48, (ctx, s) => {
+      // 一把簡單的短劍
+      ctx.save();
+      ctx.translate(s / 2, s / 2);
+      ctx.rotate(-Math.PI / 4);
+      ctx.fillStyle = '#dfe6ee';
+      ctx.fillRect(-3, -18, 6, 26);
+      ctx.beginPath(); ctx.moveTo(-3, -18); ctx.lineTo(0, -24); ctx.lineTo(3, -18); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#8a5a2b';
+      ctx.fillRect(-8, 8, 16, 5);
+      ctx.fillStyle = '#5a3c1e';
+      ctx.fillRect(-2.5, 12, 5, 10);
+      ctx.restore();
+    });
+    mk('equip_helmet', 48, (ctx, s) => {
+      const cx = s / 2, cy = s / 2 + 4;
+      ctx.fillStyle = '#9fb2c9';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 16, Math.PI, 0, false);
+      ctx.lineTo(cx + 16, cy + 6);
+      ctx.lineTo(cx - 16, cy + 6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#5a6b80';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(20,24,32,0.7)';
+      ctx.fillRect(cx - 12, cy - 4, 24, 6);
+    });
+    mk('equip_clothes', 48, (ctx, s) => {
+      const cx = s / 2, cy = s / 2;
+      ctx.fillStyle = '#7fb2ff';
+      ctx.beginPath();
+      ctx.moveTo(cx - 10, cy - 16);
+      ctx.lineTo(cx - 18, cy - 8);
+      ctx.lineTo(cx - 12, cy - 4);
+      ctx.lineTo(cx - 10, cy - 8);
+      ctx.lineTo(cx - 10, cy + 18);
+      ctx.lineTo(cx + 10, cy + 18);
+      ctx.lineTo(cx + 10, cy - 8);
+      ctx.lineTo(cx + 12, cy - 4);
+      ctx.lineTo(cx + 18, cy - 8);
+      ctx.lineTo(cx + 10, cy - 16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#3d6bb8';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+    mk('equip_pants', 48, (ctx, s) => {
+      const cx = s / 2, cy = s / 2 - 8;
+      ctx.fillStyle = '#5b6b8a';
+      ctx.fillRect(cx - 12, cy, 24, 14);
+      ctx.fillRect(cx - 12, cy + 14, 9, 16);
+      ctx.fillRect(cx + 3, cy + 14, 9, 16);
+      ctx.strokeStyle = '#3a4560';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(cx - 12, cy, 24, 14);
+    });
+    mk('equip_shoes', 48, (ctx, s) => {
+      const cx = s / 2, cy = s / 2 + 6;
+      ctx.fillStyle = '#c9843d';
+      ctx.beginPath();
+      ctx.moveTo(cx - 12, cy - 6);
+      ctx.lineTo(cx - 4, cy - 6);
+      ctx.lineTo(cx + 12, cy);
+      ctx.lineTo(cx + 12, cy + 8);
+      ctx.lineTo(cx - 12, cy + 8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#7a4d1e';
+      ctx.lineWidth = 2;
       ctx.stroke();
     });
   }

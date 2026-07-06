@@ -105,13 +105,14 @@ https://game-text-cd3c2-default-rtdb.asia-southeast1.firebasedatabase.app/
 │   ├── fonts/
 │   └── shaders/
 ├── src/
-│   ├── scenes/              # BootScene / CharacterSelectScene / GameScene / UIScene / LevelUpScene / RelicChoiceScene / GameOverScene
+│   ├── scenes/              # BootScene / MainMenuScene / InventoryScene / ShopScene / GameScene / UIScene / LevelUpScene / RelicChoiceScene / GameOverScene
 │   ├── player/               # Player.js：角色數值、四職業設定、移動與衝刺
 │   ├── enemy/                 # EnemyData.js / EnemySystem.js：怪物 AI 與物件池
 │   ├── boss/                  # Boss.js：黑藍巨龍／血色紅龍兩種型態，三種技能與血條
 │   ├── weapons/               # WeaponData.js / WeaponSystem.js：五武器五階＋進化與聯動
 │   ├── skills/                # PassiveData.js：五被動十階
 │   ├── relics/                # RelicData.js：擊敗 Boss 後可拿取的永久遺物（龍之光環／龍之翼）
+│   ├── equipment/             # EquipmentData.js：裝備系統（武器/頭盔/衣服/褲子/鞋子），商店與背包共用
 │   ├── ui/                    # （保留擴充：可拆分更細的 UI 元件）
 │   ├── firebase/              # firebase.js：Realtime Database 排行榜
 │   ├── managers/               # ObjectPool.js / AudioManager.js / SaveManager.js

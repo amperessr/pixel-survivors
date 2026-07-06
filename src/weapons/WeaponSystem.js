@@ -92,20 +92,24 @@ export default class WeaponSystem {
     // 鋸片環繞更新
     if (this.owned.sawblade) {
       const data = this._getEffectiveData('sawblade');
-      // 原本 `1 + atkSpeed * 0.3` 完全沒有上限：被動攻速現在可以疊到 10 級
-      // （單一被動就 +80），乘出來的轉速倍率會誇張到 25 倍以上，看起來像失控轉輪。
-      // 改成係數 0.02 並加上 3.5 倍的硬上限，跟冷卻公式（`_scaledCooldown` 有 80ms 下限）
-      // 一樣走「遞增但有天花板」的設計，數值更合理，高攻速也還是看得出旋轉動作。
-      const atkSpeedMult = Math.min(3.5, 1 + this.player.stats.atkSpeed * 0.02);
-      const rot = data.rotSpeed * atkSpeedMult;
+      // 上一版把倍率上限訂在 3.5 倍還是太快：被動攻速疊到 10 級（+80）算出來是
+      // 2.6 倍，接近上限，公轉+自轉疊加後看起來還是很誇張。這次把係數降到 0.015、
+      // 上限降到 2.2 倍，同樣量級的攻速大概只會到 ~2.2 倍封頂，肉眼看起來更合理。
+      const atkSpeedMult = Math.min(2.2, 1 + this.player.stats.atkSpeed * 0.015);
+      const rot = data.rotSpeed * atkSpeedMult; // 公轉角速度（繞著玩家轉的速度）
       this.sawbladeAngle += rot * (delta / 1000);
       const n = this.sawbladeSprites.length;
+      // 鋸片「自轉」（貼圖本身的旋轉，純視覺效果，不影響命中判定）改成固定速度、
+      // 不再跟攻速倍率掛鉤——之前公轉和自轉共用同一個倍率，攻速一高兩個一起衝，
+      // 看起來像失控的電風扇。固定在跟 1 級公轉差不多的速度，任何build下都穩定。
+      const selfSpinSpeed = 2.6; // 弧度/秒，約每秒轉 0.41 圈
+      const selfSpinDelta = selfSpinSpeed * (delta / 1000);
       for (let i = 0; i < n; i++) {
         const ang = this.sawbladeAngle + (i / n) * Math.PI * 2;
         const sp = this.sawbladeSprites[i];
         sp.x = this.player.sprite.x + Math.cos(ang) * data.radius;
         sp.y = this.player.sprite.y + Math.sin(ang) * data.radius;
-        sp.rotation += 0.3;
+        sp.rotation += selfSpinDelta;
       }
     }
 

@@ -1,6 +1,11 @@
 // 本地儲存管理：玩家名稱僅需詢問一次，之後從 localStorage 讀取
 const NAME_KEY = 'pixelSurvivors_playerName';
 const BEST_KEY = 'pixelSurvivors_bestScore';
+const GOLD_KEY = 'pixelSurvivors_gold';
+const INVENTORY_KEY = 'pixelSurvivors_inventory'; // JSON: 長度 50 的陣列，每格是 itemId 或 null
+const EQUIPPED_KEY = 'pixelSurvivors_equipped';   // JSON: { weapon, helmet, clothes, pants, shoes }
+
+const INVENTORY_SIZE = 50; // 5 列 x 10 欄，跟楓之谷倉庫一樣的排法
 
 export function getPlayerName() {
   return localStorage.getItem(NAME_KEY);
@@ -19,6 +24,75 @@ export function setBestScore(score) {
   if (score > best) {
     localStorage.setItem(BEST_KEY, String(score));
   }
+}
+
+// ---------- 金幣 ----------
+export function getGold() {
+  return parseInt(localStorage.getItem(GOLD_KEY) || '0', 10);
+}
+
+export function setGold(amount) {
+  localStorage.setItem(GOLD_KEY, String(Math.max(0, Math.floor(amount))));
+}
+
+export function addGold(amount) {
+  const next = getGold() + Math.floor(amount);
+  setGold(next);
+  return next;
+}
+
+// 花費金幣：金額不足時回傳 false、不會扣款；足夠的話扣款並回傳 true
+export function spendGold(amount) {
+  const cur = getGold();
+  if (cur < amount) return false;
+  setGold(cur - amount);
+  return true;
+}
+
+// ---------- 背包（50 格，5x10）----------
+export function getInventory() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(INVENTORY_KEY) || '[]');
+    const arr = Array.isArray(raw) ? raw : [];
+    while (arr.length < INVENTORY_SIZE) arr.push(null);
+    return arr.slice(0, INVENTORY_SIZE);
+  } catch {
+    return new Array(INVENTORY_SIZE).fill(null);
+  }
+}
+
+export function setInventory(arr) {
+  localStorage.setItem(INVENTORY_KEY, JSON.stringify(arr.slice(0, INVENTORY_SIZE)));
+}
+
+// 把一個 itemId 塞進背包第一個空格；背包滿了回傳 false（呼叫端可以提示玩家背包已滿）
+export function addItemToInventory(itemId) {
+  const inv = getInventory();
+  const idx = inv.findIndex((slot) => !slot);
+  if (idx === -1) return false;
+  inv[idx] = itemId;
+  setInventory(inv);
+  return true;
+}
+
+// ---------- 已裝備物品（weapon / helmet / clothes / pants / shoes）----------
+export function getEquipped() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(EQUIPPED_KEY) || '{}');
+    return {
+      weapon: raw.weapon || null,
+      helmet: raw.helmet || null,
+      clothes: raw.clothes || null,
+      pants: raw.pants || null,
+      shoes: raw.shoes || null,
+    };
+  } catch {
+    return { weapon: null, helmet: null, clothes: null, pants: null, shoes: null };
+  }
+}
+
+export function setEquipped(equipped) {
+  localStorage.setItem(EQUIPPED_KEY, JSON.stringify(equipped));
 }
 
 // 顯示 HTML 名稱輸入 Modal，回傳 Promise<string>

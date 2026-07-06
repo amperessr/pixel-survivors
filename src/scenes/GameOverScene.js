@@ -1,4 +1,4 @@
-import { getPlayerName, setBestScore, getBestScore } from '../managers/SaveManager.js';
+import { getPlayerName, setBestScore, getBestScore, addGold, getGold } from '../managers/SaveManager.js';
 import { submitScore, subscribeLeaderboard } from '../firebase/firebase.js';
 import { textStyle } from '../utils/TextStyle.js';
 
@@ -21,6 +21,10 @@ export default class GameOverScene extends Phaser.Scene {
     const score = this.kills * 10 + this.level * 50 + Math.floor(this.playTime * 0.5);
     setBestScore(score);
 
+    // 擊殺數直接轉換成金幣（1 擊殺 = 1 金幣），存進永久金幣存款，可以拿去商店買裝備
+    const goldEarned = this.kills;
+    addGold(goldEarned);
+
     const mm = String(Math.floor(this.playTime / 60)).padStart(2, '0');
     const ss = String(this.playTime % 60).padStart(2, '0');
 
@@ -30,6 +34,7 @@ export default class GameOverScene extends Phaser.Scene {
       `擊殺數：${this.kills}`,
       `存活時間：${mm}:${ss}`,
       `歷史最佳：${getBestScore()}`,
+      `💰 獲得金幣：+${goldEarned}（目前總金幣：${getGold()}）`,
     ].join('\n'), textStyle({
       fontSize: '34px', color: '#fff', align: 'center', lineSpacing: 14,
     })).setOrigin(0.5);
@@ -55,9 +60,9 @@ export default class GameOverScene extends Phaser.Scene {
     });
 
     const btn = this.add.image(w / 2, h - 110, 'ui_bar_bg').setDisplaySize(360, 76).setInteractive({ useHandCursor: true });
-    this.add.text(w / 2, h - 110, '重新開始', textStyle({ fontSize: '32px', color: '#10131a' })).setOrigin(0.5);
+    this.add.text(w / 2, h - 110, '返回主選單', textStyle({ fontSize: '32px', color: '#10131a' })).setOrigin(0.5);
     btn.on('pointerover', () => btn.setTint(0x6fd3ff));
     btn.on('pointerout', () => btn.clearTint());
-    btn.on('pointerdown', () => this.scene.start('CharacterSelectScene'));
+    btn.on('pointerdown', () => this.scene.start('MainMenuScene'));
   }
 }

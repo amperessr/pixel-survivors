@@ -14,6 +14,6 @@ export default class BootScene extends Phaser.Scene {
     factory.generateAll();
 
     label.destroy();
-    this.scene.start('CharacterSelectScene');
+    this.scene.start('MainMenuScene');
   }
 }

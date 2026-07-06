@@ -8,6 +8,8 @@ import Boss from '../boss/Boss.js';
 import { WEAPON_IDS, WEAPON_KNOCKBACK } from '../weapons/WeaponData.js';
 import { PASSIVE_IDS } from '../skills/PassiveData.js';
 import { RELICS } from '../relics/RelicData.js';
+import { EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
+import { getEquipped } from '../managers/SaveManager.js';
 import { dist } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { textStyle } from '../utils/TextStyle.js';
@@ -30,6 +32,7 @@ export default class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(-1e7, -1e7, 2e7, 2e7);
 
     this.player = new Player(this, 0, 0, this.characterId);
+    this._applyEquipmentBonuses();
     this.cameras.main.startFollow(this.player.sprite, true, 0.12, 0.12);
     this.cameras.main.setZoom(2.1); // 鏡頭拉近，讓角色與怪物看起來更清楚、不會太小太遠
 
@@ -68,8 +71,36 @@ export default class GameScene extends Phaser.Scene {
     audioManager.startBgm();
   }
 
+  // 讀取存檔裡目前裝備的五個欄位（武器/頭盔/衣服/褲子/鞋子），
+  // 把對應的數值加成疊加到玩家身上——只在開局套用一次，之後升級/被動/遺物
+  // 都是在這個基礎上再疊加，彼此不衝突。
+  _applyEquipmentBonuses() {
+    const equipped = getEquipped();
+    const stats = this.player.stats;
+    Object.values(equipped).forEach((itemId) => {
+      if (!itemId || !EQUIPMENT_DATA[itemId]) return;
+      const bonus = EQUIPMENT_DATA[itemId].bonus || {};
+      if (bonus.attack) stats.attack += bonus.attack;
+      if (bonus.defense) stats.defense += bonus.defense;
+      if (bonus.moveSpeed) stats.moveSpeed += bonus.moveSpeed;
+      if (bonus.maxHp) {
+        stats.maxHp += bonus.maxHp;
+        this.player.hp += bonus.maxHp; // 生命上限提升的部分直接補滿，不用讓玩家「掉血」
+      }
+    });
+  }
+
   update(time, delta) {
     if (this.paused) return;
+    // 安全網：不管 _update() 內部是否有例外被下面的 try/catch 吃掉，
+    // 只要偵測到玩家血量已經歸零但遊戲還沒結束，就直接強制觸發死亡流程。
+    // 這是為了解決「血量到 0 但站在原地、遊戲沒有結束」的問題——
+    // 這類狀況幾乎都是 onPlayerDeath() 內部某個步驟拋了例外，被下面那層
+    // try/catch 吃掉之後，切換到 GameOverScene 那一行就再也沒機會執行到。
+    if (!this.gameEnded && this.player && this.player.hp <= 0) {
+      this.onPlayerDeath();
+      return;
+    }
     // 防呆：任何未預期的例外都只印出錯誤並跳過這一幀，而不是讓 Phaser 的
     // update 迴圈整個中斷、畫面卡住不動（Boss 那個卡死 bug就是活生生的例子，
     // 這裡多一層保護，以後就算有新的類似疏漏也不會直接讓整個遊戲當掉）。
@@ -364,14 +395,48 @@ export default class GameScene extends Phaser.Scene {
     this.physics.world.resume();
   }
 
+  // 拿到遺物時的通知橫幅：畫面正中央短暫顯示「獲得遺物／xxx」，
+  // 跟升級、進化那些提示走同一種「淡入停留→淡出」的節奏，讓玩家清楚知道剛剛拿到了什麼。
+  announceRelicObtained(relicName) {
+    const w = this.scale.width, h = this.scale.height;
+    const container = this.add.container(w / 2, h * 0.32).setScrollFactor(0).setDepth(31000).setAlpha(0);
+
+    const title = this.add.text(0, -6, '獲得遺物', textStyle({
+      fontSize: '30px', color: '#cfe9ff',
+    })).setOrigin(0.5);
+    const name = this.add.text(0, 38, relicName, textStyle({
+      fontSize: '52px', color: '#ffe066',
+    })).setOrigin(0.5);
+    container.add([title, name]);
+
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      duration: 260,
+      yoyo: false,
+      onComplete: () => {
+        this.tweens.add({
+          targets: container, alpha: 0, duration: 500, delay: 1500,
+          onComplete: () => container.destroy(),
+        });
+      },
+    });
+  }
+
   onPlayerDeath() {
     if (this.gameEnded) return;
     this.gameEnded = true;
     this.paused = true;
-    audioManager.stopBgm();
-    audioManager.gameOver();
+
+    // 下面這幾步各自包 try/catch：不管哪一步意外拋錯，都不能連累到
+    // 最後「切換到 GameOverScene」那一行沒有執行到——這正是之前
+    // 「血量歸零但畫面卡住不結束」的成因（某個步驟拋例外，被外層 update()
+    // 的 try/catch 吃掉，導致 scene.start() 永遠沒機會被呼叫到）。
+    try { audioManager.stopBgm(); } catch (err) { console.error('[GameScene] stopBgm 失敗：', err); }
+    try { audioManager.gameOver(); } catch (err) { console.error('[GameScene] gameOver 音效失敗：', err); }
+    try { this.scene.stop('UIScene'); } catch (err) { console.error('[GameScene] 關閉 UIScene 失敗：', err); }
+
     const elapsed = Math.floor((this.time.now - this.startTime) / 1000);
-    this.scene.stop('UIScene');
     this.scene.start('GameOverScene', {
       kills: this.killCount,
       level: this.player.level,
@@ -396,6 +461,19 @@ export default class GameScene extends Phaser.Scene {
 
   // ================= 特效輔助 =================
   // 通用「爆裂粒子」：從一個點往四周噴出好幾個小碎片，比單張淡出圖案更有份量感
+  // 「打擊停頓」(hit stop)：短暫把物理世界的時間流速降到接近凍結，
+  // 製造那種「這一拳很重」的手感，取代畫面震動（畫面震動容易讓人頭暈、
+  // 也比較廉價，hit stop 是很多動作遊戲慣用的手法）。
+  hitStop(duration = 70, scaleTo = 0.05) {
+    if (this._hitStopUntil && this.time.now < this._hitStopUntil) return; // 短時間內不重疊觸發，避免疊加卡頓
+    const prevScale = this.physics.world.timeScale;
+    this.physics.world.timeScale = scaleTo;
+    this._hitStopUntil = this.time.now + duration;
+    this.time.delayedCall(duration, () => {
+      this.physics.world.timeScale = prevScale;
+    });
+  }
+
   spawnBurstFx(x, y, color, count = 10, texture = 'fx_crit', baseSpeed = 90) {
     for (let i = 0; i < count; i++) {
       const ang = (i / count) * Math.PI * 2 + Math.random() * 0.4;
@@ -482,7 +560,7 @@ export default class GameScene extends Phaser.Scene {
     const auraTint = 0xffe066;
     p.setTint(auraTint);
     this.cameras.main.flash(320, 255, 224, 100);
-    this.cameras.main.shake(250, 0.008);
+    this.hitStop(80);
     this.spawnGlowRing(p.x, p.y, 'fx_levelup', auraTint, 0.4, 5, 700, 29997);
     this.spawnBurstFx(p.x, p.y, auraTint, 26, 'fx_levelup', 210);
     this.saiyanBurstUntil = this.time.now + duration;
@@ -539,14 +617,13 @@ export default class GameScene extends Phaser.Scene {
   enableDragonWingsVisual() {
     this.dragonWingsActive = true;
     this._nextWingsFxAt = 0;
-    const wingTint = 0xff6a3d;
     if (!this.dragonWingLeft) {
+      // 材質已經是畫好的深紅／暗骨固定配色（參考紅龍翅膀圖片），
+      // 不用再套用 tint 或 ADD 疊加模式，維持一般混合模式讓顏色如實呈現
       this.dragonWingLeft = this.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_dragon_wing')
-        .setOrigin(0, 1).setFlipX(true).setTint(wingTint).setAlpha(0.88).setScale(1.15)
-        .setBlendMode(Phaser.BlendModes.ADD).setDepth(9996);
+        .setOrigin(0, 0).setFlipX(true).setScale(1.05).setDepth(9996);
       this.dragonWingRight = this.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_dragon_wing')
-        .setOrigin(0, 1).setTint(wingTint).setAlpha(0.88).setScale(1.15)
-        .setBlendMode(Phaser.BlendModes.ADD).setDepth(9996);
+        .setOrigin(0, 0).setScale(1.05).setDepth(9996);
     }
     this.dragonWingLeft.setVisible(true);
     this.dragonWingRight.setVisible(true);
@@ -561,11 +638,11 @@ export default class GameScene extends Phaser.Scene {
     const flap = Math.sin(time / 130) * 0.22 - 0.08;
     const depth = p.depth - 1;
 
-    this.dragonWingLeft.setPosition(p.x - 6, p.y - 2);
+    this.dragonWingLeft.setPosition(p.x - 8, p.y - 14);
     this.dragonWingLeft.setRotation(-flap);
     this.dragonWingLeft.setDepth(depth);
 
-    this.dragonWingRight.setPosition(p.x + 6, p.y - 2);
+    this.dragonWingRight.setPosition(p.x + 8, p.y - 14);
     this.dragonWingRight.setRotation(flap);
     this.dragonWingRight.setDepth(depth);
 

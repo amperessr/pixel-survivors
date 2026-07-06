@@ -72,6 +72,7 @@ export default class RelicChoiceScene extends Phaser.Scene {
 
   _accept() {
     this.relic.apply(this.gs);
+    this.gs.announceRelicObtained(this.relic.name);
     this.gs.resumeFromRelicChoice();
     this.scene.stop();
   }
