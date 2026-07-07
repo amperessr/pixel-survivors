@@ -1017,12 +1017,9 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // 冰柱特效：從地面冒出一根結晶冰柱，命中範圍內敵人並造成減速。
-  // knockback 為 null 時不造成擊退；evolved 為 true 時體型更大、特效更華麗，
-  // 但刻意「不」套用其他武器共用的金色進化配色——冰系維持一貫的藍色系，
-  // 用更亮更飽和的冰藍白（0xbfe9ff）來區分一般版與進化版。
+  // knockback 為 null 時不造成擊退；evolved 為 true 時換成進化版的專屬美術圖
+  // （見下方 pillarTexture），不再跟一般版共用同一張貼圖疊色縮放。
   spawnIcePillar(x, y, dmg, slow, slowDuration, critRate, critDmg, knockback, evolved = false) {
-    const tint = evolved ? 0xbfe9ff : null;
-
     // 地面裂痕／冰霜擴散提示，讓玩家注意到冰柱要冒出來的位置
     const crack = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setScale(evolved ? 0.4 : 0.25).setAlpha(0.6);
     crack.setTint(evolved ? 0x8fd6ff : 0x8fe3ff);
@@ -1042,11 +1039,12 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
-    // 冰柱由下往上「刺」出來的動畫（用 Back.easeOut 做出衝出地面的彈跳感），
-    // 一般版跟進化版都是同一套「由內到外」的冒出邏輯，進化版只是體型更大
-    const pillarScale = evolved ? 1.9 : 1.15;
-    const pillar = this.add.image(x, y, 'fx_ice_pillar').setOrigin(0.5, 1).setDepth(y + 1).setScale(pillarScale, 0.05).setAlpha(0.95);
-    if (tint) pillar.setTint(tint);
+    // 冰柱由下往上「刺」出來的動畫（用 Back.easeOut 做出衝出地面的彈跳感）。一般版跟
+    // 進化版改用兩張不同的正式美術圖（小冰柱／大冰柱），各自調過縮放倍率，
+    // 讓兩張圖在遊戲裡的視覺大小跟舊版數值手感差不多。
+    const pillarTexture = evolved ? 'fx_ice_pillar_evo' : 'fx_ice_pillar_normal';
+    const pillarScale = evolved ? 0.42 : 0.55;
+    const pillar = this.add.image(x, y, pillarTexture).setOrigin(0.5, 1).setDepth(y + 1).setScale(pillarScale, pillarScale * 0.05).setAlpha(0.95);
 
     this.tweens.add({
       targets: pillar,
@@ -1071,8 +1069,9 @@ export default class GameScene extends Phaser.Scene {
         this.spawnImpactFx(x, y, 'frost', hitRadius, evolved);
 
         if (evolved) {
-          // 進化版收尾：頂端補一圈亮白冰晶閃光＋額外藍白碎片噴射，強調「更華麗」
-          const flash = this.add.image(x, y - pillarScale * 34, 'fx_frost')
+          // 進化版收尾：頂端補一圈亮白冰晶閃光＋額外藍白碎片噴射，強調「更華麗」；
+          // 閃光位置用實際圖片顯示高度換算，不再綁死舊版 procedural 貼圖比例的魔術數字
+          const flash = this.add.image(x, y - pillar.displayHeight * 0.85, 'fx_frost')
             .setDepth(y + 2).setScale(0.5).setAlpha(0.9).setTint(0xffffff).setBlendMode(Phaser.BlendModes.ADD);
           this.tweens.add({ targets: flash, scale: 1.7, alpha: 0, duration: 280, onComplete: () => flash.destroy() });
           this.spawnBurstFx(x, y - 10, 0xbfe9ff, 12, 'fx_frost', 120);

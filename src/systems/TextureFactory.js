@@ -49,7 +49,6 @@ export default class TextureFactory {
       ['generatePassiveIcons', () => this.generatePassiveIcons()],
       ['generateTiles', () => this.generateTiles()],
       ['generateEffects', () => this.generateEffects()],
-      ['generateIcePillars', () => this.generateIcePillars()],
       ['generatePickups', () => this.generatePickups()],
       ['generateUI', () => this.generateUI()],
       ['generateGachaMachine', () => this.generateGachaMachine()],
@@ -611,42 +610,6 @@ export default class TextureFactory {
       ctx.lineWidth = 1;
       ctx.stroke();
     });
-  }
-
-  // ---------- 冰霜技能：從地板冒出的冰柱 ----------
-  generateIcePillars() {
-    const w = 22, h = 60;
-    const { tex, ctx } = this._canvas('fx_ice_pillar', w, h);
-    const cx = w / 2;
-    // 主體：尖銳的結晶冰柱，由淺至深的藍白漸層
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, '#f2feff');
-    grad.addColorStop(0.35, '#a8ecff');
-    grad.addColorStop(1, '#2a7fc9');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.moveTo(cx, 0);
-    ctx.lineTo(cx + 7, h * 0.32);
-    ctx.lineTo(cx + 4, h * 0.62);
-    ctx.lineTo(cx + 10, h);
-    ctx.lineTo(cx - 10, h);
-    ctx.lineTo(cx - 4, h * 0.62);
-    ctx.lineTo(cx - 7, h * 0.32);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
-    // 內部高光紋路，增加結晶感
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(cx - 2, h * 0.18); ctx.lineTo(cx - 2, h * 0.88);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx + 3, h * 0.4); ctx.lineTo(cx + 3, h * 0.85);
-    ctx.stroke();
-    this._finish(tex);
   }
 
   // ---------- 拾取物：血包 ----------

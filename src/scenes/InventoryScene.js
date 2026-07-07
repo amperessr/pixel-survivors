@@ -5,19 +5,19 @@ import { textStyle } from '../utils/TextStyle.js';
 
 const COLS = 10, ROWS = 5; // 5x10 背包格子，跟楓之谷倉庫版面一樣
 
-// 角色圖是 64x64 的圓潤 Q 版身體（無明顯四肢），這裡把五個裝備欄位疊在對應的
-// 身體部位上（相對於角色圖中心的螢幕座標偏移量，會再乘上角色圖的縮放倍率）：
-// 頭盔在頭頂、衣服在胸口、褲子在下半身、鞋子在腳邊，武器則畫在角色右手邊。
-const SLOT_BODY_OFFSET = {
-  helmet: { x: 0, y: -100 },
-  clothes: { x: 0, y: -33 },
-  pants: { x: 0, y: 33 },
-  shoes: { x: 0, y: 100 },
-  weapon: { x: 115, y: 0 },
+// 裝備欄改成分兩排「掛」在角色左右兩側（各三格），不再疊在身體部位上——
+// 左邊由上到下：頭盔／衣服／褲子；右邊由上到下：武器／鞋子／戒指（戒指格
+// 另外在下面單獨處理，但位置沿用同一組「右側」欄位，湊成左右各三個）。
+const SLOT_SIDE_OFFSET = {
+  helmet: { x: -155, y: -85 },
+  clothes: { x: -155, y: 0 },
+  pants: { x: -155, y: 85 },
+  weapon: { x: 155, y: -85 },
+  shoes: { x: 155, y: 0 },
 };
 
 const PORTRAIT_SCALE = 3.4;
-const SLOT_SIZE = 58;
+const SLOT_SIZE = 66;
 
 // 能力值面板顯示的項目：跟 UIScene 底部狀態列同一套圖示/顏色，額外多了生命上限。
 const STATS_PANEL_DEFS = [
@@ -60,7 +60,7 @@ export default class InventoryScene extends Phaser.Scene {
     this.equipEmptyLabels = {};
 
     EQUIP_SLOTS.forEach((slot) => {
-      const off = SLOT_BODY_OFFSET[slot];
+      const off = SLOT_SIDE_OFFSET[slot];
       const sx = leftX + off.x, sy = portraitY + off.y;
       const bg = this.add.image(sx, sy, 'ui_equip_slot').setDisplaySize(SLOT_SIZE, SLOT_SIZE)
         .setInteractive({ useHandCursor: true }).setDepth(10);
@@ -78,9 +78,9 @@ export default class InventoryScene extends Phaser.Scene {
       bg.on('pointerout', () => { bg.clearTint(); this._hideTooltip(); });
     });
 
-    // 第六格：戒指，位置固定在角色 UI 右上角。目前遊戲裡還沒有戒指裝備資料，
-    // 先放一個佔位格並標註用途，點下去提示「尚未開放」，不做任何實際效果。
-    const ringX = leftX + 165, ringY = 150;
+    // 第六格：戒指，跟右側武器/鞋子排成同一欄，湊成左右各三格。目前遊戲裡還沒有
+    // 戒指裝備資料，先放一個佔位格並標註用途，點下去提示「尚未開放」，不做任何實際效果。
+    const ringX = leftX + 155, ringY = portraitY + 85;
     const ringBg = this.add.image(ringX, ringY, 'ui_equip_slot').setDisplaySize(SLOT_SIZE, SLOT_SIZE)
       .setInteractive({ useHandCursor: true }).setAlpha(0.6);
     this.add.text(ringX, ringY, '戒指', textStyle({ fontSize: '15px', color: '#cfcfcf' })).setOrigin(0.5).setAlpha(0.7);
@@ -192,9 +192,9 @@ export default class InventoryScene extends Phaser.Scene {
       const itemId = this.equipped[slot];
       const bg = this.equipSlotImgs[slot];
       if (itemId && EQUIPMENT_DATA[itemId]) {
-        // 圖示現在是 128x128 的正式美術圖（取代舊的 48x48 程式產生貼圖），縮放倍率
-        // 等比例縮小，維持跟改版前一樣的實際顯示大小。
-        const icon = this.add.image(bg.x, bg.y, EQUIPMENT_DATA[itemId].icon).setScale(0.49).setDepth(12);
+        // 圖示是 128x128 的正式美術圖，縮放倍率調大讓圖示確實填滿欄位方框，
+        // 不再看起來小小一顆飄在方框中間。
+        const icon = this.add.image(bg.x, bg.y, EQUIPMENT_DATA[itemId].icon).setScale(0.55).setDepth(12);
         this.equipIconImgs[slot] = icon;
         this.equipEmptyLabels[slot].setVisible(false);
       } else {
@@ -209,7 +209,8 @@ export default class InventoryScene extends Phaser.Scene {
       if (itemId && EQUIPMENT_DATA[itemId]) {
         const def = EQUIPMENT_DATA[itemId];
         const bg = this.slotBgs[idx];
-        const icon = this.add.image(bg.x, bg.y, def.icon).setScale(0.34);
+        // 背包格圖示縮放倍率調大，讓圖示填滿格子（原本 0.34 太小，格子裡空太多）。
+        const icon = this.add.image(bg.x, bg.y, def.icon).setScale(0.47);
         icon.setInteractive({ useHandCursor: true, draggable: true });
         icon.on('dragstart', () => {
           icon.setData('dragged', false);
