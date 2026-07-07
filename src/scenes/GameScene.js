@@ -377,6 +377,7 @@ export default class GameScene extends Phaser.Scene {
   registerKill() { this.killCount++; }
 
   onGainExp(amount) {
+    if (this.gameEnded) return false; // 遊戲已經結束就不要再處理升級（避免死後還跳升級選單）
     const leveledUp = this.player.gainExp(amount);
     if (leveledUp.length > 0) {
       audioManager.levelUp();
@@ -388,6 +389,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _openLevelUp() {
+    if (this.gameEnded) return;
     this.paused = true;
     this.physics.world.pause();
     this.scene.launch('LevelUpScene', {
@@ -397,6 +399,12 @@ export default class GameScene extends Phaser.Scene {
   }
 
   resumeFromLevelUp() {
+    // 重要防呆：玩家死亡的同一時間點有可能剛好也觸發升級（例如同歸於盡打死 Boss），
+    // 如果這裡沒檢查 gameEnded，死亡演出播到一半時升級選單被關掉，會把
+    // physics.world 恢復運作、this.paused 設回 false，讓怪物的擊退/碰撞
+    // 又能推著「已經死亡」的玩家滑動，而且遊戲永遠不會真的結束——
+    // 這正是「死亡時人物會往一個方向不停前進、無法結束遊戲」的根本原因。
+    if (this.gameEnded) return;
     this.paused = false;
     this.physics.world.resume();
     // 若這次升級是「擊敗 Boss 拿到經驗值」順便觸發的，等升級選單關掉後
@@ -410,6 +418,7 @@ export default class GameScene extends Phaser.Scene {
 
   // Boss 死亡時由 Boss._die() 呼叫，帶入這隻 Boss 的型態與對應遺物 id
   onBossDefeated(bossType, relicId) {
+    if (this.gameEnded) return; // 玩家跟 Boss 同時陣亡就不用再處理擊殺獎勵了
     this.boss = null;
     this.registerKill();
     // 慶祝特效一定會播放，不受任何選單開關影響
@@ -431,12 +440,15 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _openRelicChoicePrompt(relic) {
+    if (this.gameEnded) return;
     this.paused = true;
     this.physics.world.pause();
     this.scene.launch('RelicChoiceScene', { gameScene: this, relic });
   }
 
   resumeFromRelicChoice() {
+    // 跟 resumeFromLevelUp() 一樣的防呆：死亡後就不要再把物理世界恢復運作
+    if (this.gameEnded) return;
     this.paused = false;
     this.physics.world.resume();
   }
@@ -626,6 +638,21 @@ export default class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: fx, y: y - 34, alpha: 0, scale: 1.9, duration: 380, onComplete: () => fx.destroy() });
     this.spawnBurstFx(x, y, 0xffe066, 5, 'fx_crit', 70);
   }
+
+  // 傷害數字：一般傷害白色，爆擊傷害黃色（字體也比較大），從敵人身上往上飄再淡出。
+  // x 座標加一點隨機偏移，避免同一隻怪物短時間內連續中好幾刀時數字全部疊在同一點看不清楚。
+  spawnDamageNumber(x, y, amount, isCrit) {
+    const offsetX = (Math.random() - 0.5) * 24;
+    const text = this.add.text(x + offsetX, y - 14, `${Math.round(amount)}`, textStyle({
+      fontSize: isCrit ? '28px' : '20px',
+      color: isCrit ? '#ffe066' : '#ffffff',
+    })).setOrigin(0.5).setDepth(30010);
+    this.tweens.add({
+      targets: text, y: y - 50, alpha: 0, duration: 650, ease: 'Cubic.easeOut',
+      onComplete: () => text.destroy(),
+    });
+  }
+
   spawnKillFx(x, y) {
     const fx = this.add.image(x, y, 'fx_kill').setDepth(29999).setScale(0.5);
     this.tweens.add({ targets: fx, scale: 1.4, alpha: 0, duration: 300, onComplete: () => fx.destroy() });
