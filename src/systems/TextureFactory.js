@@ -740,6 +740,21 @@ export default class TextureFactory {
       ctx.strokeStyle = '#444';
       ctx.stroke();
     });
+    // 羊皮紙風格按鈕：給主選單用，搭配風景封面圖背景，米色底＋咖啡色邊框，
+    // 深色文字疊在上面隨時都看得清楚（不像 ui_bar_bg 深色底配深色文字，
+    // 沒 hover 之前幾乎看不到字）
+    mk('ui_button_parchment', 200, 60, (ctx) => {
+      const grad = ctx.createLinearGradient(0, 0, 0, 60);
+      grad.addColorStop(0, '#f0e2bd');
+      grad.addColorStop(1, '#dcc999');
+      ctx.fillStyle = grad;
+      TextureFactory.roundRect(ctx, 0, 0, 200, 60, 14);
+      ctx.fill();
+      ctx.strokeStyle = '#6b4a2b';
+      ctx.lineWidth = 4;
+      TextureFactory.roundRect(ctx, 2, 2, 196, 56, 14);
+      ctx.stroke();
+    });
     mk('ui_bar_fill_hp', 200, 16, (ctx) => {
       const grad = ctx.createLinearGradient(0, 0, 200, 0);
       grad.addColorStop(0, '#ff4d4d');
