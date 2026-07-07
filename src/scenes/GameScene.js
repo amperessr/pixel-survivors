@@ -9,7 +9,7 @@ import { WEAPON_IDS, WEAPON_KNOCKBACK } from '../weapons/WeaponData.js';
 import { PASSIVE_IDS } from '../skills/PassiveData.js';
 import { RELICS } from '../relics/RelicData.js';
 import { EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
-import { getEquipped, addGold, setBestScore } from '../managers/SaveManager.js';
+import { getEquipped, addGold, setBestScore, setCheckpointStage } from '../managers/SaveManager.js';
 import { dist } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { textStyle } from '../utils/TextStyle.js';
@@ -25,6 +25,11 @@ export default class GameScene extends Phaser.Scene {
 
   init(data) {
     this.characterId = data.characterId || 'balanced';
+    // 存檔點：從主選單選擇「當前關卡」或「往前十關」時會帶入 startStage，
+    // 讓這場遊戲一開局就等同於「已經存活到第 N 關」的難度（怪物強度／Boss 生成
+    // 時間都是照存活分鐘數算的，見下面 create() 怎麼往回推 startTime）。
+    // 沒有帶值就是預設從第 1 關開始（一般模式）。
+    this.startStage = Math.max(1, Math.floor(data.startStage || 1));
   }
 
   create() {
@@ -45,10 +50,17 @@ export default class GameScene extends Phaser.Scene {
 
     this.bossBoltGroup = this.physics.add.group();
     this.boss = null;
-    this.nextBossAt = BOSS_INTERVAL_MS;
-    this.bossSpawnCount = 0; // 用來讓黑藍巨龍／血色紅龍輪流出現
 
-    this.startTime = this.time.now;
+    // 存檔點：把 startTime 往回推，讓「存活分鐘數」（怪物強度／Boss 生成都是照這個算的）
+    // 從一開局就等於 startStage 對應的關卡數，而不用真的重新玩過前面的關卡。
+    const elapsedAtStartMs = (this.startStage - 1) * 60000;
+    this.startTime = this.time.now - elapsedAtStartMs;
+    // 補上「理論上應該已經打過幾隻王」的計數，讓黑藍/血色紅龍的輪替從這關開始算才對；
+    // 下一隻王訂在下一個 5 分鐘整數倍，不會因為往回推了 startTime 就讓好幾隻王在
+    // 一開局同一瞬間排隊出現。
+    this.bossSpawnCount = Math.floor(elapsedAtStartMs / BOSS_INTERVAL_MS);
+    this.nextBossAt = (this.bossSpawnCount + 1) * BOSS_INTERVAL_MS;
+
     this.killCount = 0;
     this.paused = false;
     this.escPaused = false; // 僅代表玩家手動按 ESC 暫停（用於顯示「已暫停」遮罩）
@@ -142,6 +154,13 @@ export default class GameScene extends Phaser.Scene {
 
     this.player.update(time, delta);
     this.map.update(this.player.sprite.x, this.player.sprite.y);
+
+    // 每滿 5 關就記錄一次存檔點（只會往前推進，見 SaveManager.setCheckpointStage）
+    const stage = this.getStage();
+    if (stage % 5 === 0 && stage !== this._lastCheckpointStage) {
+      this._lastCheckpointStage = stage;
+      setCheckpointStage(stage);
+    }
 
     const elapsedMin = (time - this.startTime) / 60000;
     this.enemySystem.setDifficultyMinutes(elapsedMin);
