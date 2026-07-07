@@ -89,8 +89,8 @@ export default class MainMenuScene extends Phaser.Scene {
     this.add.text(120, h - 76, `已登入：${getPlayerName() || '???'}`, textStyle({
       fontSize: '18px', color: '#9fd3ff',
     })).setOrigin(0.5);
-    const logoutBtn = this.add.image(120, h - 40, 'ui_bar_bg').setDisplaySize(170, 46).setInteractive({ useHandCursor: true });
-    this.add.text(120, h - 40, '登出', textStyle({ fontSize: '22px', color: '#10131a' })).setOrigin(0.5);
+    const logoutBtn = this.add.image(120, h - 40, 'ui_button_parchment').setDisplaySize(170, 46).setInteractive({ useHandCursor: true });
+    this.add.text(120, h - 40, '登出', textStyle({ fontSize: '22px', color: '#3a2413' })).setOrigin(0.5);
     logoutBtn.on('pointerover', () => logoutBtn.setTint(0xff9a9a));
     logoutBtn.on('pointerout', () => logoutBtn.clearTint());
     logoutBtn.on('pointerdown', () => logout());
