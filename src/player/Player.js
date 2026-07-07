@@ -149,6 +149,14 @@ export default class Player {
     this.dashCooldownUntil = time + 1800;
   }
 
+  // 升級/遺物選單開著的期間 update() 完全不會執行，如果玩家這時候按了衝刺鍵，
+  // 這個按鍵的「剛按下」狀態會一直留著沒被消耗掉，導致選單一關閉、下一幀
+  // update() 恢復執行時，明明玩家沒有在那個當下按鍵，卻無端觸發一次衝刺——
+  // 體感就像角色突然被瞬間移動。選單關閉、遊戲恢復時呼叫這個方法清掉殘留狀態。
+  clearBankedInput() {
+    this.keys.dash.reset();
+  }
+
   takeDamage(amount, time) {
     if (time < this.invulnerableUntil || this.hp <= 0) return false;
     const mitigated = Math.max(1, amount - this.stats.defense * 0.5);

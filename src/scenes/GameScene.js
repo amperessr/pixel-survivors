@@ -416,6 +416,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.gameEnded) return;
     this.paused = false;
     this.physics.world.resume();
+    this.player.clearBankedInput();
     // 若這次升級是「擊敗 Boss 拿到經驗值」順便觸發的，等升級選單關掉後
     // 再接著跳遺物選擇視窗，避免兩個選單同時疊在畫面上
     if (this._pendingRelic) {
@@ -460,6 +461,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.gameEnded) return;
     this.paused = false;
     this.physics.world.resume();
+    this.player.clearBankedInput();
   }
 
   // 拿到遺物時的通知橫幅：畫面正中央短暫顯示「獲得遺物／xxx」，
@@ -569,6 +571,7 @@ export default class GameScene extends Phaser.Scene {
       this.physics.world.pause();
     } else {
       this.physics.world.resume();
+      this.player.clearBankedInput();
     }
   }
 
