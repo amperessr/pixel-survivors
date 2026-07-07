@@ -5,7 +5,7 @@ import HealthPackSystem from '../systems/HealthPackSystem.js';
 import MagnetSystem from '../systems/MagnetSystem.js';
 import WeaponSystem from '../weapons/WeaponSystem.js';
 import Boss from '../boss/Boss.js';
-import { WEAPON_IDS, WEAPON_KNOCKBACK } from '../weapons/WeaponData.js';
+import { WEAPON_KNOCKBACK } from '../weapons/WeaponData.js';
 import { PASSIVE_IDS } from '../skills/PassiveData.js';
 import { RELICS } from '../relics/RelicData.js';
 import { EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
@@ -52,7 +52,6 @@ export default class GameScene extends Phaser.Scene {
     this.healthPackSystem = new HealthPackSystem(this, this.player);
     this.magnetSystem = new MagnetSystem(this, this.player);
     this.weaponSystem = new WeaponSystem(this, this.player, this.enemySystem);
-    this.weaponSystem.addOrUpgrade(WEAPON_IDS[0]); // 起始武器：火球術
 
     this.bossBoltGroup = this.physics.add.group();
     this.boss = null;
@@ -73,6 +72,15 @@ export default class GameScene extends Phaser.Scene {
     this.dragonAuraActive = false; // 是否已接受龍之光環（永久跟隨光環視覺開關）
     this.dragonWingsActive = false; // 是否已接受龍之翼（永久跟隨風之尾跡視覺開關）
     this._pendingRelic = null; // 擊敗 Boss 順便升級時，排隊等升級選單關閉後再跳遺物選擇視窗
+    // 重要修正：Phaser 同一個 GameScene 物件會在好幾場遊戲之間重複使用（scene.start()
+    // 只會重新呼叫 init()/create()，不會真的整個重建），這幾個旗標如果沒有在這裡
+    // 重設，會直接沿用「上一場遊戲死亡時」留下的值——這正是「這場遊戲結束後，下一場
+    // 玩家死亡不會結算」、「下一場撿經驗值完全沒反應」的根本原因：onGainExp()／
+    // onPlayerDeath() 等一大堆地方都在最前面檢查 `if (this.gameEnded) return`，
+    // 上一場死亡時已經把它設成 true，沒重設的話下一場一開局就已經是「遊戲已結束」的狀態。
+    this.gameEnded = false;
+    this._wentToGameOver = false;
+    this._lastCheckpointStage = 0;
 
     // 滑鼠瞄準方向（用於飛刀等以滑鼠為準的武器，此處以世界座標更新提供 UI 之用）
     this.input.on('pointermove', () => {});
@@ -124,6 +132,23 @@ export default class GameScene extends Phaser.Scene {
     });
 
     audioManager.startBgm();
+
+    // 開局不再固定送火球術，改成跳出選單讓玩家自己選一個起始技能——
+    // 遊戲維持暫停狀態，直到玩家選好為止（見 resumeFromStartSkillChoice()）。
+    // `_awaitingStartSkill` 這面旗標是為了擋掉這段期間按 ESC：如果沒擋，_togglePause()
+    // 會把 paused 誤解成一般 ESC 暫停而提早恢復運作，選單卻還蓋在畫面上、武器也還沒選。
+    this._awaitingStartSkill = true;
+    this.paused = true;
+    this.physics.world.pause();
+    this.scene.launch('StartSkillScene', { gameScene: this });
+  }
+
+  resumeFromStartSkillChoice() {
+    if (this.gameEnded) return;
+    this._awaitingStartSkill = false;
+    this.paused = false;
+    this.physics.world.resume();
+    this.player.clearBankedInput();
   }
 
   // 讀取存檔裡目前裝備的五個欄位（武器/頭盔/衣服/褲子/鞋子），
@@ -593,7 +618,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _togglePause() {
-    if (this.gameEnded) return;
+    if (this.gameEnded || this._awaitingStartSkill) return;
     this.paused = !this.paused;
     this.escPaused = this.paused;
     if (this.paused) {

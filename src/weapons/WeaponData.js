@@ -97,29 +97,33 @@ export const WEAPON_KNOCKBACK = {
 // 武器五級滿了之後可以「進化」成更強的高階版本，不是單純數值疊加，
 // 而是外觀（金色光環）與數值全面躍升的新武器
 export const WEAPON_EVOLUTIONS = {
+  // cooldownMult 沒指定的話會直接沿用 extraMult（範圍/數量的放大倍率），
+  // 但「冷卻時間縮短的倍率」跟「範圍/數量放大的倍率」其實是兩件不同的事，
+  // 共用同一個數字容易失控——火球進化成隕石之後就是因為這樣才變得太快，
+  // 這裡拆開來讓冷卻可以單獨調鬆一點，不用跟著範圍倍率一起放大。
   fireball: {
     name: '隕石燄爆',
     desc: '火球術的最終進化。不再沿地面飛行，改為鎖定敵人後從天而降砸下巨大隕石，範圍與威力大幅提升。',
-    dmgMult: 1.9, extraMult: 1.6,
+    dmgMult: 1.9, extraMult: 1.6, cooldownMult: 1.15,
   },
   lightning: {
     name: '雷霆風暴',
     desc: '雷電鎖鏈的最終進化。分裂數與傷害都大幅躍升，瞬間連鎖整群敵人。',
-    dmgMult: 1.7, extraMult: 1.8,
+    dmgMult: 1.7, extraMult: 1.8, cooldownMult: 1.3,
   },
   knife: {
     name: '旋風飛刃',
     desc: '飛刀的最終進化。數量與穿透力大幅提升，形成一片刀刃風暴。',
-    dmgMult: 1.6, extraMult: 1.8,
+    dmgMult: 1.6, extraMult: 1.8, cooldownMult: 1.3,
   },
   sawblade: {
     name: '狂暴鋸輪',
     desc: '旋轉鋸片的最終進化。數量與轉速大幅提升，環繞成一圈死亡領域。',
-    dmgMult: 1.7, extraMult: 1.6,
+    dmgMult: 1.7, extraMult: 1.6, cooldownMult: 1.3,
   },
   frost: {
     name: '永凍冰川',
     desc: '冰霜新星的最終進化。範圍與減速效果大幅提升，凍結一切靠近的敵人。',
-    dmgMult: 1.8, extraMult: 1.6,
+    dmgMult: 1.8, extraMult: 1.6, cooldownMult: 1.3,
   },
 };

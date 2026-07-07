@@ -61,18 +61,17 @@ export default class WeaponSystem {
     if (base.count != null) scaled.count = Math.round(base.count * evo.extraMult);
     if (base.pierce != null) scaled.pierce = base.pierce + 1;
     if (base.slow != null) scaled.slow = Math.min(0.85, base.slow * 1.2);
-    scaled.cooldown = base.cooldown / evo.extraMult;
+    scaled.cooldown = base.cooldown / (evo.cooldownMult || evo.extraMult);
     return scaled;
   }
 
-  // 依照聯動屬性微調冷卻時間（例如攻速影響飛刀/鋸片）；
-  // 每次開火時「即時」重新計算，屬性提升會立刻反映在下一次冷卻，不會卡在舊數值
+  // 依照攻速屬性縮短冷卻時間——原本只有飛刀/鋸片會吃到攻速加成，其餘武器
+  // 完全不受攻速影響，現在統一套用同一條公式到全部武器，被動攻速加成才會
+  // 真的對每個技能都有感。每次開火時「即時」重新計算，屬性提升會立刻反映在
+  // 下一次冷卻，不會卡在舊數值。
   _scaledCooldown(id, base) {
     const stats = this.player.stats;
-    if (id === 'knife' || id === 'sawblade') {
-      return Math.max(80, base / (1 + stats.atkSpeed * 0.35));
-    }
-    return base;
+    return Math.max(80, base / (1 + stats.atkSpeed * 0.35));
   }
 
   update(time, delta) {
@@ -173,8 +172,9 @@ export default class WeaponSystem {
   }
 
   _fireLightning(data, stats, enemy) {
-    // CritRate 越高，分裂數越多
+    // CritRate 越高，分裂數越多；攻擊力比照火球術的公式，同步反映到傷害上
     const bonusChains = Math.floor(stats.critRate / 20);
+    const dmg = data.dmg * (1 + stats.attack * 0.02);
     const px = this.player.sprite.x, py = this.player.sprite.y;
     const ang = angleTo(px, py, enemy.x, enemy.y);
     const proj = this.projectilePool.spawn();
@@ -182,7 +182,7 @@ export default class WeaponSystem {
     proj.setPosition(px, py);
     // 改成電光藍白色調（類似英雄聯盟史提克彈簧刀電刀的連鎖閃電配色）
     proj.setTint(data.evolved ? 0xffe066 : 0x7ef7ff);
-    proj.setData('dmg', data.dmg);
+    proj.setData('dmg', dmg);
     proj.setData('chains', data.chains + bonusChains);
     proj.setData('range', data.range);
     proj.setData('kind', 'lightning');
@@ -194,9 +194,10 @@ export default class WeaponSystem {
   }
 
   _fireKnife(data, stats, enemy) {
-    // AttackSpeed 越高，飛刀數量越多
+    // AttackSpeed 越高，飛刀數量越多；攻擊力比照火球術的公式，同步反映到傷害上
     const bonusCount = Math.floor(stats.atkSpeed / 25);
     const totalCount = data.count + bonusCount;
+    const dmg = data.dmg * (1 + stats.attack * 0.02);
     const px = this.player.sprite.x, py = this.player.sprite.y;
     const baseAng = angleTo(px, py, enemy.x, enemy.y);
     const spread = 0.18;
@@ -208,7 +209,7 @@ export default class WeaponSystem {
       proj.setPosition(px, py);
       proj.setRotation(baseAng + off);
       if (data.evolved) proj.setTint(0xffe066); else proj.clearTint();
-      proj.setData('dmg', data.dmg);
+      proj.setData('dmg', dmg);
       proj.setData('pierce', data.pierce);
       proj.setData('kind', 'knife');
       proj.setData('evolved', !!data.evolved);
@@ -219,9 +220,10 @@ export default class WeaponSystem {
   }
 
   _fireFrost(data, stats) {
-    // Defense 越高，範圍越大
+    // Defense 越高，範圍越大；攻擊力比照火球術的公式，同步反映到傷害上
     const bonusRadius = stats.defense * 1.2;
     const totalRadius = data.radius + bonusRadius;
+    const dmg = data.dmg * (1 + stats.attack * 0.02);
     const px = this.player.sprite.x, py = this.player.sprite.y;
     const kb = WEAPON_KNOCKBACK.frost;
     const knockback = { force: kb.force, duration: kb.duration };
@@ -241,7 +243,7 @@ export default class WeaponSystem {
           const x = px + Math.cos(ang) * pillarDist;
           const y = py + Math.sin(ang) * pillarDist;
           this.scene.time.delayedCall((s - 1) * 120, () => {
-            this.scene.spawnIcePillar(x, y, data.dmg, data.slow, data.slowDuration, stats.critRate, stats.critDmg, knockback, true);
+            this.scene.spawnIcePillar(x, y, dmg, data.slow, data.slowDuration, stats.critRate, stats.critDmg, knockback, true);
           });
         }
       }
@@ -256,7 +258,7 @@ export default class WeaponSystem {
         const x = px + Math.cos(ang) * pillarDist;
         const y = py + Math.sin(ang) * pillarDist;
         this.scene.time.delayedCall((i - 1) * 120, () => {
-          this.scene.spawnIcePillar(x, y, data.dmg, data.slow, data.slowDuration, stats.critRate, stats.critDmg, knockback, false);
+          this.scene.spawnIcePillar(x, y, dmg, data.slow, data.slowDuration, stats.critRate, stats.critDmg, knockback, false);
         });
       }
     }
@@ -278,6 +280,8 @@ export default class WeaponSystem {
 
   getSawbladeDamage() {
     if (!this.owned.sawblade) return 0;
-    return this._getEffectiveData('sawblade').dmg;
+    // 攻擊力比照其他武器的公式，同步反映到鋸片傷害上
+    const data = this._getEffectiveData('sawblade');
+    return data.dmg * (1 + this.player.stats.attack * 0.02);
   }
 }
