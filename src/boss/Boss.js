@@ -4,15 +4,21 @@ import { textStyle } from '../utils/TextStyle.js';
 
 const BOSS_BASE_HP = 900;
 const BOSS_BASE_DMG = 22;
-// Boss 現在用玩家提供的正式美術圖（去背後的黑龍/紅龍，見 assets/boss_black.png、
-// assets/boss_red.png），兩張圖都統一裁切/縮放成同樣的 574x320，不用再各自調整。
-// 0.9 倍縮放後龍的身體高度跟原本程式產生的貼圖差不多大，翅膀展開會比原本更寬更有氣勢。
+// Boss 現在用玩家提供的正式美術圖。兩隻龍（去背後的黑龍/紅龍，見 assets/boss_black.png、
+// assets/boss_red.png）統一裁切/縮放成 574x320，0.9 倍縮放後龍的身體高度跟原本程式產生
+// 的貼圖差不多大。惡魔王／樹王是直立人形，原始圖片長寬比跟龍差很多（比較接近正方形、
+// 沒有龍那麼寬扁），沿用同一個縮放倍率會顯得比兩隻龍巨大兩倍以上，所以改成每個型態自己
+// 的縮放倍率（見 BOSS_TYPES 的 scale 欄位），讓四種 Boss 站在畫面上的「體型感」比較一致。
 const BOSS_SCALE = 0.9;
 const BOSS_TOUCH_RADIUS = 100;   // Boss 對玩家造成接觸傷害的判定半徑（跟著體型放大）
 
-// 兩種 Boss 型態的外觀／技能配色與死亡時提供的遺物設定。
-// 黑藍巨龍沿用原本的冰系龍息，紅龍則改成火系龍息，死亡後提供的遺物也不同，
-// 這樣兩種 Boss 輪流出現時，玩家最終可以拿到兩種不同的永久遺物。
+// 四種 Boss 型態的外觀／技能配色與死亡時提供的遺物設定。
+// 兩隻龍（黑藍／紅）沿用原本的衝刺／龍爪／龍息三招；惡魔王／樹王是新增的兩隻，
+// 技能組改成「遠距／特殊／近戰」各一招（見 skills 欄位），近戰共用 claw 的揮擊
+// 邏輯、遠距共用 breath 的扇形彈幕邏輯（只是換色換材質），特殊技能則是新增的
+// nova（範圍新星），novaCenter 決定新星中心點是「Boss 自己」還是「鎖定的目標點」。
+// 惡魔王／樹王死亡暫不提供遺物（relicId: null，遺物之後再補上），
+// onBossDefeated() 已經會對 falsy relicId 直接跳過遺物選擇，不影響擊殺獎勵。
 const BOSS_TYPES = {
   blue: {
     label: '⚠ 黑藍巨龍降臨！ ⚠',
@@ -24,7 +30,10 @@ const BOSS_TYPES = {
     boltTexture: 'proj_frost',
     chargeTint: 0xaaccff,
     windColor: 0x24242c, // 黑龍衝刺時周圍的黑色風系粒子
+    clawColor: 0xffe066,
     relicId: 'dragonAura',
+    skills: ['charge', 'claw', 'breath'],
+    skillLabels: { charge: '⚠ 衝刺！', claw: '⚠ 龍爪！', breath: '⚠ 龍息！' },
   },
   red: {
     label: '⚠ 血色紅龍降臨！ ⚠',
@@ -36,14 +45,52 @@ const BOSS_TYPES = {
     boltTexture: 'proj_fireball',
     chargeTint: 0xffcfa0,
     windColor: 0xcc2200, // 紅龍衝刺時周圍的紅色風系粒子
+    clawColor: 0xffe066,
     relicId: 'dragonWings',
+    skills: ['charge', 'claw', 'breath'],
+    skillLabels: { charge: '⚠ 衝刺！', claw: '⚠ 龍爪！', breath: '⚠ 龍息！' },
+  },
+  demon: {
+    label: '⚠ 惡魔王降臨！ ⚠',
+    labelColor: '#d18aff',
+    texture: 'boss_demon',
+    aoeColor: 0x8b2fd9,
+    breathColor: 0x9d4dff,
+    breathTexture: 'fx_frost',
+    boltTexture: 'proj_frost',
+    chargeTint: 0xe0c3ff,
+    windColor: 0x4b1a66, // 惡魔王施放技能時周圍的暗紫色風系粒子
+    clawColor: 0xd94dff,
+    relicId: null, // 遺物之後補上
+    skills: ['breath', 'nova', 'claw'], // 遠距：深淵彈幕／特殊：詛咒新星／近戰：惡魔爪擊
+    skillLabels: { breath: '⚠ 深淵彈幕！', nova: '⚠ 詛咒新星！', claw: '⚠ 惡魔爪擊！' },
+    novaCenter: 'self', // 新星以惡魔王自己為中心炸開
+    novaRadius: 260,
+    scale: 0.62, // 原始圖接近正方形（不像龍那麼寬扁），縮小一點避免體型看起來比龍誇張
+  },
+  treant: {
+    label: '⚠ 樹王降臨！ ⚠',
+    labelColor: '#8fe36a',
+    texture: 'boss_treant',
+    aoeColor: 0x4caf50,
+    breathColor: 0x7ed957,
+    breathTexture: 'fx_frost',
+    boltTexture: 'proj_frost',
+    chargeTint: 0xc8f7b0,
+    windColor: 0x2e5c1f, // 樹王施放技能時周圍的深綠色風系粒子
+    clawColor: 0x9dff6b,
+    relicId: null, // 遺物之後補上
+    skills: ['breath', 'nova', 'claw'], // 遠距：荊棘彈幕／特殊：樹根衝擊／近戰：巨杖橫掃
+    skillLabels: { breath: '⚠ 荊棘彈幕！', nova: '⚠ 樹根衝擊！', claw: '⚠ 巨杖橫掃！' },
+    novaCenter: 'target', // 樹根衝擊鎖定玩家所在位置冒出來，不是繞著樹王自己
+    novaRadius: 170,
+    scale: 0.61, // 原始圖接近正方形，縮小一點避免體型看起來比龍誇張
   },
 };
 
 // 三個技能發動前的「前搖」時間：Boss 會停下來、亮起警示色並顯示警告文字/範圍指示，
 // 讓玩家有充足時間看懂「牠要出招了」並閃開，過了這段時間才會真的造成傷害。
 const TELEGRAPH_MS = 2000;
-const TELEGRAPH_LABELS = { charge: '⚠ 衝刺！', claw: '⚠ 龍爪！', breath: '⚠ 龍息！' };
 
 // Boss 強度倍率：依「這是第幾隻王」(bossIndex，從 1 開始，每 5 分鐘一隻)決定，
 // 不再用存活分鐘數線性計算。數列從 1, 2 開始，之後每項是前兩項相加（費氏數列變體）：
@@ -62,9 +109,9 @@ function bossStrengthMultiplier(bossIndex) {
   return b;
 }
 
-// Boss 系統：西方龍造型，具備衝撞 / 範圍衝擊波 / 龍息遠距攻擊 三種技能，血條與死亡動畫。
-// bossType 決定外觀配色、龍息屬性（冰／火）以及死亡後提供的遺物種類；
-// bossIndex 決定強度倍率（見上方 bossStrengthMultiplier）。
+// Boss 系統：目前有四種型態（黑藍巨龍／血色紅龍／惡魔王／樹王），各自三招技能、
+// 血條與死亡動畫共用同一套邏輯。bossType 決定外觀、技能組合（見 BOSS_TYPES.skills）
+// 以及死亡後提供的遺物種類；bossIndex 決定強度倍率（見上方 bossStrengthMultiplier）。
 export default class Boss {
   constructor(scene, player, difficultyMinutes, bossType = 'blue', bossIndex = 1) {
     this.scene = scene;
@@ -85,10 +132,14 @@ export default class Boss {
     const y = py + Math.sin(angle) * 600;
 
     this.sprite = scene.physics.add.sprite(x, y, this.typeDef.texture);
-    this.sprite.setScale(BOSS_SCALE);
-    // 碰撞圓圈只用來讓物理身體存在（遊戲裡怪物碰撞判定都是手動算距離，不是靠這個），
-    // 圓心抓在新美術圖胸口／交叉的龍爪附近（貼圖寬 574、高 320，身體大約在中央偏下）。
-    this.sprite.body.setCircle(70, 574 / 2 - 70, 176 - 70);
+    this.sprite.setScale(this.typeDef.scale ?? BOSS_SCALE);
+    // 碰撞圓圈只用來讓物理身體存在（遊戲裡怪物碰撞判定都是手動算距離，不是靠這個）。
+    // 圓心抓在美術圖胸口位置：水平置中、垂直落在原圖高度 55% 左右（兩隻龍是寬扁的
+    // 橫向姿勢，惡魔王／樹王是站立的直向人形，圖片長寬比差很多，所以用「原始貼圖
+    // 尺寸的比例」算，而不是寫死 574x320 那組數字，四種 Boss 都能正確對齊）。
+    const texW = this.sprite.frame.width, texH = this.sprite.frame.height;
+    const bodyRadius = texH * 0.219;
+    this.sprite.body.setCircle(bodyRadius, texW / 2 - bodyRadius, texH * 0.55 - bodyRadius);
     this.sprite.setDepth(y);
 
     this.phase = 'chase'; // chase | charge | aoe | ranged
@@ -159,12 +210,13 @@ export default class Boss {
     this.headBarFill.setPosition(bx - 58, headY).setDisplaySize(116 * hpRatio, 8).setDepth(headY);
   }
 
-  // 三個技能輪流隨機挑選：龍之吐息（遠距噴火/噴冰）／衝刺（續力衝撞）／龍爪（三爪金色斬擊）。
+  // 三個技能輪流隨機挑選，實際有哪三招由 typeDef.skills 決定（兩隻龍是
+  // 衝刺／龍爪／龍息；惡魔王／樹王是遠距彈幕／新星／近戰揮擊，見 BOSS_TYPES）。
   // 選好之後不會馬上出招，而是先進入「前搖」：瞄準方向/目標點在這一刻就鎖定，
   // 停頓 TELEGRAPH_MS 讓玩家看到警示、有機會移動閃開，時間到才真的執行攻擊。
   _chooseSkill(time) {
-    const r = Math.random();
-    const kind = r < 0.34 ? 'charge' : r < 0.67 ? 'claw' : 'breath';
+    const skills = this.typeDef.skills || ['charge', 'claw', 'breath'];
+    const kind = skills[Math.floor(Math.random() * skills.length)];
     this._startTelegraph(kind, time);
   }
 
@@ -186,7 +238,7 @@ export default class Boss {
     audioManager.bossRoar();
 
     // 警示文字：跟著 Boss 頭頂浮動，清楚告訴玩家牠準備使出哪一招
-    const label = this.scene.add.text(bx, by - 150, TELEGRAPH_LABELS[kind], textStyle({
+    const label = this.scene.add.text(bx, by - 150, this.typeDef.skillLabels[kind], textStyle({
       fontSize: '30px', color: '#ff4444', fontStyle: 'bold',
     })).setOrigin(0.5).setDepth(20010);
     this.scene.tweens.add({ targets: label, scale: 1.18, duration: 260, yoyo: true, repeat: -1 });
@@ -200,6 +252,11 @@ export default class Boss {
       const cx = bx + Math.cos(this._telegraphAngle) * reach;
       const cy = by + Math.sin(this._telegraphAngle) * reach;
       this._telegraphFx.push(this._telegraphRing(cx, cy, hitRadius));
+    } else if (kind === 'nova') {
+      const t = this.typeDef;
+      const ncx = t.novaCenter === 'target' ? this._telegraphTarget.x : bx;
+      const ncy = t.novaCenter === 'target' ? this._telegraphTarget.y : by;
+      this._telegraphFx.push(this._telegraphRing(ncx, ncy, t.novaRadius, t.aoeColor));
     } else {
       this._telegraphFx.push(this._telegraphCone(bx, by, this._telegraphAngle));
     }
@@ -214,9 +271,10 @@ export default class Boss {
     return line;
   }
 
-  // 龍爪前搖指示圈：從 0 慢慢長大到實際命中半徑，讓玩家清楚看到「危險範圍」在哪
-  _telegraphRing(x, y, endRadius) {
-    const ring = this.scene.add.circle(x, y, 4, 0xff2020, 0.28).setStrokeStyle(4, 0xff2020, 0.9).setDepth(20009);
+  // 前搖指示圈：從 0 慢慢長大到實際命中半徑，讓玩家清楚看到「危險範圍」在哪。
+  // 龍爪跟新星都共用這個指示圈，顏色可以指定（不指定就用預設的警示紅）。
+  _telegraphRing(x, y, endRadius, color = 0xff2020) {
+    const ring = this.scene.add.circle(x, y, 4, color, 0.28).setStrokeStyle(4, color, 0.9).setDepth(20009);
     this.scene.tweens.add({ targets: ring, radius: endRadius, duration: TELEGRAPH_MS, ease: 'Sine.easeIn' });
     return ring;
   }
@@ -249,6 +307,7 @@ export default class Boss {
     const kind = this._telegraphKind;
     if (kind === 'charge') this._executeCharge(time);
     else if (kind === 'claw') this._executeClaw(time);
+    else if (kind === 'nova') this._executeNova(time);
     else this._executeBreath(time);
   }
 
@@ -292,8 +351,43 @@ export default class Boss {
     this.sprite.clearTint();
   }
 
-  // 技能二：龍爪 —— 往前搖鎖定方向的前方揮出三條金色爪痕，短暫延遲後在揮擊點造成範圍傷害。
-  // 三條爪痕垂直排列、依序些微延遲出現，模擬「三根爪子同時劃過」的斬擊感。
+  // 特殊技能：新星 —— 惡魔王／樹王專屬的第三招，取代兩隻龍的衝刺。novaCenter 決定
+  // 爆炸中心是「Boss 自己」（惡魔王的詛咒新星，逼玩家遠離）還是「前搖鎖定的目標點」
+  // （樹王的樹根衝擊，玩家站在原地不動就會被炸到，逼玩家在前搖時間內先跑開）。
+  // 沒有續航動作，前搖結束的瞬間直接判定一次範圍傷害，跟龍爪同樣是瞬間打擊型技能。
+  _executeNova(time) {
+    this.phase = 'nova';
+    const t = this.typeDef;
+    const bx = this.sprite.x, by = this.sprite.y;
+    const cx = t.novaCenter === 'target' ? this._telegraphTarget.x : bx;
+    const cy = t.novaCenter === 'target' ? this._telegraphTarget.y : by;
+    const radius = t.novaRadius;
+
+    this.scene.cameras.main.flash(220, (t.aoeColor >> 16) & 0xff, (t.aoeColor >> 8) & 0xff, t.aoeColor & 0xff);
+    this.scene.hitStop(120);
+    audioManager.bossRoar();
+
+    // 由中心向外炸開的雙層光環（主題色 + 內層純白），加上大量碎片噴發，做出「新星」的份量感
+    this.scene.spawnGlowRing(cx, cy, 'fx_bossdeath', t.aoeColor, 0.5, radius / 26, 480);
+    this.scene.spawnGlowRing(cx, cy, 'fx_bossdeath', 0xffffff, 0.4, radius / 45, 340);
+    this.scene.spawnBurstFx(cx, cy, t.aoeColor, 22, 'fx_crit', 210);
+
+    this.scene.time.delayedCall(120, () => {
+      if (!this.alive) return;
+      const d = dist(cx, cy, this.player.sprite.x, this.player.sprite.y);
+      if (d < radius) {
+        const died = this.player.takeDamage(this.dmg * 1.3, this.scene.time.now);
+        if (died) this.scene.onPlayerDeath();
+      }
+      this.phase = 'chase';
+      this.nextSkillAt = this.scene.time.now + 3200;
+    });
+  }
+
+  // 技能二：近戰揮擊 —— 往前搖鎖定方向的前方揮出五道爪痕/揮擊痕，短暫延遲後在揮擊點
+  // 造成範圍傷害。顏色改用 typeDef.clawColor（兩隻龍是金色，惡魔王紫色，樹王綠色），
+  // 讓不同 Boss 的近戰攻擊有各自的視覺辨識度；五道痕跡垂直排列、依序些微延遲出現，
+  // 模擬「同時劃過」的斬擊感。
   _executeClaw(time) {
     this.phase = 'claw';
     const bx = this.sprite.x, by = this.sprite.y;
@@ -302,6 +396,7 @@ export default class Boss {
     const cx = bx + Math.cos(ang) * reach;
     const cy = by + Math.sin(ang) * reach;
     const hitRadius = 95;
+    const clawColor = this.typeDef.clawColor || 0xffe066;
 
     this.scene.cameras.main.flash(200, 255, 224, 130);
     this.scene.hitStop(110);
@@ -314,7 +409,7 @@ export default class Boss {
       const sx = cx + Math.cos(perpAng) * off;
       const sy = cy + Math.sin(perpAng) * off;
       const claw = this.scene.add.image(sx, sy, 'fx_claw_slash')
-        .setDepth(20005).setRotation(ang).setScale(0.4, 1).setAlpha(0.95);
+        .setDepth(20005).setRotation(ang).setScale(0.4, 1).setAlpha(0.95).setTint(clawColor);
       this.scene.tweens.add({
         targets: claw, scaleX: 1.5, alpha: 0, duration: 280, delay: Math.abs(i) * 35,
         onComplete: () => claw.destroy(),
@@ -323,10 +418,10 @@ export default class Boss {
 
     this.scene.time.delayedCall(140, () => {
       if (!this.alive) return; // 動畫播放期間 Boss 可能已被打死，避免存取已銷毀的物件
-      // 落地瞬間追加一圈金色衝擊光環＋碎片噴發＋二次打擊停頓，把「爪子真正打中地面」
+      // 落地瞬間追加一圈衝擊光環＋碎片噴發＋二次打擊停頓，把「揮擊真正打中地面」
       // 那一刻的份量感做出來，不再只有斬擊殘影而已
-      this.scene.spawnGlowRing(cx, cy, 'fx_bossdeath', 0xffe066, 0.35, 3.4, 400);
-      this.scene.spawnBurstFx(cx, cy, 0xffe066, 20, 'fx_crit', 210);
+      this.scene.spawnGlowRing(cx, cy, 'fx_bossdeath', clawColor, 0.35, 3.4, 400);
+      this.scene.spawnBurstFx(cx, cy, clawColor, 20, 'fx_crit', 210);
       this.scene.cameras.main.flash(140, 255, 255, 210);
       this.scene.hitStop(70);
       const d = dist(cx, cy, this.player.sprite.x, this.player.sprite.y);

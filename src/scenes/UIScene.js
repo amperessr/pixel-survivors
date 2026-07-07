@@ -148,6 +148,26 @@ export default class UIScene extends Phaser.Scene {
       this.add.image(x, y, 'ui_equip_slot').setDisplaySize(58, 58).setAlpha(0.15).setScrollFactor(0);
     }
 
+    // ---- 左下角：返回主選單按鈕（放在底部狀態列上方，避免跟狀態列格子疊在一起），
+    // 用跟主選單按鈕一樣的米色羊皮紙風格＋深咖啡色文字，維持全遊戲按鈕視覺統一。
+    // 點下去要把 GameScene 本身跟可能還開著的關卡內彈出視窗（升級/遺物/開局選技能）
+    // 一起關掉，不然回到主選單後這些場景還留在背景繼續跑。
+    const menuBtnY = bottomBarY - bottomBarH / 2 - 36;
+    const menuBtn = this.add.image(120, menuBtnY, 'ui_button_parchment')
+      .setDisplaySize(180, 56).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    this.add.text(120, menuBtnY, '返回主選單', textStyle({
+      fontSize: '20px', color: '#3a2413',
+    })).setOrigin(0.5).setScrollFactor(0);
+    menuBtn.on('pointerover', () => menuBtn.setTint(0xfff3d0));
+    menuBtn.on('pointerout', () => menuBtn.clearTint());
+    menuBtn.on('pointerdown', () => {
+      ['LevelUpScene', 'RelicChoiceScene', 'StartSkillScene'].forEach((key) => {
+        if (this.scene.isActive(key)) this.scene.stop(key);
+      });
+      this.scene.stop('GameScene');
+      this.scene.start('MainMenuScene');
+    });
+
     // ---- 畫面邊緣指示箭頭：血包（紅）／磁鐵（藍紫）不在畫面內時，指出方向 ----
     this.healthArrow = this.add.image(0, 0, 'ui_arrow').setTint(0xff5a5a).setScale(1.1)
       .setScrollFactor(0).setDepth(20000).setVisible(false);

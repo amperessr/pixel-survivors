@@ -46,7 +46,12 @@ export default class Player {
     // 這裡縮小回 0.5 倍讓遊戲內實際顯示大小維持不變。
     this.sprite.setScale(0.5);
     this.sprite.setCollideWorldBounds(false);
-    this.sprite.body.setCircle(22, 10, 16);
+    // 碰撞圓圈用「原始貼圖尺寸的比例」算，而不是寫死數字——'balanced' 現在改用
+    // 玩家提供的藍色史萊姆正式美術圖，是緊貼裁切過的圖（64x51，沒有程式產生貼圖
+    // 那圈留白），圓心/半徑要跟著實際圖片大小重新算，不然碰撞判定會偏移。
+    const texW = this.sprite.frame.width, texH = this.sprite.frame.height;
+    const bodyRadius = Math.min(texW, texH) * 0.42;
+    this.sprite.body.setCircle(bodyRadius, texW / 2 - bodyRadius, texH / 2 - bodyRadius);
     this.sprite.setDepth(y);
 
     this.level = 1;

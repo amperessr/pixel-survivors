@@ -111,14 +111,15 @@ export default class MainMenuScene extends Phaser.Scene {
       fontSize: '21px', color: '#cfe9ff', align: 'center', lineSpacing: 7,
     })).setOrigin(0.5, 0);
 
-    // 更新日誌：簡單列出近期幾項重點更新，方便玩家知道遊戲還在持續開發
+    // 更新日誌：簡單列出近期幾項重點更新，方便玩家知道遊戲還在持續開發（新的排在上面）
     const CHANGELOG = [
+      '🆕 新增帳號密碼系統，跨裝置同步存檔進度',
+      '🆕 新增惡魔王／樹王，四魔王輪流登場',
+      '🎨 玩家角色、冰霜技能換成正式美術圖',
       '🆕 新增裝備系統：武器/頭盔/衣服/褲子/鞋子',
       '🆕 新增背包與商店，擊殺數可換金幣購買裝備',
       '🆕 新增遺物系統：擊敗魔王可獲得永久強化',
-      '🆕 雙魔王輪替登場，各有專屬技能與外觀',
       '🆕 關卡制取代倒數計時，魔王關卡特別標示',
-      '🛠 修正多項卡死、特效不同步等問題',
     ];
     const logPanelH = 320;
     const logPanelY = lbPanelY + lbPanelH / 2 + 30 + logPanelH / 2;

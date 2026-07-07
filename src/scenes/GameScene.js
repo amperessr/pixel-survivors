@@ -232,9 +232,10 @@ export default class GameScene extends Phaser.Scene {
     if (this.boss) {
       this.boss.update(time, delta);
     } else if (time - this.startTime > this.nextBossAt) {
-      // 每 5 關（第 5、10、15...關）出現一隻 Boss，兩種型態輪流出現：
-      // 第 1、3、5...次是黑藍巨龍，第 2、4、6...次是血色紅龍
-      const bossType = this.bossSpawnCount % 2 === 0 ? 'blue' : 'red';
+      // 每 5 關（第 5、10、15...關）出現一隻 Boss，四種型態輪流出現：
+      // 黑藍巨龍 → 血色紅龍 → 惡魔王 → 樹王 → 黑藍巨龍……依序循環
+      const BOSS_ROTATION = ['blue', 'red', 'demon', 'treant'];
+      const bossType = BOSS_ROTATION[this.bossSpawnCount % BOSS_ROTATION.length];
       this.bossSpawnCount++;
       this.nextBossAt = ((this.bossSpawnCount + 1) * BOSS_STAGE_INTERVAL - 1) * 60000;
       this.boss = new Boss(this, this.player, elapsedMin, bossType, this.bossSpawnCount);

@@ -11,9 +11,14 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('menu_bg', 'assets/menu_bg.jpg');
     this.load.image('boss_red', 'assets/boss_red.png');
     this.load.image('boss_black', 'assets/boss_black.png');
+    // 新增兩隻 Boss：惡魔王／樹王的正式美術圖
+    this.load.image('boss_demon', 'assets/boss_demon.png');
+    this.load.image('boss_treant', 'assets/boss_treant.png');
     // 冰霜新星／永凍冰川（進化版）的冰柱正式美術圖，取代原本程式產生的簡易冰柱貼圖
     this.load.image('fx_ice_pillar_normal', 'assets/fx_ice_pillar_normal.png');
     this.load.image('fx_ice_pillar_evo', 'assets/fx_ice_pillar_evo.png');
+    // 玩家角色改用正式美術圖（藍色史萊姆），取代原本程式產生的簡易貼圖
+    this.load.image('player_balanced', 'assets/player_slime.png');
 
     const equipSlots = ['weapon', 'helmet', 'clothes', 'pants', 'shoes'];
     const equipTiers = ['beginner', 'mid', 'high'];

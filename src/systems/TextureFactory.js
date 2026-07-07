@@ -66,11 +66,14 @@ export default class TextureFactory {
   // 注意：這裡用 64x64（原本 32x32 的兩倍）繪製，讓選角畫面放大顯示時
   // 有更多細節可看，而不是把一張很小的圖直接暴力放大變得死板。
   generatePlayers() {
+    // 'balanced' 現在改用玩家提供的正式美術圖（藍色史萊姆，見 BootScene 的
+    // player_balanced 圖片載入），不再程式產生，避免跟載入的圖片同一個材質 key 衝突。
+    // 其餘三種角色目前選角畫面已經沒有入口（CharacterSelectScene 沒有被排進場景清單），
+    // 保留程式產生只是不讓 Player.js 裡的 CHARACTERS 定義失效，不影響實際遊戲畫面。
     const palette = {
       attacker: { body: '#ff6b5b', trim: '#c73f30', eye: '#2b2b2b' },
       speedster: { body: '#5bd4ff', trim: '#2a9ec2', eye: '#2b2b2b' },
       tank: { body: '#8f6bff', trim: '#5b3fc7', eye: '#2b2b2b' },
-      balanced: { body: '#5bff8f', trim: '#2ac25b', eye: '#2b2b2b' },
     };
     for (const [id, c] of Object.entries(palette)) {
       const { tex, ctx } = this._canvas(`player_${id}`, 64, 64);
