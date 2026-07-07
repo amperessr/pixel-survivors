@@ -65,13 +65,23 @@ export default class WeaponSystem {
     return scaled;
   }
 
-  // 依照攻速屬性縮短冷卻時間——原本只有飛刀/鋸片會吃到攻速加成，其餘武器
-  // 完全不受攻速影響，現在統一套用同一條公式到全部武器，被動攻速加成才會
-  // 真的對每個技能都有感。每次開火時「即時」重新計算，屬性提升會立刻反映在
-  // 下一次冷卻，不會卡在舊數值。
+  // 攻速對各武器冷卻縮短的影響權重：飛刀/鋸片本來就是「攻速流」武器，攻速加成
+  // 要吃滿；火球/雷電/冰霜走的是別條屬性線（攻擊力/爆擊/防禦），攻速對它們只給
+  // 一點點加成，避免攻速被動疊一疊就把火球衝成跟飛刀一樣快，壞掉「傷害高、
+  // 攻速慢」的定位。stats.atkSpeed 是百分比數字（如 80 代表 +80%），
+  // 先除以 100 換成比例，再乘上權重，才不會像舊公式一樣一點點攻速就把冷卻壓到底。
+  static ATK_SPEED_COOLDOWN_WEIGHT = {
+    fireball: 0.15,
+    lightning: 0.3,
+    frost: 0.25,
+    knife: 1.0,
+    sawblade: 1.0,
+  };
+
   _scaledCooldown(id, base) {
     const stats = this.player.stats;
-    return Math.max(80, base / (1 + stats.atkSpeed * 0.35));
+    const weight = WeaponSystem.ATK_SPEED_COOLDOWN_WEIGHT[id] ?? 0.3;
+    return Math.max(80, base / (1 + (stats.atkSpeed / 100) * weight));
   }
 
   update(time, delta) {

@@ -15,11 +15,11 @@ export const WEAPON_DATA = {
     projectile: 'proj_fireball',
     synergyStat: 'attack',
     levels: [
-      { dmg: 12, cooldown: 1100, aoe: 26, speed: 260, pierce: 0 },
-      { dmg: 16, cooldown: 1000, aoe: 32, speed: 270, pierce: 0 },
-      { dmg: 22, cooldown: 900, aoe: 38, speed: 280, pierce: 1 },
-      { dmg: 30, cooldown: 800, aoe: 46, speed: 300, pierce: 1 },
-      { dmg: 42, cooldown: 700, aoe: 58, speed: 320, pierce: 2 },
+      { dmg: 12, cooldown: 1300, aoe: 26, speed: 260, pierce: 0 },
+      { dmg: 16, cooldown: 1180, aoe: 32, speed: 270, pierce: 0 },
+      { dmg: 22, cooldown: 1060, aoe: 38, speed: 280, pierce: 1 },
+      { dmg: 30, cooldown: 950, aoe: 46, speed: 300, pierce: 1 },
+      { dmg: 42, cooldown: 850, aoe: 58, speed: 320, pierce: 2 },
     ],
   },
   lightning: {
@@ -104,7 +104,7 @@ export const WEAPON_EVOLUTIONS = {
   fireball: {
     name: '隕石燄爆',
     desc: '火球術的最終進化。不再沿地面飛行，改為鎖定敵人後從天而降砸下巨大隕石，範圍與威力大幅提升。',
-    dmgMult: 1.9, extraMult: 1.6, cooldownMult: 1.15,
+    dmgMult: 1.9, extraMult: 1.6, cooldownMult: 0.85,
   },
   lightning: {
     name: '雷霆風暴',
