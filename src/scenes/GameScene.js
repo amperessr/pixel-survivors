@@ -9,7 +9,7 @@ import { WEAPON_IDS, WEAPON_KNOCKBACK } from '../weapons/WeaponData.js';
 import { PASSIVE_IDS } from '../skills/PassiveData.js';
 import { RELICS } from '../relics/RelicData.js';
 import { EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
-import { getEquipped } from '../managers/SaveManager.js';
+import { getEquipped, addGold, setBestScore } from '../managers/SaveManager.js';
 import { dist } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { textStyle } from '../utils/TextStyle.js';
@@ -64,8 +64,32 @@ export default class GameScene extends Phaser.Scene {
 
     this.scene.launch('UIScene', { gameScene: this });
 
+    // 玩家把網頁直接關掉、重新整理、或整個瀏覽器跳出時，遊戲不會有機會正常跑到
+    // GameOverScene 去結算——這裡額外掛上 beforeunload/pagehide，離開前立刻把
+    // 目前的擊殺數換算成金幣、分數存進歷史最佳，不用等玩家「正常死亡」才存檔。
+    // 只在遊戲還沒正常結束時才存一次（`this.gameEnded` 為 false），避免跟
+    // GameOverScene 正常結算的那次重複計算；`_exitSaveDone` 則是防止
+    // beforeunload 跟 pagehide 剛好同時觸發時被重複執行兩次。
+    this._exitSaveDone = false;
+    this._saveOnExit = () => {
+      if (this.gameEnded || this._exitSaveDone) return;
+      this._exitSaveDone = true;
+      try {
+        addGold(this.killCount);
+        const elapsed = this.getElapsedSeconds();
+        const score = this.killCount * 10 + this.player.level * 50 + Math.floor(elapsed * 0.5);
+        setBestScore(score);
+      } catch (err) {
+        console.error('[GameScene] 離開前存檔失敗：', err);
+      }
+    };
+    window.addEventListener('beforeunload', this._saveOnExit);
+    window.addEventListener('pagehide', this._saveOnExit);
+
     this.events.on('shutdown', () => {
       audioManager.stopBgm();
+      window.removeEventListener('beforeunload', this._saveOnExit);
+      window.removeEventListener('pagehide', this._saveOnExit);
     });
 
     audioManager.startBgm();
@@ -94,11 +118,14 @@ export default class GameScene extends Phaser.Scene {
     if (this.paused) return;
     // 安全網：不管 _update() 內部是否有例外被下面的 try/catch 吃掉，
     // 只要偵測到玩家血量已經歸零但遊戲還沒結束，就直接強制觸發死亡流程。
-    // 這是為了解決「血量到 0 但站在原地、遊戲沒有結束」的問題——
-    // 這類狀況幾乎都是 onPlayerDeath() 內部某個步驟拋了例外，被下面那層
-    // try/catch 吃掉之後，切換到 GameOverScene 那一行就再也沒機會執行到。
+    // 這個呼叫本身也包 try/catch——萬一 onPlayerDeath() 內部真的有什麼漏網之魚，
+    // 至少不會讓整個 update() 迴圈跟著掛掉，下一幀還有機會再試一次。
     if (!this.gameEnded && this.player && this.player.hp <= 0) {
-      this.onPlayerDeath();
+      try {
+        this.onPlayerDeath();
+      } catch (err) {
+        console.error('[GameScene] onPlayerDeath() 發生未預期錯誤：', err);
+      }
       return;
     }
     // 防呆：任何未預期的例外都只印出錯誤並跳過這一幀，而不是讓 Phaser 的
@@ -428,6 +455,14 @@ export default class GameScene extends Phaser.Scene {
     this.gameEnded = true;
     this.paused = true;
 
+    // 立刻歸零玩家的移動速度——這是「死亡瞬間會一直往一個方向衝刺停不下來」的
+    // 直接解法：如果死亡當下玩家正在衝刺/移動，物理身體上還留著速度，
+    // 底下雖然會呼叫 physics.world.pause() 讓整個物理世界凍結，但這裡先手動
+    // 清零，就算後面 pause() 那一步意外沒執行到，玩家也不會繼續滑行。
+    if (this.player && this.player.sprite && this.player.sprite.body) {
+      this.player.sprite.body.setVelocity(0, 0);
+    }
+
     const kills = this.killCount;
     const level = this.player.level;
     const elapsed = Math.floor((this.time.now - this.startTime) / 1000);
@@ -491,6 +526,17 @@ export default class GameScene extends Phaser.Scene {
 
   getElapsedSeconds() {
     return Math.floor((this.time.now - this.startTime) / 1000);
+  }
+
+  // 關卡系統：1 分鐘 = 1 關（從第 1 關開始），每 5 關（5、10、15...）是魔王關。
+  // 這只是「顯示層」的換算，底層難度曲線／Boss 生成計時器都還是照原本的存活分鐘數走，
+  // 兩者剛好對得上（每 5 分鐘一隻王 = 每 5 關一隻王），不用另外重寫一套邏輯。
+  getStage() {
+    return Math.floor(this.getElapsedSeconds() / 60) + 1;
+  }
+
+  isBossStage(stage = this.getStage()) {
+    return stage % 5 === 0;
   }
 
   // ================= 特效輔助 =================
@@ -660,8 +706,10 @@ export default class GameScene extends Phaser.Scene {
       const tex = this.textures.get('fx_dragon_wing_pair').getSourceImage();
       const displayW = 130;
       const displayH = displayW * (tex.height / tex.width);
+      // 錨點改成貼近圖片頂端（兩片翅膀交會的關節縫隙處），讓這個縫隙對齊角色肩膀，
+      // 翅膀主體大部分往下往外展開，而不是像之前那樣整片翅膀懸在角色偏下方的位置
       this.dragonWingPair = this.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_dragon_wing_pair')
-        .setOrigin(0.5, 0.32).setDisplaySize(displayW, displayH).setDepth(9996);
+        .setOrigin(0.5, 0.18).setDisplaySize(displayW, displayH).setDepth(9996);
       // 記住 setDisplaySize 算出來的基準縮放值，之後拍動動畫要在這個基準上疊加，
       // 不能直接呼叫 setScale(1±flap)，那樣會蓋掉 setDisplaySize 的效果，
       // 讓翅膀突然變回原始貼圖的超大尺寸（1351x781）。
@@ -677,7 +725,7 @@ export default class GameScene extends Phaser.Scene {
 
     // 呼吸般的拍動感：用 sin 波讓翅膀輕微縮放擺盪，不會呆板地完全靜止
     const flap = Math.sin(time / 260) * 0.05;
-    this.dragonWingPair.setPosition(p.x, p.y - 4);
+    this.dragonWingPair.setPosition(p.x, p.y - 16);
     this.dragonWingPair.setScale(
       this.dragonWingBaseScaleX * (1 + flap * 0.4),
       this.dragonWingBaseScaleY * (1 - flap)

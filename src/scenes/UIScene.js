@@ -1,5 +1,6 @@
 import { WEAPON_DATA, WEAPON_EVOLUTIONS } from '../weapons/WeaponData.js';
 import { EQUIP_SLOTS, EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
+import { PASSIVE_IDS, PASSIVE_DATA } from '../skills/PassiveData.js';
 import { getEquipped } from '../managers/SaveManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 
@@ -33,10 +34,15 @@ export default class UIScene extends Phaser.Scene {
     this.add.image(400, 158, 'ui_bar_bg').setScrollFactor(0).setDisplaySize(280, 22).setOrigin(0.5);
     this.xpFill = this.add.image(260, 158, 'ui_bar_fill_xp').setScrollFactor(0).setOrigin(0, 0.5).setDisplaySize(278, 19);
 
-    // ---- 右上：時間 / 擊殺數 / FPS ----
-    this.timeText = this.add.text(w - 32, 26, '', textStyle({ fontSize: '38px', color: '#fff' })).setOrigin(1, 0).setScrollFactor(0);
-    this.killText = this.add.text(w - 32, 74, '', textStyle({ fontSize: '28px', color: '#ffd93d' })).setOrigin(1, 0).setScrollFactor(0);
-    this.fpsText = this.add.text(w - 32, 112, '', textStyle({ fontSize: '20px', color: '#999' })).setOrigin(1, 0).setScrollFactor(0);
+    // ---- 右上：擊殺數 / FPS ----
+    this.killText = this.add.text(w - 32, 26, '', textStyle({ fontSize: '28px', color: '#ffd93d' })).setOrigin(1, 0).setScrollFactor(0);
+    this.fpsText = this.add.text(w - 32, 64, '', textStyle({ fontSize: '20px', color: '#999' })).setOrigin(1, 0).setScrollFactor(0);
+
+    // ---- 正上方置中：目前關卡（1 分鐘 = 1 關，取代原本的時間顯示）----
+    // 白色粗體；魔王關（每 5 關）改成紅色，並在文字前加骷髏圖案提醒玩家小心
+    this.stageText = this.add.text(w / 2, 26, '', textStyle({
+      fontSize: '40px', color: '#ffffff', fontStyle: 'bold',
+    })).setOrigin(0.5, 0).setScrollFactor(0);
 
     // ---- 右側：目前技能（用面板框把整塊「技能」區域框起來）----
     const PANEL_W = 380;
@@ -57,46 +63,86 @@ export default class UIScene extends Phaser.Scene {
     this._panelW = PANEL_W;
     this._titleH = TITLE_H;
 
-    // ---- 下方：狀態列（裝備 + 數值狀態）----
-    // 底板：一條橫跨畫面下方的半透明面板，把裝備圖示跟數值都放在同一列
-    const bottomBarH = 96;
+    // ---- 下方：狀態列，分成「數值／裝備／技能」三大塊，各自 3 欄 x 2 列 ----
+    const bottomBarH = 190;
     const bottomBarY = h - bottomBarH / 2 - 10;
-    this.add.image(w / 2, bottomBarY, 'ui_panel').setDisplaySize(w - 60, bottomBarH).setScrollFactor(0).setDepth(-1);
+    const barLeft = 30, barWidth = w - 60;
+    this.add.image(w / 2, bottomBarY, 'ui_panel').setDisplaySize(barWidth, bottomBarH).setScrollFactor(0).setDepth(-1);
 
-    // 裝備圖示（讀開局當下的存檔裝備，整場遊戲不會變，只顯示一次即可）
+    const colW = barWidth / 3;
+    const col1CenterX = barLeft + colW * 0.5; // 數值
+    const col2CenterX = barLeft + colW * 1.5; // 裝備
+    const col3CenterX = barLeft + colW * 2.5; // 技能
+
+    const titleY = bottomBarY - bottomBarH / 2 + 22;
+    const gridTopY = bottomBarY - bottomBarH / 2 + 66;
+    const rowGap = 70;
+
+    this.add.text(col1CenterX, titleY, '數值', textStyle({ fontSize: '24px', color: '#cfe9ff' })).setOrigin(0.5).setScrollFactor(0);
+    this.add.text(col2CenterX, titleY, '裝備', textStyle({ fontSize: '24px', color: '#ffe066' })).setOrigin(0.5).setScrollFactor(0);
+    this.add.text(col3CenterX, titleY, '技能', textStyle({ fontSize: '24px', color: '#6fd3ff' })).setOrigin(0.5).setScrollFactor(0);
+
+    // 直向分隔線，讓三大塊視覺上更清楚地分開
+    this.add.rectangle(barLeft + colW, bottomBarY, 2, bottomBarH - 24, 0xffffff, 0.12).setScrollFactor(0);
+    this.add.rectangle(barLeft + colW * 2, bottomBarY, 2, bottomBarH - 24, 0xffffff, 0.12).setScrollFactor(0);
+
+    // 通用排版：給定該欄中心 X，回傳「上面三個、下面三個」共 6 個格子的座標
+    const cellPositions = (colCenterX) => {
+      const xs = [colCenterX - colW * 0.28, colCenterX, colCenterX + colW * 0.28];
+      const ys = [gridTopY, gridTopY + rowGap];
+      const pos = [];
+      ys.forEach((y) => xs.forEach((x) => pos.push({ x, y })));
+      return pos; // [row0-col0, row0-col1, row0-col2, row1-col0, row1-col1, row1-col2]
+    };
+
+    // ---------- 左：數值（6 個，STAT_DEFS 剛好 6 項，滿版 3x2）----------
+    const statPos = cellPositions(col1CenterX);
+    this.statChips = {};
+    STAT_DEFS.forEach((def, i) => {
+      const { x, y } = statPos[i];
+      this.add.image(x - 34, y, def.icon).setScale(1.15).setScrollFactor(0);
+      const valueText = this.add.text(x - 14, y, '', textStyle({
+        fontSize: '17px', color: def.color,
+      })).setOrigin(0, 0.5).setScrollFactor(0);
+      this.statChips[def.key] = valueText;
+    });
+
+    // ---------- 中：裝備（5 個裝備欄 + 1 個保留給未來飾品欄的空格）----------
+    const equipPos = cellPositions(col2CenterX);
     const equipped = getEquipped();
-    const equipStartX = 70;
-    this.add.text(equipStartX, bottomBarY - 34, '裝備', textStyle({
-      fontSize: '20px', color: '#ffe066',
-    })).setOrigin(0.5, 1).setScrollFactor(0);
     EQUIP_SLOTS.forEach((slot, i) => {
-      const ex = equipStartX + i * 60 - (EQUIP_SLOTS.length - 1) * 30;
+      const { x, y } = equipPos[i];
       const itemId = equipped[slot];
-      const slotBg = this.add.image(ex, bottomBarY, 'ui_equip_slot').setDisplaySize(52, 52).setScrollFactor(0);
+      const slotBg = this.add.image(x, y, 'ui_equip_slot').setDisplaySize(50, 50).setScrollFactor(0);
       if (itemId && EQUIPMENT_DATA[itemId]) {
-        this.add.image(ex, bottomBarY, EQUIPMENT_DATA[itemId].icon).setScale(0.85).setScrollFactor(0);
+        this.add.image(x, y, EQUIPMENT_DATA[itemId].icon).setScale(0.8).setScrollFactor(0);
       } else {
         slotBg.setAlpha(0.35);
       }
     });
+    {
+      // 第 6 格先保留給未來的飾品欄位，用問號淡淡標示「尚未開放」
+      const { x, y } = equipPos[5];
+      this.add.image(x, y, 'ui_equip_slot').setDisplaySize(50, 50).setAlpha(0.2).setScrollFactor(0);
+      this.add.text(x, y, '?', textStyle({ fontSize: '22px', color: '#666666' })).setOrigin(0.5).setScrollFactor(0);
+    }
 
-    // 數值狀態：一排「圖示 + 中文標籤 + 數值」的狀態格，參考英雄聯盟角色面板的呈現方式，
-    // 取代原本 ATK/DEF/SPD 那種英文縮寫的純文字。從裝備區右邊一路排到面板右側。
-    const statAreaStartX = 260;
-    const statAreaEndX = w - 100;
-    const chipGap = (statAreaEndX - statAreaStartX) / (STAT_DEFS.length - 1);
-    this.statChips = {};
-    STAT_DEFS.forEach((def, i) => {
-      const cx = statAreaStartX + i * chipGap;
-      this.add.image(cx - 40, bottomBarY, def.icon).setScale(1.4).setScrollFactor(0);
-      this.add.text(cx - 20, bottomBarY - 14, def.label, textStyle({
-        fontSize: '17px', color: def.color,
+    // ---------- 右：技能（5 個被動 + 1 個保留格；武器已經在右上角的技能面板顯示過，
+    // 這裡改顯示被動等級，避免跟上面重複）----------
+    const skillPos = cellPositions(col3CenterX);
+    this.passiveChips = {};
+    PASSIVE_IDS.forEach((id, i) => {
+      const { x, y } = skillPos[i];
+      this.add.image(x - 28, y, PASSIVE_DATA[id].icon).setScale(1.15).setScrollFactor(0);
+      const lvText = this.add.text(x - 8, y, '', textStyle({
+        fontSize: '17px', color: '#cfe9ff',
       })).setOrigin(0, 0.5).setScrollFactor(0);
-      const valueText = this.add.text(cx - 20, bottomBarY + 13, '', textStyle({
-        fontSize: '24px', color: '#ffffff',
-      })).setOrigin(0, 0.5).setScrollFactor(0);
-      this.statChips[def.key] = valueText;
+      this.passiveChips[id] = lvText;
     });
+    {
+      const { x, y } = skillPos[5];
+      this.add.image(x, y, 'ui_equip_slot').setDisplaySize(44, 44).setAlpha(0.15).setScrollFactor(0);
+    }
 
     // ---- 畫面邊緣指示箭頭：血包（紅）／磁鐵（藍紫）不在畫面內時，指出方向 ----
     this.healthArrow = this.add.image(0, 0, 'ui_arrow').setTint(0xff5a5a).setScale(1.1)
@@ -128,15 +174,19 @@ export default class UIScene extends Phaser.Scene {
     const xpRatio = Math.max(0, Math.min(1, p.exp / p.expToNext));
     this.xpFill.setDisplaySize(278 * xpRatio, 19);
 
-    const t = this.gs.getElapsedSeconds();
-    const mm = String(Math.floor(t / 60)).padStart(2, '0');
-    const ss = String(t % 60).padStart(2, '0');
-    this.timeText.setText(`⏱ ${mm}:${ss}`);
+    const stage = this.gs.getStage();
+    const isBossStage = this.gs.isBossStage(stage);
+    this.stageText.setText(isBossStage ? `💀 第 ${stage} 關` : `第 ${stage} 關`);
+    this.stageText.setColor(isBossStage ? '#ff4d4d' : '#ffffff');
     this.killText.setText(`💀 擊殺 ${this.gs.killCount}`);
     this.fpsText.setText(`FPS ${Math.round(this.game.loop.actualFps)}`);
 
     STAT_DEFS.forEach((def) => {
-      this.statChips[def.key].setText(def.get(p));
+      this.statChips[def.key].setText(`${def.label} ${def.get(p)}`);
+    });
+    PASSIVE_IDS.forEach((id) => {
+      const lvl = this.gs.player.passiveLevels[id] || 0;
+      this.passiveChips[id].setText(`${PASSIVE_DATA[id].name.slice(0, 2)} Lv${lvl}`);
     });
 
     this._refreshWeaponPanel();
@@ -156,16 +206,21 @@ export default class UIScene extends Phaser.Scene {
 
   // 從一個系統（HealthPackSystem / MagnetSystem）的物件池裡，找出「不在畫面範圍內
   // 的最近一個」，回傳世界座標 {x,y}；如果全部都在畫面內或根本沒有，回傳 null
+  //
+  // 重要修正：這裡原本用 `cam.midPoint` 當作畫面中心點，但箭頭一直固定指向左上方，
+  // 代表 `cam.midPoint` 並沒有正確反映鏡頭實際跟隨玩家後的中心位置。
+  // 鏡頭本來就是跟著玩家跑的（`startFollow`），玩家座標本身就等於畫面中心，
+  // 改成直接用 `player.x/y` 計算，簡單又保證正確。
   _nearestOffscreen(system, player, cam) {
     if (!system || !system.pool) return null;
     const halfW = cam.width / (2 * cam.zoom), halfH = cam.height / (2 * cam.zoom);
     const margin = 40; // 留一點邊界，避免物件才剛超出畫面邊緣就急著顯示箭頭
     let best = null, bestDist = Infinity;
     system.pool.forEachActive((obj) => {
-      const dx = obj.x - cam.midPoint.x, dy = obj.y - cam.midPoint.y;
+      const dx = obj.x - player.x, dy = obj.y - player.y;
       const onScreen = Math.abs(dx) < halfW - margin && Math.abs(dy) < halfH - margin;
       if (onScreen) return;
-      const d = Math.hypot(obj.x - player.x, obj.y - player.y);
+      const d = Math.hypot(dx, dy);
       if (d < bestDist) { bestDist = d; best = obj; }
     });
     return best ? { x: best.x, y: best.y } : null;
@@ -176,8 +231,8 @@ export default class UIScene extends Phaser.Scene {
     if (!target) { arrowImg.setVisible(false); return; }
     const w = this.scale.width, h = this.scale.height;
     const cx = w / 2, cy = h / 2;
-    const cam = this.cameras.main;
-    const dx = target.x - cam.midPoint.x, dy = target.y - cam.midPoint.y;
+    const p = this.gs.player.sprite;
+    const dx = target.x - p.x, dy = target.y - p.y;
     const ang = Math.atan2(dy, dx);
 
     // 用畫面矩形跟射線的交點，把箭頭釘在螢幕邊緣（留一點邊距，不要貼到最邊邊）

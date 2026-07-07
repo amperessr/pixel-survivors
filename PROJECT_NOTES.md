@@ -277,3 +277,142 @@ Attack／CritRate／CritDmg／AttackSpeed／MoveSpeed，各 5 級。
   在 `_resetEnemy()`（物件池重生時）就會同步更新，避免這隻敵人被回收後
   下一輪重生成不同種類/tier 時，擠壓動畫還沿用上一輪生命週期的舊縮放值。
 
+## 排行榜同名去重（`src/firebase/firebase.js`）
+
+- 資料庫是 append-only（每場結束都 `push()` 一筆新紀錄），同一個人玩很多場
+  就會有很多筆紀錄，原本直接抓 `limitToLast(10)` 排行榜會被同一人洗版。
+- `subscribeLeaderboard()` 改成多撈 100 筆原始紀錄、排序後在前端依名稱去重
+  （由高到低排序後，每個名字第一次出現的那筆就是最高分，後面重複的名字直接跳過），
+  湊滿 10 個不同名字才回傳。呼叫端（`MainMenuScene` / `GameOverScene`）不用改，
+  因為回傳的陣列已經是去重後、最多 10 筆的結果。
+
+## 遺物通知橫幅＋龍之翼造型改版
+
+- **拿到遺物時的通知**：`RelicChoiceScene._accept()` 套用效果後會呼叫
+  `GameScene.announceRelicObtained(relicName)`，畫面正中央偏上會淡入顯示
+  「獲得遺物／〈遺物名稱〉」，停留約 1.5 秒後淡出。
+- **龍之翼造型改成參考圖片的紅黑骨爪風格**：`TextureFactory.js` 的
+  `fx_dragon_wing` 材質整個重畫，改成深紅翼膜漸層＋暗色骨架＋米白骨爪／關節點，
+  下緣是參差不齊的破損狀並挖了兩個小洞，不再是白色可調色的抽象翅膀。
+  材質本身已經是固定配色，`GameScene.enableDragonWingsVisual()` 不再對它套用
+  `setTint()` / ADD 疊加模式；錨點也從原本的「左下角」改成「左上角」
+  （因為新造型是關節在上方、翅膀向下展開），`_updateDragonWings()` 的
+  掛點位置也跟著往上移到肩膀高度（`p.y - 14`）。
+
+## 擊殺掉血包／方向箭頭／Boss頭頂血條／死亡演出／底部狀態列
+
+- **擊殺 10% 機率掉血包**：`EnemySystem._killEnemy()` 呼叫新增的
+  `HealthPackSystem.forceSpawn(x, y)`，跟原本地圖上定時生成的血包共用同一個
+  物件池與 `MAX_PACKS` 上限，只是這個是「立刻在擊殺點生成」，不受計時器限制。
+- **畫面邊緣方向箭頭**（`UIScene._updatePickupArrows()`）：血包（紅）跟磁鐵（藍紫）
+  各自找「離玩家最近、且不在目前畫面範圍內」的一個，在螢幕邊緣顯示箭頭指向它；
+  畫面內看得到就不顯示。用 `ui_arrow` 材質（純白三角形）+ `setTint()` 上色。
+- **Boss 頭頂血條**：`Boss.js` 新增 `headBarBg` / `headBarFill`，是跟著 Boss
+  移動的世界座標血條（跟原本畫面固定在上方的血條並存），近戰纏鬥時不用一直看畫面上方。
+  `_die()` / `destroy()` 都要記得一起清掉，不然會留下孤兒物件。
+- **Boss 死亡特效加強**：原本只有 3 層擴散光環，現在是 4 層＋型態專屬色
+  （藍龍/紅龍各自的 `aoeColor`）的衝擊波光環＋白色內層閃光＋分兩批噴發的碎片，
+  層次感更豐富，呼應「魔王死後要有華麗的死亡特效」的需求。
+- **玩家死亡演出**（`GameScene.onPlayerDeath()`）：不再斷氣立刻跳轉，改成
+  「原地爆炸特效（`_spawnPlayerDeathExplosion()`：碎片＋光環＋角色本體淡出放大消失）
+  → 鏡頭慢慢淡黑（`camera.fade()`）→ 淡黑播完才真的切到 GameOverScene」。
+  這段邏輯延續了之前「保證一定會結束遊戲」的防呆精神：核心的場景切換
+  (`goToGameOver()`) 包在 try/catch 外層，就算特效播放途中出了任何意外，
+  也會在 catch 裡立刻補呼叫，不會卡在爆炸畫面出不去。
+- **底部狀態列**（`UIScene.create()`）：畫面下方新增一條面板，左邊顯示這場遊戲
+  開局當下讀到的五個裝備欄圖示（`getEquipped()`，整場不會變），中間是原本的
+  數值狀態文字（ATK/DEF/SPD/攻速/爆擊率/爆傷）。技能（武器）維持顯示在右側
+  原本的技能面板，沒有搬動。
+
+## 龍之翼改用真實圖片素材（不再是 Canvas 畫的近似形狀）
+
+- **原因**：玩家提供了實際的翅膀美術圖（紅黑配色、骨爪、參差破損邊緣），
+  但 Canvas 手畫的版本跟參考圖差太多，而且更嚴重的是「兩片翅膀」的位移量
+  （±8px）遠小於單片翅膀本身的尺寸，兩張幾乎完全疊在一起，遊戲裡看起來
+  是一坨糊在一起的紅色色塊，而不是分開在角色左右兩側的翅膀。
+- **解法**：這是目前專案唯一一個外部圖片素材（其餘都還是 `TextureFactory`
+  程式生成），放在 `assets/dragon_wing.png`，在 `BootScene.preload()` 用
+  `this.load.image('fx_dragon_wing_pair', 'assets/dragon_wing.png')` 載入。
+  這張圖本身就是完整、左右對稱的一對翅膀（中間留了角色站的空隙），
+  所以遊戲內只用「一張」圖置中掛在玩家背後（`GameScene.enableDragonWingsVisual()`
+  / `_updateDragonWings()`），不用再分開處理左右兩片、也不會有重疊問題。
+  `TextureFactory.js` 裡舊的 Canvas 版 `fx_dragon_wing` 繪製程式碼已經整段移除。
+- **要注意的技術細節**：`_updateDragonWings()` 的拍動動畫改成呼吸式的縮放擺盪，
+  用 `setScale()` 疊加在 `setDisplaySize()` 算出來的基準縮放值上
+  （存在 `dragonWingBaseScaleX/Y`），不能直接 `setScale(1±flap)`，
+  不然會蓋掉 `setDisplaySize` 的效果，翅膀會瞬間變回原始貼圖的超大尺寸（1351x781px）。
+- **之後如果要換掉這張圖或加新的圖片素材**：一律在 `BootScene.preload()` 加
+  `this.load.image(key, 'assets/xxx.png')`，記得同時把檔案放進 `assets/` 資料夾，
+  打包 zip 給使用者時也要包含這個資料夾，不然圖片會讀取失敗（純黑或報 404）。
+
+## 數值調整＋Boss 技能改版（龍之吐息／衝刺／龍爪）
+
+- **擊殺掉血包機率**：`EnemySystem._killEnemy()` 從 10% 改成 0.1%（`Math.random() < 0.001`）。
+- **龍之翼跑速加成**：`Player.applyDragonWings()` 從 x2 改成 x1.5，`RelicData.js`
+  的描述文字也同步更新。
+- **Boss 技能整套重做**（`Boss.js`）：原本的「衝撞／範圍衝擊波／龍息」三個技能，
+  改成「衝刺／龍爪／龍之吐息」，`_chooseSkill()` 一樣是三選一隨機挑：
+  - **衝刺**（`_startCharge` / `_updateCharge`）：續力時間從 900ms 延長到 2000ms
+    （常數 `CHARGE_DURATION`），衝刺全程會持續在 Boss 身邊冒出型態專屬色的風系粒子
+    （`BOSS_TYPES[type].windColor`：黑龍是黑色 `0x24242c`、紅龍是紅色 `0xcc2200`），
+    讓玩家能提前看出「牠正在衝刺」，不用等撞上才知道。
+  - **龍爪**（`_startClaw`，取代原本的 `_startAoe` 範圍衝擊波）：往玩家方向前方
+    揮出三條金色爪痕（新材質 `fx_claw_slash`，`TextureFactory.js` 裡的彎曲漸層線條），
+    三條依序些微延遲出現模擬「三爪同時劃過」，140ms 後在揮擊點判定範圍傷害。
+    沿用了 Boss 那個「動畫播放期間可能已被打死」的防呆寫法（`delayedCall` 裡先檢查
+    `this.alive` 才存取座標），沒有引入新的卡死風險。
+  - **龍之吐息**（`_startBreath`，原本的 `_startRanged`）：維持原本的扇形彈幕，
+    但額外沿瞄準方向連續噴出 5 波往前推進的粒子（`spawnEmbersFx`），
+    做出「持續吐息」的感覺，而不是原本瞬間噴一下就結束。
+
+## 血包/磁鐵過遠回收＋底部狀態列改成圖示化中文
+
+- **血包/磁鐵過遠自動回收**（`HealthPackSystem.js` / `MagnetSystem.js` 都加了
+  `MAX_KEEP_DIST = 1400`）：玩家往反方向跑遠之後，舊的血包/磁鐵離玩家太遠就直接
+  回收（不用撿也會消失），下一次計時生成會在玩家「現在」的位置附近重新出現。
+  這是為了解決「畫面邊緣箭頭一直指向很遠的東西，走了很久都追不到」的問題——
+  之前這兩個系統的道具一旦生成就會停在原地到天荒地老，玩家跑去別的方向探索久了，
+  舊道具跟玩家的距離就會越拉越遠。
+- **底部狀態列改版**（`UIScene.js`）：原本的 `ATK/DEF/SPD/AtkSpd/Crit/CritDmg`
+  英文縮寫純文字，改成 `STAT_DEFS` 資料表驅動的六個「圖示＋中文標籤＋數值」狀態格
+  （攻擊／防禦／移速／攻速／爆擊率／爆傷），參考英雄聯盟角色面板那種圖示配數值的
+  呈現方式。新增了 `icon_defense` 圖示（`TextureFactory.generatePassiveIcons()`，
+  防禦本身不是被動技能項目，但沿用同一套圖示風格）。
+
+## 箭頭方向修正／底部UI三大塊／關卡系統／死亡防呆再加固／離開頁面存檔
+
+- **箭頭一直指向左上方的真正原因**（`UIScene.js`）：`_nearestOffscreen()` /
+  `_pointArrowAt()` 原本用 `cam.midPoint.x/y` 當作畫面中心點來算方向，但這個值
+  沒有正確反映鏡頭實際跟隨玩家後的中心位置。鏡頭本來就是 `startFollow` 玩家，
+  改成直接用 `this.gs.player.sprite.x/y` 計算方向，簡單且保證正確。
+- **底部UI改成三大塊**（`UIScene.js`）：「數值／裝備／技能」各佔一欄，都是
+  3 欄 x 2 列的格子（`cellPositions()` 通用排版函式）。數值欄沿用原本的
+  `STAT_DEFS`（剛好 6 項）；裝備欄是 5 個裝備欄位 + 1 個保留給未來飾品的空格；
+  技能欄目前顯示 5 個被動技能的等級 + 1 個保留格（武器已經在右上角的技能面板
+  顯示過，這裡刻意不重複顯示武器，改顯示被動，資訊更完整而不是疊床架屋）。
+- **關卡系統取代倒數計時**：`GameScene.getStage()` 把存活時間換算成關卡
+  （1 分鐘 = 1 關），`isBossStage()` 判斷是不是 5 的倍數關（魔王關）。這只是
+  「顯示層」的換算，底層難度曲線／Boss 生成計時器完全沒動，兩者本來就對得上
+  （每 5 分鐘一隻王＝每 5 關一隻王）。`UIScene` 原本右上角的時間文字拿掉了，
+  改成畫面正上方置中的關卡文字：白色粗體，魔王關會變紅色並加上 💀 前綴。
+- **死亡卡死 bug 再加固**（`GameScene.js`）：
+  - `onPlayerDeath()` 一開始就先手動 `player.sprite.body.setVelocity(0, 0)`，
+    直接解決「死亡瞬間還在衝刺，之後一直往同個方向滑行停不下來」的殘留速度問題，
+    不完全依賴後面才執行的 `physics.world.pause()`。
+  - `update()` 裡呼叫安全網 `onPlayerDeath()` 的那行也包了一層 try/catch，
+    確保萬一內部真有例外，不會讓整個 `update()` 掛掉、下一幀還有機會重試。
+- **離開頁面即時存檔**：`GameScene.create()` 掛上 `beforeunload` / `pagehide`，
+  玩家把分頁關掉、重新整理、或直接關瀏覽器時，會立刻把目前擊殺數換算成金幣
+  （`addGold`）並記錄分數（`setBestScore`），不用等玩家「正常死亡」跑到
+  GameOverScene 才存檔。用 `this.gameEnded` 跟 `_exitSaveDone` 兩個旗標避免
+  跟正常結算重複計算、或者 beforeunload/pagehide 同時觸發被算兩次。
+- **遊戲結束畫面加上 UI 框**（`GameOverScene.js`）：戰績資訊跟排行榜都各自用
+  `ui_panel` + 描邊矩形框起來（金色框／藍色框），比原本純文字漂浮在畫面上美觀。
+- **主選單新增更新日誌面板**（`MainMenuScene.js`）：右側原本只有排行榜文字，
+  現在排行榜跟新增的「更新日誌」都各自用面板框起來，更新日誌內容是幾行
+  精簡的重點更新條列，讓玩家知道遊戲還在持續開發。
+- **龍之翼位置再往上**：`GameScene.enableDragonWingsVisual()` 的錨點從
+  `setOrigin(0.5, 0.32)` 改成 `setOrigin(0.5, 0.18)`（貼近圖片頂端、兩片翅膀
+  交會的關節縫隙處），`_updateDragonWings()` 的位移也從 `p.y - 4` 加大到
+  `p.y - 16`，讓翅膀的關節縫隙更貼齊角色肩膀，而不是整片懸在角色偏下方。
+

@@ -2,19 +2,19 @@
 // 注意：依需求規格，使用 Realtime Database，不使用 Firestore
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-    getDatabase,
-    ref,
-    push,
-    query,
-    orderByChild,
-    limitToLast,
-    onValue,
+  getDatabase,
+  ref,
+  push,
+  query,
+  orderByChild,
+  limitToLast,
+  onValue,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 // 專案設定：使用使用者提供的 Realtime Database URL
 const firebaseConfig = {
-    databaseURL:
-        "https://game-text-cd3c2-default-rtdb.asia-southeast1.firebasedatabase.app/",
+  databaseURL:
+    "https://game-text-cd3c2-default-rtdb.asia-southeast1.firebasedatabase.app/",
 };
 
 let app = null;
@@ -22,11 +22,11 @@ let db = null;
 let leaderboardRef = null;
 
 function ensureInit() {
-    if (!app) {
-        app = initializeApp(firebaseConfig);
-        db = getDatabase(app);
-        leaderboardRef = ref(db, "leaderboard");
-    }
+  if (!app) {
+    app = initializeApp(firebaseConfig);
+    db = getDatabase(app);
+    leaderboardRef = ref(db, "leaderboard");
+  }
 }
 
 /**
@@ -34,14 +34,14 @@ function ensureInit() {
  * @param {{name:string, score:number, kill:number, time:number, date:string}} entry
  */
 export async function submitScore(entry) {
-    try {
-        ensureInit();
-        await push(leaderboardRef, entry);
-        return true;
-    } catch (err) {
-        console.warn("[Firebase] 上傳分數失敗（可能離線或網路受限）：", err.message);
-        return false;
-    }
+  try {
+    ensureInit();
+    await push(leaderboardRef, entry);
+    return true;
+  } catch (err) {
+    console.warn("[Firebase] 上傳分數失敗（可能離線或網路受限）：", err.message);
+    return false;
+  }
 }
 
 /**
@@ -52,41 +52,41 @@ export async function submitScore(entry) {
  * @returns {Function} unsubscribe
  */
 export function subscribeLeaderboard(callback) {
-    try {
-        ensureInit();
-        // 撈多一點原始紀錄（不是只撈 10 筆），才有足夠的資料可以在去重之後還湊得滿 10 個不同的名字
-        const topQuery = query(leaderboardRef, orderByChild("score"), limitToLast(100));
-        const unsubscribe = onValue(
-            topQuery,
-            (snapshot) => {
-                const rows = [];
-                snapshot.forEach((child) => {
-                    rows.push(child.val());
-                });
-                rows.sort((a, b) => (b.score || 0) - (a.score || 0));
+  try {
+    ensureInit();
+    // 撈多一點原始紀錄（不是只撈 10 筆），才有足夠的資料可以在去重之後還湊得滿 10 個不同的名字
+    const topQuery = query(leaderboardRef, orderByChild("score"), limitToLast(100));
+    const unsubscribe = onValue(
+      topQuery,
+      (snapshot) => {
+        const rows = [];
+        snapshot.forEach((child) => {
+          rows.push(child.val());
+        });
+        rows.sort((a, b) => (b.score || 0) - (a.score || 0));
 
-                // 依名稱去重：陣列已經是分數由高到低排序，所以每個名字第一次出現
-                // 的那筆就是他的最高分，直接跳過後面重複的名字即可
-                const seenNames = new Set();
-                const deduped = [];
-                for (const row of rows) {
-                    const key = row.name || "???";
-                    if (seenNames.has(key)) continue;
-                    seenNames.add(key);
-                    deduped.push(row);
-                    if (deduped.length >= 10) break;
-                }
-                callback(deduped);
-            },
-            (err) => {
-                console.warn("[Firebase] 讀取排行榜失敗：", err.message);
-                callback([]);
-            }
-        );
-        return unsubscribe;
-    } catch (err) {
-        console.warn("[Firebase] 初始化失敗：", err.message);
+        // 依名稱去重：陣列已經是分數由高到低排序，所以每個名字第一次出現
+        // 的那筆就是他的最高分，直接跳過後面重複的名字即可
+        const seenNames = new Set();
+        const deduped = [];
+        for (const row of rows) {
+          const key = row.name || "???";
+          if (seenNames.has(key)) continue;
+          seenNames.add(key);
+          deduped.push(row);
+          if (deduped.length >= 10) break;
+        }
+        callback(deduped);
+      },
+      (err) => {
+        console.warn("[Firebase] 讀取排行榜失敗：", err.message);
         callback([]);
-        return () => { };
-    }
+      }
+    );
+    return unsubscribe;
+  } catch (err) {
+    console.warn("[Firebase] 初始化失敗：", err.message);
+    callback([]);
+    return () => {};
+  }
 }
