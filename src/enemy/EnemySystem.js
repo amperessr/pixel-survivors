@@ -285,6 +285,7 @@ export default class EnemySystem {
     }
 
     if (isCrit) this.scene.spawnCritFx(enemy.x, enemy.y);
+    this.scene.spawnDamageNumber(enemy.x, enemy.y, dmg, isCrit);
 
     if (hp <= 0) {
       this._killEnemy(enemy);
