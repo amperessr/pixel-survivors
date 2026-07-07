@@ -97,11 +97,20 @@ export default class GameScene extends Phaser.Scene {
     };
     window.addEventListener('beforeunload', this._saveOnExit);
     window.addEventListener('pagehide', this._saveOnExit);
+    // 手機瀏覽器（尤其是被切到背景、被系統直接砍掉分頁時）pagehide/beforeunload
+    // 不一定每次都會確實觸發，額外掛 visibilitychange 當保險。因為 `_exitSaveDone`
+    // 這個旗標只會在「開新的一局」時重置，同一局遊戲裡不管切幾次分頁都只會
+    // 存一次，不會被重複觸發、也不會被拿來重複洗金幣。
+    this._onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') this._saveOnExit();
+    };
+    document.addEventListener('visibilitychange', this._onVisibilityChange);
 
     this.events.on('shutdown', () => {
       audioManager.stopBgm();
       window.removeEventListener('beforeunload', this._saveOnExit);
       window.removeEventListener('pagehide', this._saveOnExit);
+      document.removeEventListener('visibilitychange', this._onVisibilityChange);
     });
 
     audioManager.startBgm();
@@ -486,12 +495,15 @@ export default class GameScene extends Phaser.Scene {
     this.gameEnded = true;
     this.paused = true;
 
-    // 立刻歸零玩家的移動速度——這是「死亡瞬間會一直往一個方向衝刺停不下來」的
-    // 直接解法：如果死亡當下玩家正在衝刺/移動，物理身體上還留著速度，
-    // 底下雖然會呼叫 physics.world.pause() 讓整個物理世界凍結，但這裡先手動
-    // 清零，就算後面 pause() 那一步意外沒執行到，玩家也不會繼續滑行。
+    // 立刻歸零玩家的移動速度並直接停用整個物理身體——這是「死亡瞬間會一直往
+    // 一個方向衝刺停不下來」的直接解法：如果死亡當下玩家正在衝刺/移動，
+    // 物理身體上還留著速度，下面雖然會呼叫 physics.world.pause() 讓整個物理
+    // 世界凍結，但這裡先手動清零＋停用身體，就算後面 pause() 那一步意外沒執行到、
+    // 或是之後物理世界不知道為什麼被恢復運作，這個身體本身也不會再被引擎更新位置，
+    // 是最徹底、最不依賴其他狀態的解法。
     if (this.player && this.player.sprite && this.player.sprite.body) {
       this.player.sprite.body.setVelocity(0, 0);
+      this.player.sprite.body.enable = false;
     }
 
     const kills = this.killCount;
