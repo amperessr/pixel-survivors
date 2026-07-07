@@ -1,5 +1,5 @@
 import {
-  EQUIPMENT_DATA, EQUIP_SLOTS, SLOT_LABELS, EQUIP_LINES, TIER_TINTS,
+  EQUIPMENT_DATA, EQUIP_SLOTS, SLOT_LABELS, EQUIP_LINES,
 } from '../equipment/EquipmentData.js';
 import { getGold, spendGold, addGold, isItemOwned, upgradeEquipment } from '../managers/SaveManager.js';
 import { textStyle } from '../utils/TextStyle.js';
@@ -131,8 +131,9 @@ export default class ShopScene extends Phaser.Scene {
     this.gridContainer.add(this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH));
 
     const iconY = cy - 65;
-    const icon = this.add.image(cx, iconY, def.icon).setScale(1.8);
-    if (TIER_TINTS[def.tier]) icon.setTint(TIER_TINTS[def.tier]); else icon.clearTint();
+    // 圖示現在是玩家提供的正式美術圖（128x128，取代舊的 48x48 程式產生貼圖），
+    // 每階已經是各自獨立的圖案配色，不用再額外染色區分階級。
+    const icon = this.add.image(cx, iconY, def.icon).setScale(0.675);
     if (owned) icon.setAlpha(0.3);
     this.gridContainer.add(icon);
 

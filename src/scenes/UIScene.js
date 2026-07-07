@@ -117,7 +117,9 @@ export default class UIScene extends Phaser.Scene {
       const itemId = equipped[slot];
       const slotBg = this.add.image(x, y, 'ui_equip_slot').setDisplaySize(66, 66).setScrollFactor(0);
       if (itemId && EQUIPMENT_DATA[itemId]) {
-        this.add.image(x, y, EQUIPMENT_DATA[itemId].icon).setScale(1.05).setScrollFactor(0);
+        // 圖示現在是 128x128 的正式美術圖（取代舊的 48x48 程式產生貼圖），縮放倍率
+        // 等比例縮小，維持跟改版前一樣的實際顯示大小。
+        this.add.image(x, y, EQUIPMENT_DATA[itemId].icon).setScale(0.394).setScrollFactor(0);
       } else {
         slotBg.setAlpha(0.35);
       }

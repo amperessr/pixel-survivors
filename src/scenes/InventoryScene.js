@@ -192,7 +192,9 @@ export default class InventoryScene extends Phaser.Scene {
       const itemId = this.equipped[slot];
       const bg = this.equipSlotImgs[slot];
       if (itemId && EQUIPMENT_DATA[itemId]) {
-        const icon = this.add.image(bg.x, bg.y, EQUIPMENT_DATA[itemId].icon).setScale(1.3).setDepth(12);
+        // 圖示現在是 128x128 的正式美術圖（取代舊的 48x48 程式產生貼圖），縮放倍率
+        // 等比例縮小，維持跟改版前一樣的實際顯示大小。
+        const icon = this.add.image(bg.x, bg.y, EQUIPMENT_DATA[itemId].icon).setScale(0.49).setDepth(12);
         this.equipIconImgs[slot] = icon;
         this.equipEmptyLabels[slot].setVisible(false);
       } else {
@@ -207,7 +209,7 @@ export default class InventoryScene extends Phaser.Scene {
       if (itemId && EQUIPMENT_DATA[itemId]) {
         const def = EQUIPMENT_DATA[itemId];
         const bg = this.slotBgs[idx];
-        const icon = this.add.image(bg.x, bg.y, def.icon).setScale(0.9);
+        const icon = this.add.image(bg.x, bg.y, def.icon).setScale(0.34);
         icon.setInteractive({ useHandCursor: true, draggable: true });
         icon.on('dragstart', () => {
           icon.setData('dragged', false);

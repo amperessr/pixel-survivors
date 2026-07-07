@@ -52,7 +52,6 @@ export default class TextureFactory {
       ['generateIcePillars', () => this.generateIcePillars()],
       ['generatePickups', () => this.generatePickups()],
       ['generateUI', () => this.generateUI()],
-      ['generateEquipmentIcons', () => this.generateEquipmentIcons()],
       ['generateGachaMachine', () => this.generateGachaMachine()],
     ];
     for (const [name, fn] of steps) {
@@ -833,89 +832,6 @@ export default class TextureFactory {
     });
   }
 
-  // 裝備圖示：五種基本裝備各畫一個簡單好辨識的剪影圖示，統一用白色描邊＋半透明填色，
-  // 風格跟武器技能圖示（generateWeaponIcons）一致
-  generateEquipmentIcons() {
-    const mk = (key, size, draw) => {
-      const { tex, ctx } = this._canvas(key, size, size);
-      draw(ctx, size);
-      this._finish(tex);
-    };
-    mk('equip_weapon', 48, (ctx, s) => {
-      // 一把簡單的短劍
-      ctx.save();
-      ctx.translate(s / 2, s / 2);
-      ctx.rotate(-Math.PI / 4);
-      ctx.fillStyle = '#dfe6ee';
-      ctx.fillRect(-3, -18, 6, 26);
-      ctx.beginPath(); ctx.moveTo(-3, -18); ctx.lineTo(0, -24); ctx.lineTo(3, -18); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#8a5a2b';
-      ctx.fillRect(-8, 8, 16, 5);
-      ctx.fillStyle = '#5a3c1e';
-      ctx.fillRect(-2.5, 12, 5, 10);
-      ctx.restore();
-    });
-    mk('equip_helmet', 48, (ctx, s) => {
-      const cx = s / 2, cy = s / 2 + 4;
-      ctx.fillStyle = '#9fb2c9';
-      ctx.beginPath();
-      ctx.arc(cx, cy, 16, Math.PI, 0, false);
-      ctx.lineTo(cx + 16, cy + 6);
-      ctx.lineTo(cx - 16, cy + 6);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = '#5a6b80';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(20,24,32,0.7)';
-      ctx.fillRect(cx - 12, cy - 4, 24, 6);
-    });
-    mk('equip_clothes', 48, (ctx, s) => {
-      const cx = s / 2, cy = s / 2;
-      ctx.fillStyle = '#7fb2ff';
-      ctx.beginPath();
-      ctx.moveTo(cx - 10, cy - 16);
-      ctx.lineTo(cx - 18, cy - 8);
-      ctx.lineTo(cx - 12, cy - 4);
-      ctx.lineTo(cx - 10, cy - 8);
-      ctx.lineTo(cx - 10, cy + 18);
-      ctx.lineTo(cx + 10, cy + 18);
-      ctx.lineTo(cx + 10, cy - 8);
-      ctx.lineTo(cx + 12, cy - 4);
-      ctx.lineTo(cx + 18, cy - 8);
-      ctx.lineTo(cx + 10, cy - 16);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = '#3d6bb8';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    });
-    mk('equip_pants', 48, (ctx, s) => {
-      const cx = s / 2, cy = s / 2 - 8;
-      ctx.fillStyle = '#5b6b8a';
-      ctx.fillRect(cx - 12, cy, 24, 14);
-      ctx.fillRect(cx - 12, cy + 14, 9, 16);
-      ctx.fillRect(cx + 3, cy + 14, 9, 16);
-      ctx.strokeStyle = '#3a4560';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(cx - 12, cy, 24, 14);
-    });
-    mk('equip_shoes', 48, (ctx, s) => {
-      const cx = s / 2, cy = s / 2 + 6;
-      ctx.fillStyle = '#c9843d';
-      ctx.beginPath();
-      ctx.moveTo(cx - 12, cy - 6);
-      ctx.lineTo(cx - 4, cy - 6);
-      ctx.lineTo(cx + 12, cy);
-      ctx.lineTo(cx + 12, cy + 8);
-      ctx.lineTo(cx - 12, cy + 8);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = '#7a4d1e';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    });
-  }
 
   // 商店抽獎機用的「日式扭蛋機」圖示：紅色底座＋透明玻璃圓頂，裡面裝著幾顆彩色扭蛋，
   // 側邊一根轉柄，風格跟其他 UI/裝備圖示一樣走「粗描邊＋鮮豔色塊」的可愛路線。

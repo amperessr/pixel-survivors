@@ -26,94 +26,88 @@ export const TIER_PRICES = {
   high: 10000,
 };
 
-// 中階／高階圖示沿用同一部位的圖案，用染色做出「越高階越亮眼」的區別
-// （初心者維持原色、中階染銀藍、高階染金色），不用額外多畫 10 張圖示材質。
-export const TIER_TINTS = {
-  beginner: null,
-  mid: 0xbfe6ff,
-  high: 0xffe066,
-};
-
 // itemId 沿用原本的 "_basic" 命名當作初心者階（避免玩家原本存檔裡的裝備 id 失效），
-// 中階／高階則用 "_mid" / "_high" 後綴。
+// 中階／高階則用 "_mid" / "_high" 後綴。圖示改用玩家提供的正式美術圖（去背後裁切自
+// 五部位 x 三階級的裝備總覽圖，見 assets/equip_<slot>_<tier>.png），每階都是各自
+// 獨立的圖案與配色，不用再靠 TIER_TINTS 染色區分階級。
 export const EQUIPMENT_DATA = {
   weapon_basic: {
     id: 'weapon_basic', slot: 'weapon', tier: 'beginner', tierIndex: 0, prevId: null,
-    name: '初心者劍', desc: '攻擊力 +5', price: TIER_PRICES.beginner, icon: 'equip_weapon',
+    name: '初心者劍', desc: '攻擊力 +5', price: TIER_PRICES.beginner, icon: 'equip_weapon_beginner',
     bonus: { attack: 5 },
   },
   weapon_mid: {
     id: 'weapon_mid', slot: 'weapon', tier: 'mid', tierIndex: 1, prevId: 'weapon_basic',
-    name: '中階劍', desc: '攻擊力 +12', price: TIER_PRICES.mid, icon: 'equip_weapon',
+    name: '中階劍', desc: '攻擊力 +12', price: TIER_PRICES.mid, icon: 'equip_weapon_mid',
     bonus: { attack: 12 },
   },
   weapon_high: {
     id: 'weapon_high', slot: 'weapon', tier: 'high', tierIndex: 2, prevId: 'weapon_mid',
-    name: '高階劍', desc: '攻擊力 +25', price: TIER_PRICES.high, icon: 'equip_weapon',
+    name: '高階劍', desc: '攻擊力 +25', price: TIER_PRICES.high, icon: 'equip_weapon_high',
     bonus: { attack: 25 },
   },
 
   helmet_basic: {
     id: 'helmet_basic', slot: 'helmet', tier: 'beginner', tierIndex: 0, prevId: null,
-    name: '初心者頭盔', desc: '防禦力 +3', price: TIER_PRICES.beginner, icon: 'equip_helmet',
+    name: '初心者頭盔', desc: '防禦力 +3', price: TIER_PRICES.beginner, icon: 'equip_helmet_beginner',
     bonus: { defense: 3 },
   },
   helmet_mid: {
     id: 'helmet_mid', slot: 'helmet', tier: 'mid', tierIndex: 1, prevId: 'helmet_basic',
-    name: '中階頭盔', desc: '防禦力 +7', price: TIER_PRICES.mid, icon: 'equip_helmet',
+    name: '中階頭盔', desc: '防禦力 +7', price: TIER_PRICES.mid, icon: 'equip_helmet_mid',
     bonus: { defense: 7 },
   },
   helmet_high: {
     id: 'helmet_high', slot: 'helmet', tier: 'high', tierIndex: 2, prevId: 'helmet_mid',
-    name: '高階頭盔', desc: '防禦力 +15', price: TIER_PRICES.high, icon: 'equip_helmet',
+    name: '高階頭盔', desc: '防禦力 +15', price: TIER_PRICES.high, icon: 'equip_helmet_high',
     bonus: { defense: 15 },
   },
 
   clothes_basic: {
     id: 'clothes_basic', slot: 'clothes', tier: 'beginner', tierIndex: 0, prevId: null,
-    name: '初心者上衣', desc: '生命上限 +20', price: TIER_PRICES.beginner, icon: 'equip_clothes',
+    name: '初心者上衣', desc: '生命上限 +20', price: TIER_PRICES.beginner, icon: 'equip_clothes_beginner',
     bonus: { maxHp: 20 },
   },
   clothes_mid: {
     id: 'clothes_mid', slot: 'clothes', tier: 'mid', tierIndex: 1, prevId: 'clothes_basic',
-    name: '中階上衣', desc: '生命上限 +45', price: TIER_PRICES.mid, icon: 'equip_clothes',
+    name: '中階上衣', desc: '生命上限 +45', price: TIER_PRICES.mid, icon: 'equip_clothes_mid',
     bonus: { maxHp: 45 },
   },
   clothes_high: {
     id: 'clothes_high', slot: 'clothes', tier: 'high', tierIndex: 2, prevId: 'clothes_mid',
-    name: '高階上衣', desc: '生命上限 +90', price: TIER_PRICES.high, icon: 'equip_clothes',
+    name: '高階上衣', desc: '生命上限 +90', price: TIER_PRICES.high, icon: 'equip_clothes_high',
     bonus: { maxHp: 90 },
   },
 
   pants_basic: {
     id: 'pants_basic', slot: 'pants', tier: 'beginner', tierIndex: 0, prevId: null,
-    name: '初心者褲子', desc: '防禦力 +2', price: TIER_PRICES.beginner, icon: 'equip_pants',
+    name: '初心者褲子', desc: '防禦力 +2', price: TIER_PRICES.beginner, icon: 'equip_pants_beginner',
     bonus: { defense: 2 },
   },
   pants_mid: {
     id: 'pants_mid', slot: 'pants', tier: 'mid', tierIndex: 1, prevId: 'pants_basic',
-    name: '中階褲子', desc: '防禦力 +5', price: TIER_PRICES.mid, icon: 'equip_pants',
+    name: '中階褲子', desc: '防禦力 +5', price: TIER_PRICES.mid, icon: 'equip_pants_mid',
     bonus: { defense: 5 },
   },
   pants_high: {
     id: 'pants_high', slot: 'pants', tier: 'high', tierIndex: 2, prevId: 'pants_mid',
-    name: '高階褲子', desc: '防禦力 +10', price: TIER_PRICES.high, icon: 'equip_pants',
+    name: '高階褲子', desc: '防禦力 +10', price: TIER_PRICES.high, icon: 'equip_pants_high',
     bonus: { defense: 10 },
   },
 
   shoes_basic: {
     id: 'shoes_basic', slot: 'shoes', tier: 'beginner', tierIndex: 0, prevId: null,
-    name: '初心者鞋子', desc: '移動速度 +10', price: TIER_PRICES.beginner, icon: 'equip_shoes',
+    name: '初心者鞋子', desc: '移動速度 +10', price: TIER_PRICES.beginner, icon: 'equip_shoes_beginner',
     bonus: { moveSpeed: 10 },
   },
   shoes_mid: {
     id: 'shoes_mid', slot: 'shoes', tier: 'mid', tierIndex: 1, prevId: 'shoes_basic',
-    name: '中階鞋子', desc: '移動速度 +22', price: TIER_PRICES.mid, icon: 'equip_shoes',
+    name: '中階鞋子', desc: '移動速度 +22', price: TIER_PRICES.mid, icon: 'equip_shoes_mid',
     bonus: { moveSpeed: 22 },
   },
   shoes_high: {
     id: 'shoes_high', slot: 'shoes', tier: 'high', tierIndex: 2, prevId: 'shoes_mid',
-    name: '高階鞋子', desc: '移動速度 +40', price: TIER_PRICES.high, icon: 'equip_shoes',
+    name: '高階鞋子', desc: '移動速度 +40', price: TIER_PRICES.high, icon: 'equip_shoes_high',
     bonus: { moveSpeed: 40 },
   },
 };
