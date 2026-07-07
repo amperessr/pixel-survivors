@@ -30,10 +30,9 @@ export default class MainMenuScene extends Phaser.Scene {
     })).setOrigin(0.5);
 
     // 存檔點：每 5 關會記錄一次目前最高關卡（見 GameScene._update()）。
-    // 「開始遊戲」改成兩個選項：從存檔點當前關卡開始，或退回十關開始（難度較低，
-    // 給想穩一點的玩家）。兩個選項都要在按鈕正上方標出實際的關卡數字。
+    // 「開始遊戲」有兩個選項：從存檔點當前關卡開始，或從第一關重新開始。
+    // 兩個選項都要在按鈕正上方標出實際的關卡數字。
     const checkpointStage = getCheckpointStage();
-    const backStage = Math.max(1, checkpointStage - 10);
 
     const btnW = 420, btnH = 88, gap = 24;
     const items = [
@@ -44,8 +43,8 @@ export default class MainMenuScene extends Phaser.Scene {
         onPick: () => this.scene.start('GameScene', { startStage: checkpointStage }),
       },
       {
-        label: '往前十關', stageLabel: `第 ${backStage} 關`,
-        onPick: () => this.scene.start('GameScene', { startStage: backStage }),
+        label: '第一關', stageLabel: `第 1 關`,
+        onPick: () => this.scene.start('GameScene', { startStage: 1 }),
       },
     ];
     // 按鈕區塊改用固定像素起點（不再用畫面高度百分比推算），確保上方角色圖片
