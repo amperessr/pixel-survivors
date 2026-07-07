@@ -307,21 +307,28 @@ export default class Boss {
     this.scene.hitStop(110);
     audioManager.bossRoar();
 
+    // 五爪齊揮（原本只有三條），扇形展開角度也加大，斬擊感更誇張、更有魄力
     const perpAng = ang + Math.PI / 2;
-    for (let i = -1; i <= 1; i++) {
-      const off = i * 26;
+    for (let i = -2; i <= 2; i++) {
+      const off = i * 24;
       const sx = cx + Math.cos(perpAng) * off;
       const sy = cy + Math.sin(perpAng) * off;
       const claw = this.scene.add.image(sx, sy, 'fx_claw_slash')
         .setDepth(20005).setRotation(ang).setScale(0.4, 1).setAlpha(0.95);
       this.scene.tweens.add({
-        targets: claw, scaleX: 1.3, alpha: 0, duration: 260, delay: Math.abs(i) * 40,
+        targets: claw, scaleX: 1.5, alpha: 0, duration: 280, delay: Math.abs(i) * 35,
         onComplete: () => claw.destroy(),
       });
     }
 
     this.scene.time.delayedCall(140, () => {
       if (!this.alive) return; // 動畫播放期間 Boss 可能已被打死，避免存取已銷毀的物件
+      // 落地瞬間追加一圈金色衝擊光環＋碎片噴發＋二次打擊停頓，把「爪子真正打中地面」
+      // 那一刻的份量感做出來，不再只有斬擊殘影而已
+      this.scene.spawnGlowRing(cx, cy, 'fx_bossdeath', 0xffe066, 0.35, 3.4, 400);
+      this.scene.spawnBurstFx(cx, cy, 0xffe066, 20, 'fx_crit', 210);
+      this.scene.cameras.main.flash(140, 255, 255, 210);
+      this.scene.hitStop(70);
       const d = dist(cx, cy, this.player.sprite.x, this.player.sprite.y);
       if (d < hitRadius) {
         const died = this.player.takeDamage(this.dmg * 1.1, this.scene.time.now);
@@ -341,24 +348,38 @@ export default class Boss {
     const baseAng = this._telegraphAngle;
     const t = this.typeDef;
 
-    // 龍息噴發視覺：從龍口延伸出的長條光柱，沿瞄準方向拉長
+    // 龍口噴發瞬間先炸一圈衝擊光環＋碎片，噴出去之前先有「蓄力炸開」的份量感
+    this.scene.spawnGlowRing(bx, by, 'fx_bossdeath', t.breathColor, 0.3, 3.4, 420);
+    this.scene.spawnBurstFx(bx, by, t.breathColor, 16, 'fx_crit', 180);
+
+    // 龍息噴發視覺：從龍口延伸出的長條光柱，沿瞄準方向拉長；疊一層純白核心光柱
+    // 在外層色柱裡面，做出「外暗內亮」的層次感，比單一色塊更有噴射的力度
     const breath = this.scene.add.image(bx, by, t.breathTexture)
-      .setTint(t.breathColor).setAlpha(0.7).setDepth(19998).setOrigin(0, 0.5)
-      .setRotation(baseAng).setScale(6, 2.2);
+      .setTint(t.breathColor).setAlpha(0.8).setDepth(19998).setOrigin(0, 0.5)
+      .setRotation(baseAng).setScale(6, 2.4);
     this.scene.tweens.add({
-      targets: breath, alpha: 0, scaleX: 8, duration: 450,
+      targets: breath, alpha: 0, scaleX: 9, scaleY: 3, duration: 500,
       onComplete: () => breath.destroy(),
     });
-    this.scene.cameras.main.flash(160, 60, 100, 255);
+    const breathCore = this.scene.add.image(bx, by, t.breathTexture)
+      .setTint(0xffffff).setAlpha(0.65).setDepth(19999).setOrigin(0, 0.5)
+      .setRotation(baseAng).setScale(5, 1.1);
+    this.scene.tweens.add({
+      targets: breathCore, alpha: 0, scaleX: 7.5, duration: 400,
+      onComplete: () => breathCore.destroy(),
+    });
+    this.scene.cameras.main.flash(200, 90, 130, 255);
+    this.scene.hitStop(90);
     audioManager.bossRoar();
 
     // 沿瞄準方向連續噴出好幾波往前衝的粒子，強化「持續吐息」而不是單發特效的感覺
-    for (let wave = 0; wave < 5; wave++) {
-      this.scene.time.delayedCall(wave * 70, () => {
+    // （原本只噴 5 波，現在拉長到 7 波、每波粒子也變多，噴發時間感更持久）
+    for (let wave = 0; wave < 7; wave++) {
+      this.scene.time.delayedCall(wave * 65, () => {
         if (!this.alive) return;
         const wx = bx + Math.cos(baseAng) * (20 + wave * 22);
         const wy = by + Math.sin(baseAng) * (20 + wave * 22);
-        this.scene.spawnEmbersFx(wx, wy, 3, t.breathColor);
+        this.scene.spawnEmbersFx(wx, wy, 4, t.breathColor);
       });
     }
 

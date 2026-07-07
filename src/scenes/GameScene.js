@@ -14,7 +14,10 @@ import { dist } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 
-const BOSS_INTERVAL_MS = 5 * 60 * 1000; // 每 5 分鐘一隻 Boss
+// Boss 固定在第 5、10、15...關「一開始」就出現，用關卡數（不是存活分鐘數）反推
+// 觸發時間點——直接拿「每 5 分鐘」換算會因為關卡從第 1 關（而不是第 0 關）開始算，
+// 跟關卡顯示差了一整關，變成王在第 6、11、16...關才出現，慢了一拍。
+const BOSS_STAGE_INTERVAL = 5;
 // Boss 現在體型大幅放大，命中/接觸判定半徑也要跟著放大，這裡統一定義方便调整
 const BOSS_HIT_RADIUS = 46;   // 子彈命中 Boss 的判定半徑
 const BOSS_TOUCH_RADIUS = 76; // Boss 對玩家造成接觸傷害的判定半徑
@@ -59,10 +62,10 @@ export default class GameScene extends Phaser.Scene {
     const elapsedAtStartMs = (this.startStage - 1) * 60000;
     this.startTime = this.time.now - elapsedAtStartMs;
     // 補上「理論上應該已經打過幾隻王」的計數，讓黑藍/血色紅龍的輪替從這關開始算才對；
-    // 下一隻王訂在下一個 5 分鐘整數倍，不會因為往回推了 startTime 就讓好幾隻王在
-    // 一開局同一瞬間排隊出現。
-    this.bossSpawnCount = Math.floor(elapsedAtStartMs / BOSS_INTERVAL_MS);
-    this.nextBossAt = (this.bossSpawnCount + 1) * BOSS_INTERVAL_MS;
+    // 下一隻王訂在下一個「第 5 的倍數」關卡一開始的時間點，不會因為往回推了 startTime
+    // 就讓好幾隻王在一開局同一瞬間排隊出現。
+    this.bossSpawnCount = Math.floor((this.startStage - 1) / BOSS_STAGE_INTERVAL);
+    this.nextBossAt = ((this.bossSpawnCount + 1) * BOSS_STAGE_INTERVAL - 1) * 60000;
 
     this.killCount = 0;
     this.paused = false;
@@ -143,19 +146,33 @@ export default class GameScene extends Phaser.Scene {
   }
 
   update(time, delta) {
-    if (this.paused) return;
+    // 死亡監控放在最前面、不受 this.paused 影響——onPlayerDeath() 本身就會把
+    // paused 設成 true 來凍結玩法，如果這段被 paused 擋在後面，下面「血量歸零
+    // 滿 5 秒還沒結束遊戲」的保底計時器就永遠不會被執行到。
     // 安全網：不管 _update() 內部是否有例外被下面的 try/catch 吃掉，
     // 只要偵測到玩家血量已經歸零但遊戲還沒結束，就直接強制觸發死亡流程。
     // 這個呼叫本身也包 try/catch——萬一 onPlayerDeath() 內部真的有什麼漏網之魚，
     // 至少不會讓整個 update() 迴圈跟著掛掉，下一幀還有機會再試一次。
-    if (!this.gameEnded && this.player && this.player.hp <= 0) {
-      try {
-        this.onPlayerDeath();
-      } catch (err) {
-        console.error('[GameScene] onPlayerDeath() 發生未預期錯誤：', err);
+    if (this.player && this.player.hp <= 0) {
+      if (!this._hpZeroSince) this._hpZeroSince = time;
+      if (!this.gameEnded) {
+        try {
+          this.onPlayerDeath();
+        } catch (err) {
+          console.error('[GameScene] onPlayerDeath() 發生未預期錯誤：', err);
+        }
+      }
+      // 保底中的保底：不管上面死亡流程有沒有正常跑完（動畫卡住、選單忘了關...），
+      // 血量歸零超過 5 秒就不演了，直接強制切到結算畫面，玩家絕對不會卡在
+      // 原地動彈不得超過 5 秒。
+      if (time - this._hpZeroSince > 5000) {
+        this._forceGameOver();
       }
       return;
     }
+    this._hpZeroSince = null;
+
+    if (this.paused) return;
     // 防呆：任何未預期的例外都只印出錯誤並跳過這一幀，而不是讓 Phaser 的
     // update 迴圈整個中斷、畫面卡住不動（Boss 那個卡死 bug就是活生生的例子，
     // 這裡多一層保護，以後就算有新的類似疏漏也不會直接讓整個遊戲當掉）。
@@ -190,11 +207,11 @@ export default class GameScene extends Phaser.Scene {
     if (this.boss) {
       this.boss.update(time, delta);
     } else if (time - this.startTime > this.nextBossAt) {
-      this.nextBossAt += BOSS_INTERVAL_MS;
-      // 每 5 分鐘出現一隻 Boss，兩種型態輪流出現：
+      // 每 5 關（第 5、10、15...關）出現一隻 Boss，兩種型態輪流出現：
       // 第 1、3、5...次是黑藍巨龍，第 2、4、6...次是血色紅龍
       const bossType = this.bossSpawnCount % 2 === 0 ? 'blue' : 'red';
       this.bossSpawnCount++;
+      this.nextBossAt = ((this.bossSpawnCount + 1) * BOSS_STAGE_INTERVAL - 1) * 60000;
       this.boss = new Boss(this, this.player, elapsedMin, bossType, this.bossSpawnCount);
     }
 
@@ -519,24 +536,6 @@ export default class GameScene extends Phaser.Scene {
       this.player.sprite.body.enable = false;
     }
 
-    const kills = this.killCount;
-    const level = this.player.level;
-    const elapsed = Math.floor((this.time.now - this.startTime) / 1000);
-
-    // 保底：不管上面的死亡特效／淡黑效果發生什麼意外，這個函式一定要被呼叫到，
-    // 而且只會真正執行一次——這是延續之前「血量歸零但畫面卡住不結束」的防呆精神。
-    const goToGameOver = () => {
-      if (this._wentToGameOver) return;
-      this._wentToGameOver = true;
-      // 死亡當下如果升級選單／遺物選擇視窗剛好開著（例如跟 Boss 同歸於盡），
-      // 這兩個視窗不會自己關掉，會一直蓋在畫面最上層，看起來像是「遊戲卡住沒結束」，
-      // 所以這裡強制把它們也一併關掉，確保一定會看到結算畫面。
-      ['UIScene', 'LevelUpScene', 'RelicChoiceScene'].forEach((key) => {
-        try { this.scene.stop(key); } catch (err) { console.error(`[GameScene] 關閉 ${key} 失敗：`, err); }
-      });
-      this.scene.start('GameOverScene', { kills, level, time: elapsed });
-    };
-
     try {
       audioManager.stopBgm();
       audioManager.gameOver();
@@ -546,11 +545,30 @@ export default class GameScene extends Phaser.Scene {
       // 原地爆炸播完之後，畫面慢慢淡成黑幕，淡黑完成才真的切換到結算畫面，
       // 而不是像之前那樣一斷氣馬上跳畫面
       this.cameras.main.fade(1300, 0, 0, 0);
-      this.time.delayedCall(1400, goToGameOver);
+      this.time.delayedCall(1400, () => this._forceGameOver());
     } catch (err) {
       console.error('[GameScene] 死亡特效發生錯誤，直接切換到結算畫面：', err);
-      goToGameOver();
+      this._forceGameOver();
     }
+  }
+
+  // 保底：不管死亡特效／淡黑效果發生什麼意外，這個函式一定要被呼叫到，而且只會
+  // 真正執行一次——這是延續之前「血量歸零但畫面卡住不結束」的防呆精神。也被
+  // update() 裡「血量歸零滿 5 秒還沒結束遊戲」的保底計時器呼叫，數值都重新現算，
+  // 不依賴呼叫來源，確保無論卡在哪個環節都能正常結算。
+  _forceGameOver() {
+    if (this._wentToGameOver) return;
+    this._wentToGameOver = true;
+    const kills = this.killCount;
+    const level = this.player ? this.player.level : 1;
+    const elapsed = Math.floor((this.time.now - this.startTime) / 1000);
+    // 死亡當下如果升級選單／遺物選擇視窗剛好開著（例如跟 Boss 同歸於盡），
+    // 這兩個視窗不會自己關掉，會一直蓋在畫面最上層，看起來像是「遊戲卡住沒結束」，
+    // 所以這裡強制把它們也一併關掉，確保一定會看到結算畫面。
+    ['UIScene', 'LevelUpScene', 'RelicChoiceScene'].forEach((key) => {
+      try { this.scene.stop(key); } catch (err) { console.error(`[GameScene] 關閉 ${key} 失敗：`, err); }
+    });
+    this.scene.start('GameOverScene', { kills, level, time: elapsed });
   }
 
   // 玩家死亡瞬間的原地爆炸特效：紅白兩色碎片＋擴散光環＋角色本體淡出放大消失，

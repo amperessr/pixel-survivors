@@ -6,8 +6,10 @@ export const RELICS = {
     name: '龍之光環',
     subtitle: '擊敗黑藍巨龍的獎賞',
     desc: '生命上限與攻擊力\n永久提升 2 倍！\n身上會持續纏繞金色龍息氣場',
-    icon: 'boss_main',
-    iconTint: 0xffe066,
+    // 用真正的黑龍美術圖（574x320，橫向構圖），iconScale 另外調過比例，
+    // 不能沿用舊的方形貼圖縮放倍率，不然會爆版蓋住整張卡片。
+    icon: 'boss_black',
+    iconScale: 0.38,
     // 實際套用效果：呼叫 Player.applyDragonAura()
     apply(gameScene) {
       gameScene.player.applyDragonAura();
@@ -20,8 +22,8 @@ export const RELICS = {
     name: '龍之翼',
     subtitle: '擊敗血色紅龍的獎賞',
     desc: '移動速度永久提升 1.5 倍！\n從此健步如飛，來去如風',
-    icon: 'boss_main',
-    iconTint: 0xff5a3d,
+    icon: 'boss_red',
+    iconScale: 0.38,
     apply(gameScene) {
       gameScene.player.applyDragonWings();
       gameScene.enableDragonWingsVisual();

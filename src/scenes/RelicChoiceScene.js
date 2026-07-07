@@ -27,7 +27,7 @@ export default class RelicChoiceScene extends Phaser.Scene {
     const cy = h / 2 + 40;
 
     this._makeCard(startX, cy, cardW, cardH, {
-      icon: this.relic.icon, iconTint: this.relic.iconTint, iconScale: 1.3,
+      icon: this.relic.icon, iconTint: this.relic.iconTint, iconScale: this.relic.iconScale || 1.3,
       title: `⭐ 拿取「${this.relic.name}」`,
       titleColor: '#ffe066',
       desc: this.relic.desc,
