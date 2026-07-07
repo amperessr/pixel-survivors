@@ -64,7 +64,9 @@ export default class UIScene extends Phaser.Scene {
     this._titleH = TITLE_H;
 
     // ---- 下方：狀態列，分成「數值／裝備／技能」三大塊，各自 3 欄 x 2 列 ----
-    const bottomBarH = 190;
+    // 整塊狀態列的文字/圖示原本偏小，跟這麼寬的底板不成比例，這裡統一放大
+    // （底板本身也加高一點，才裝得下放大後的內容，不會擠在一起）。
+    const bottomBarH = 230;
     const bottomBarY = h - bottomBarH / 2 - 10;
     const barLeft = 30, barWidth = w - 60;
     this.add.image(w / 2, bottomBarY, 'ui_panel').setDisplaySize(barWidth, bottomBarH).setScrollFactor(0).setDepth(-1);
@@ -74,13 +76,13 @@ export default class UIScene extends Phaser.Scene {
     const col2CenterX = barLeft + colW * 1.5; // 裝備
     const col3CenterX = barLeft + colW * 2.5; // 技能
 
-    const titleY = bottomBarY - bottomBarH / 2 + 22;
-    const gridTopY = bottomBarY - bottomBarH / 2 + 66;
-    const rowGap = 70;
+    const titleY = bottomBarY - bottomBarH / 2 + 28;
+    const gridTopY = bottomBarY - bottomBarH / 2 + 82;
+    const rowGap = 86;
 
-    this.add.text(col1CenterX, titleY, '數值', textStyle({ fontSize: '24px', color: '#cfe9ff' })).setOrigin(0.5).setScrollFactor(0);
-    this.add.text(col2CenterX, titleY, '裝備', textStyle({ fontSize: '24px', color: '#ffe066' })).setOrigin(0.5).setScrollFactor(0);
-    this.add.text(col3CenterX, titleY, '技能', textStyle({ fontSize: '24px', color: '#6fd3ff' })).setOrigin(0.5).setScrollFactor(0);
+    this.add.text(col1CenterX, titleY, '數值', textStyle({ fontSize: '28px', color: '#cfe9ff' })).setOrigin(0.5).setScrollFactor(0);
+    this.add.text(col2CenterX, titleY, '裝備', textStyle({ fontSize: '28px', color: '#ffe066' })).setOrigin(0.5).setScrollFactor(0);
+    this.add.text(col3CenterX, titleY, '技能', textStyle({ fontSize: '28px', color: '#6fd3ff' })).setOrigin(0.5).setScrollFactor(0);
 
     // 直向分隔線，讓三大塊視覺上更清楚地分開
     this.add.rectangle(barLeft + colW, bottomBarY, 2, bottomBarH - 24, 0xffffff, 0.12).setScrollFactor(0);
@@ -88,7 +90,7 @@ export default class UIScene extends Phaser.Scene {
 
     // 通用排版：給定該欄中心 X，回傳「上面三個、下面三個」共 6 個格子的座標
     const cellPositions = (colCenterX) => {
-      const xs = [colCenterX - colW * 0.28, colCenterX, colCenterX + colW * 0.28];
+      const xs = [colCenterX - colW * 0.3, colCenterX, colCenterX + colW * 0.3];
       const ys = [gridTopY, gridTopY + rowGap];
       const pos = [];
       ys.forEach((y) => xs.forEach((x) => pos.push({ x, y })));
@@ -100,9 +102,9 @@ export default class UIScene extends Phaser.Scene {
     this.statChips = {};
     STAT_DEFS.forEach((def, i) => {
       const { x, y } = statPos[i];
-      this.add.image(x - 34, y, def.icon).setScale(1.15).setScrollFactor(0);
-      const valueText = this.add.text(x - 14, y, '', textStyle({
-        fontSize: '17px', color: def.color,
+      this.add.image(x - 44, y, def.icon).setScale(1.6).setScrollFactor(0);
+      const valueText = this.add.text(x - 20, y, '', textStyle({
+        fontSize: '22px', color: def.color,
       })).setOrigin(0, 0.5).setScrollFactor(0);
       this.statChips[def.key] = valueText;
     });
@@ -113,9 +115,9 @@ export default class UIScene extends Phaser.Scene {
     EQUIP_SLOTS.forEach((slot, i) => {
       const { x, y } = equipPos[i];
       const itemId = equipped[slot];
-      const slotBg = this.add.image(x, y, 'ui_equip_slot').setDisplaySize(50, 50).setScrollFactor(0);
+      const slotBg = this.add.image(x, y, 'ui_equip_slot').setDisplaySize(66, 66).setScrollFactor(0);
       if (itemId && EQUIPMENT_DATA[itemId]) {
-        this.add.image(x, y, EQUIPMENT_DATA[itemId].icon).setScale(0.8).setScrollFactor(0);
+        this.add.image(x, y, EQUIPMENT_DATA[itemId].icon).setScale(1.05).setScrollFactor(0);
       } else {
         slotBg.setAlpha(0.35);
       }
@@ -123,8 +125,8 @@ export default class UIScene extends Phaser.Scene {
     {
       // 第 6 格先保留給未來的飾品欄位，用問號淡淡標示「尚未開放」
       const { x, y } = equipPos[5];
-      this.add.image(x, y, 'ui_equip_slot').setDisplaySize(50, 50).setAlpha(0.2).setScrollFactor(0);
-      this.add.text(x, y, '?', textStyle({ fontSize: '22px', color: '#666666' })).setOrigin(0.5).setScrollFactor(0);
+      this.add.image(x, y, 'ui_equip_slot').setDisplaySize(66, 66).setAlpha(0.2).setScrollFactor(0);
+      this.add.text(x, y, '?', textStyle({ fontSize: '28px', color: '#666666' })).setOrigin(0.5).setScrollFactor(0);
     }
 
     // ---------- 右：技能（5 個被動 + 1 個保留格；武器已經在右上角的技能面板顯示過，
@@ -133,15 +135,15 @@ export default class UIScene extends Phaser.Scene {
     this.passiveChips = {};
     PASSIVE_IDS.forEach((id, i) => {
       const { x, y } = skillPos[i];
-      this.add.image(x - 28, y, PASSIVE_DATA[id].icon).setScale(1.15).setScrollFactor(0);
-      const lvText = this.add.text(x - 8, y, '', textStyle({
-        fontSize: '17px', color: '#cfe9ff',
+      this.add.image(x - 36, y, PASSIVE_DATA[id].icon).setScale(1.6).setScrollFactor(0);
+      const lvText = this.add.text(x - 12, y, '', textStyle({
+        fontSize: '22px', color: '#cfe9ff',
       })).setOrigin(0, 0.5).setScrollFactor(0);
       this.passiveChips[id] = lvText;
     });
     {
       const { x, y } = skillPos[5];
-      this.add.image(x, y, 'ui_equip_slot').setDisplaySize(44, 44).setAlpha(0.15).setScrollFactor(0);
+      this.add.image(x, y, 'ui_equip_slot').setDisplaySize(58, 58).setAlpha(0.15).setScrollFactor(0);
     }
 
     // ---- 畫面邊緣指示箭頭：血包（紅）／磁鐵（藍紫）不在畫面內時，指出方向 ----
