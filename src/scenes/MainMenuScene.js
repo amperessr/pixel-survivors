@@ -1,4 +1,4 @@
-import { promptPlayerName, getCheckpointStage } from '../managers/SaveManager.js';
+import { promptPlayerName, getCheckpointStage, getPlayerName, logout } from '../managers/SaveManager.js';
 import { subscribeLeaderboard } from '../firebase/firebase.js';
 import { textStyle } from '../utils/TextStyle.js';
 
@@ -81,6 +81,19 @@ export default class MainMenuScene extends Phaser.Scene {
     this.add.text(w / 2, h - 50, '操作：WASD 移動／自動鎖定攻擊／SPACE 衝刺／ESC 暫停', textStyle({
       fontSize: '26px', color: '#cfcfcf',
     })).setOrigin(0.5);
+
+    // ---- 左下角：目前登入的名字 + 登出按鈕 ----
+    // 同一台裝置登入過一次之後，往後開遊戲都會直接沿用（見 SaveManager.promptPlayerName()
+    // 的「靜默背景同步」邏輯），不會每次都跳密碼輸入視窗；要換帳號的話按這顆登出鍵，
+    // 才會清掉本機快取的登入狀態，下次開遊戲重新跳出名字/密碼視窗。
+    this.add.text(120, h - 76, `已登入：${getPlayerName() || '???'}`, textStyle({
+      fontSize: '18px', color: '#9fd3ff',
+    })).setOrigin(0.5);
+    const logoutBtn = this.add.image(120, h - 40, 'ui_bar_bg').setDisplaySize(170, 46).setInteractive({ useHandCursor: true });
+    this.add.text(120, h - 40, '登出', textStyle({ fontSize: '22px', color: '#10131a' })).setOrigin(0.5);
+    logoutBtn.on('pointerover', () => logoutBtn.setTint(0xff9a9a));
+    logoutBtn.on('pointerout', () => logoutBtn.clearTint());
+    logoutBtn.on('pointerdown', () => logout());
 
     // ---- 右側：排行榜 + 更新日誌，各自用面板框起來 ----
     const rightX = w - 260;

@@ -51,3 +51,8 @@ canvas {
   cursor: pointer; font-size: 14px;
 }
 .modal-box button:hover { background: #93e0ff; }
+.modal-box button:disabled { opacity: 0.5; cursor: not-allowed; }
+.modal-error {
+  color: #ff6b6b; font-size: 13px; margin: -6px 0 14px; max-width: 220px;
+}
+.modal-error.hidden { display: none; }

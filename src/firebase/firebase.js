@@ -9,6 +9,8 @@ import {
   orderByChild,
   limitToLast,
   onValue,
+  get,
+  set,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 // 專案設定：使用使用者提供的 Realtime Database URL
@@ -89,4 +91,43 @@ export function subscribeLeaderboard(callback) {
     callback([]);
     return () => {};
   }
+}
+
+// ---------- 帳號系統：用名字＋密碼把存檔（金幣/裝備/背包/關卡進度）同步到雲端， ----------
+// ---------- 讓同一個名字在不同電腦登入都能讀到最新進度。 ----------
+
+// Realtime Database 的 key 不能包含 . # $ [ ] / ，把這些字元換掉，
+// 避免玩家名字剛好用到這些符號時整個路徑失效。
+function sanitizeNameKey(name) {
+  return String(name).replace(/[.#$/\[\]]/g, "_");
+}
+
+// 密碼不能明碼存在資料庫裡：用瀏覽器內建的 Web Crypto API 做 SHA-256 雜湊，
+// 資料庫裡只會存雜湊後的字串，存取時也只比對雜湊值。
+export async function hashPassword(password) {
+  const data = new TextEncoder().encode(password);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * 讀取某個名字底下的雲端帳號資料。
+ * @returns {Promise<{exists:boolean, data:Object|null}>}
+ */
+export async function fetchAccount(name) {
+  ensureInit();
+  const accountRef = ref(db, `accounts/${sanitizeNameKey(name)}`);
+  const snapshot = await get(accountRef);
+  if (!snapshot.exists()) return { exists: false, data: null };
+  return { exists: true, data: snapshot.val() };
+}
+
+/**
+ * 把整包帳號資料（密碼雜湊 + 金幣/裝備/背包/關卡進度）寫入雲端，
+ * 用 set() 整包覆蓋，不是只更新單一欄位，避免不同裝置各自局部更新造成資料不一致。
+ */
+export async function saveAccount(name, data) {
+  ensureInit();
+  const accountRef = ref(db, `accounts/${sanitizeNameKey(name)}`);
+  await set(accountRef, data);
 }
