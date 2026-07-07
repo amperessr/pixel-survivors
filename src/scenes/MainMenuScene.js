@@ -40,11 +40,13 @@ export default class MainMenuScene extends Phaser.Scene {
       { label: '商店', onPick: () => this.scene.start('ShopScene') },
       {
         label: '當前關卡', stageLabel: `第 ${checkpointStage} 關`,
-        onPick: () => this.scene.start('GameScene', { startStage: checkpointStage }),
+        // 除錯用：暫時印出玩家實際點了哪顆按鈕，方便排查「點第一關卻從別的關卡開始」的問題，
+        // 之後確認沒問題了可以把這行 console.log 拿掉。
+        onPick: () => { console.log(`[STAGE] 點了「當前關卡」，checkpointStage=${checkpointStage}`); this.scene.start('GameScene', { startStage: checkpointStage }); },
       },
       {
         label: '第一關', stageLabel: `第 1 關`,
-        onPick: () => this.scene.start('GameScene', { startStage: 1 }),
+        onPick: () => { console.log('[STAGE] 點了「第一關」，startStage=1'); this.scene.start('GameScene', { startStage: 1 }); },
       },
     ];
     // 按鈕區塊改用固定像素起點（不再用畫面高度百分比推算），確保上方角色圖片不會

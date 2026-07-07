@@ -29,7 +29,7 @@ export const CHARACTERS = {
   },
 };
 
-const BASE_STATS = {
+export const BASE_STATS = {
   hp: 100, attack: 10, defense: 5, moveSpeed: 180,
   atkSpeed: 0, critRate: 5, critDmg: 150,
 };

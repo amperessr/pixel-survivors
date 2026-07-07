@@ -30,6 +30,9 @@ export default class GameScene extends Phaser.Scene {
     // 時間都是照存活分鐘數算的，見下面 create() 怎麼往回推 startTime）。
     // 沒有帶值就是預設從第 1 關開始（一般模式）。
     this.startStage = Math.max(1, Math.floor(data.startStage || 1));
+    // 除錯用：暫時印出主選單實際傳進來的 startStage，方便排查「點第一關卻從別的關卡開始」的問題，
+    // 之後確認沒問題了可以整段拿掉。
+    console.log(`[STAGE] init() 收到 data.startStage=${data.startStage}　最終 this.startStage=${this.startStage}`);
   }
 
   create() {
@@ -391,7 +394,11 @@ export default class GameScene extends Phaser.Scene {
 
   onGainExp(amount) {
     if (this.gameEnded) return false; // 遊戲已經結束就不要再處理升級（避免死後還跳升級選單）
+    // 除錯用：暫時印出每次加經驗值前後的數值，方便排查「撿寶石沒反應」的問題，
+    // 之後確認沒問題了可以整段拿掉。
+    const expBefore = this.player.exp;
     const leveledUp = this.player.gainExp(amount);
+    console.log(`[EXP] +${amount}　exp: ${expBefore} -> ${this.player.exp} / ${this.player.expToNext}　lv=${this.player.level}`);
     if (leveledUp.length > 0) {
       audioManager.levelUp();
       this.spawnLevelUpFx(this.player.sprite.x, this.player.sprite.y);
