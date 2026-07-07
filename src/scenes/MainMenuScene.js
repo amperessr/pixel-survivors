@@ -9,9 +9,16 @@ export default class MainMenuScene extends Phaser.Scene {
 
   async create() {
     const w = this.scale.width, h = this.scale.height;
-    this.add.rectangle(w / 2, h / 2, w, h, 0x10131a);
+
+    // 背景改成玩家提供的封面美術圖（見 BootScene.preload() 載入的 'menu_bg'）
+    this.add.image(w / 2, h / 2, 'menu_bg').setDisplaySize(w, h);
+
+    // 背景圖本身很豐富（天空、村莊、瀑布都有內容），中間這一整欄的文字/按鈕
+    // 疊一塊半透明深色底板上去，不管背景細節長怎樣，文字跟按鈕都保證看得清楚。
+    this.add.rectangle(w / 2, 515, 660, 900, 0x0a0e16, 0.55).setDepth(-1);
+
     this.add.text(w / 2, h * 0.14, '像素求生 Pixel Survivors', textStyle({
-      fontSize: '72px', color: '#6fd3ff',
+      fontSize: '72px', color: '#ffe066',
     })).setOrigin(0.5);
 
     await promptPlayerName();
@@ -51,18 +58,19 @@ export default class MainMenuScene extends Phaser.Scene {
           fontSize: '20px', color: '#ffd93d',
         })).setOrigin(0.5, 1);
       }
-      const btn = this.add.image(w / 2, cy, 'ui_bar_bg').setDisplaySize(btnW, btnH).setInteractive({ useHandCursor: true });
+      const btn = this.add.image(w / 2, cy, 'ui_button_parchment').setDisplaySize(btnW, btnH).setInteractive({ useHandCursor: true });
       this.add.text(w / 2, cy, item.label, textStyle({
-        fontSize: '38px', color: '#10131a',
+        fontSize: '38px', color: '#3a2413',
       })).setOrigin(0.5);
-      btn.on('pointerover', () => btn.setTint(0x6fd3ff));
+      btn.on('pointerover', () => btn.setTint(0xfff3d0));
       btn.on('pointerout', () => btn.clearTint());
       btn.on('pointerdown', item.onPick);
       cy += btnH + gap;
     });
 
+    this.add.rectangle(w / 2, h - 50, 760, 44, 0x0a0e16, 0.55);
     this.add.text(w / 2, h - 50, '操作：WASD 移動／自動鎖定攻擊／SPACE 衝刺／ESC 暫停', textStyle({
-      fontSize: '26px', color: '#999',
+      fontSize: '26px', color: '#cfcfcf',
     })).setOrigin(0.5);
 
     // ---- 右側：排行榜 + 更新日誌，各自用面板框起來 ----
