@@ -4,6 +4,7 @@ const BEST_KEY = 'pixelSurvivors_bestScore';
 const GOLD_KEY = 'pixelSurvivors_gold';
 const INVENTORY_KEY = 'pixelSurvivors_inventory'; // JSON: 長度 50 的陣列，每格是 itemId 或 null
 const EQUIPPED_KEY = 'pixelSurvivors_equipped';   // JSON: { weapon, helmet, clothes, pants, shoes }
+const CHECKPOINT_KEY = 'pixelSurvivors_checkpointStage'; // 目前記錄到的最高關卡存檔點（每 5 關記一次）
 
 const INVENTORY_SIZE = 50; // 5 列 x 10 欄，跟楓之谷倉庫一樣的排法
 
@@ -93,6 +94,17 @@ export function getEquipped() {
 
 export function setEquipped(equipped) {
   localStorage.setItem(EQUIPPED_KEY, JSON.stringify(equipped));
+}
+
+// ---------- 關卡存檔點（每 5 關記錄一次，只會往前推進、不會被較小的關卡數蓋掉）----------
+export function getCheckpointStage() {
+  return Math.max(1, parseInt(localStorage.getItem(CHECKPOINT_KEY) || '1', 10));
+}
+
+export function setCheckpointStage(stage) {
+  if (stage > getCheckpointStage()) {
+    localStorage.setItem(CHECKPOINT_KEY, String(Math.floor(stage)));
+  }
 }
 
 // 顯示 HTML 名稱輸入 Modal，回傳 Promise<string>
