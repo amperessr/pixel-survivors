@@ -4,6 +4,9 @@ import {
 import { getGold, spendGold, addGold, isItemOwned, upgradeEquipment } from '../managers/SaveManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 
+const GACHA_SINGLE_PRICE = 1000;
+const GACHA_TEN_PRICE = 9000;
+
 // 商店：五個裝備部位 x 三個階級（初心者/中階/高階）的 5x3 卡片牆。
 // 同一部位必須依序購買（先買初心者才能買中階，先買中階才能買高階），
 // 每件裝備限購一次；買中/高階時會直接把背包或身上的前一階裝備原地升級成新的，
@@ -26,30 +29,73 @@ export default class ShopScene extends Phaser.Scene {
       fontSize: '21px', color: '#9fd3ff',
     })).setOrigin(0.5);
 
-    this.cardW = 320;
-    this.cardH = 260;
-    this.gapX = 26;
-    this.gapY = 20;
+    // 裝備卡片牆縮小一點，把畫面右側讓出來給抽獎機面板
+    this.cardW = 250;
+    this.cardH = 230;
+    this.gapX = 18;
+    this.gapY = 18;
     const totalW = EQUIP_SLOTS.length * this.cardW + (EQUIP_SLOTS.length - 1) * this.gapX;
-    this.startX = w / 2 - totalW / 2 + this.cardW / 2;
+    this.startX = 60 + this.cardW / 2;
     this.startY = 270;
 
     // 每個部位一欄標題，標在該欄第一張卡片正上方
     EQUIP_SLOTS.forEach((slot, i) => {
       const cx = this.startX + i * (this.cardW + this.gapX);
       this.add.text(cx, this.startY - this.cardH / 2 - 16, SLOT_LABELS[slot], textStyle({
-        fontSize: '24px', color: '#ffe066',
+        fontSize: '22px', color: '#ffe066',
       })).setOrigin(0.5, 1);
     });
 
     this.gridContainer = this.add.container(0, 0);
     this._buildGrid();
 
+    this._buildGachaPanel(60 + totalW + 40, w);
+
     const backBtn = this.add.image(w / 2, h - 50, 'ui_bar_bg').setDisplaySize(280, 62).setInteractive({ useHandCursor: true });
     this.add.text(w / 2, h - 50, '返回主選單', textStyle({ fontSize: '26px', color: '#10131a' })).setOrigin(0.5);
     backBtn.on('pointerover', () => backBtn.setTint(0x6fd3ff));
     backBtn.on('pointerout', () => backBtn.clearTint());
     backBtn.on('pointerdown', () => this.scene.start('MainMenuScene'));
+  }
+
+  // 抽獎機面板：日式扭蛋機圖片 + 一抽／十抽兩個按鈕。
+  // 獎勵內容表還沒定案（使用者要求先保留），所以按鈕目前只會顯示「準備中」提示、
+  // 不會扣款——之後獎勵表決定了，只需要改 `_gachaPull()` 這個函式接上真正的抽獎邏輯即可。
+  _buildGachaPanel(panelLeft, screenW) {
+    const panelW = screenW - panelLeft - 60;
+    const cx = panelLeft + panelW / 2;
+    const panelTop = 150, panelH = 820;
+    const cy = panelTop + panelH / 2;
+
+    this.add.image(cx, cy, 'ui_panel').setDisplaySize(panelW, panelH);
+    this.add.rectangle(cx, cy, panelW - 6, panelH - 6).setStrokeStyle(3, 0xff9ad6, 0.7).setFillStyle(0, 0);
+    this.add.text(cx, panelTop + 34, '🎰 幸運扭蛋', textStyle({
+      fontSize: '30px', color: '#ff9ad6',
+    })).setOrigin(0.5);
+    this.add.rectangle(cx, panelTop + 66, panelW - 60, 2, 0xff9ad6, 0.4);
+
+    this.add.image(cx, panelTop + 265, 'gacha_machine').setScale(1.3);
+
+    this.add.text(cx, panelTop + 467, '每次抽獎都有機會拿到豐厚獎勵！', textStyle({
+      fontSize: '19px', color: '#cfe9ff',
+    })).setOrigin(0.5);
+
+    const btnW = panelW - 100;
+    this._buildGachaButton(cx, panelTop + 521, btnW, `一抽　💰 ${GACHA_SINGLE_PRICE}`, () => this._gachaPull(1, GACHA_SINGLE_PRICE));
+    this._buildGachaButton(cx, panelTop + 611, btnW, `十抽　💰 ${GACHA_TEN_PRICE}`, () => this._gachaPull(10, GACHA_TEN_PRICE));
+  }
+
+  _buildGachaButton(cx, cy, btnW, label, onClick) {
+    const btn = this.add.image(cx, cy, 'ui_button_parchment').setDisplaySize(btnW, 68).setInteractive({ useHandCursor: true });
+    this.add.text(cx, cy, label, textStyle({ fontSize: '26px', color: '#3a2413' })).setOrigin(0.5);
+    btn.on('pointerover', () => btn.setTint(0xfff3d0));
+    btn.on('pointerout', () => btn.clearTint());
+    btn.on('pointerdown', onClick);
+  }
+
+  _gachaPull(times, price) {
+    // TODO: 獎勵表定案後在這裡實作真正的抽獎邏輯（扣款＋開獎＋發獎勵）。
+    this._showToast('抽獎機制準備中，敬請期待！');
   }
 
   _buildGrid() {
@@ -93,9 +139,9 @@ export default class ShopScene extends Phaser.Scene {
         fontSize: '22px', color: '#ffd93d',
       })).setOrigin(0.5));
 
-      const btn = this.add.image(cx, cy + 96, 'ui_bar_bg').setDisplaySize(cardW - 100, 40).setInteractive({ useHandCursor: true });
+      const btn = this.add.image(cx, cy + 92, 'ui_bar_bg').setDisplaySize(cardW - 100, 38).setInteractive({ useHandCursor: true });
       this.gridContainer.add(btn);
-      this.gridContainer.add(this.add.text(cx, cy + 96, '購買', textStyle({
+      this.gridContainer.add(this.add.text(cx, cy + 92, '購買', textStyle({
         fontSize: '22px', color: '#10131a',
       })).setOrigin(0.5));
       btn.on('pointerover', () => btn.setTint(0x6fd3ff));

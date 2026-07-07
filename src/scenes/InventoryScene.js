@@ -63,6 +63,16 @@ export default class InventoryScene extends Phaser.Scene {
       }
     }
 
+    // ---------- 垃圾桶：把背包裡的裝備拖過來就丟棄 ----------
+    this.trashX = startX + gridW / 2;
+    this.trashY = 830;
+    this.TRASH_TINT = 0xff6b6b;
+    this.trashZone = this.add.image(this.trashX, this.trashY, 'ui_slot').setDisplaySize(140, 140).setTint(this.TRASH_TINT);
+    this.add.text(this.trashX, this.trashY, '🗑', textStyle({ fontSize: '52px', color: '#ffffff' })).setOrigin(0.5);
+    this.add.text(this.trashX, this.trashY + 84, '拖曳裝備到這裡丟棄', textStyle({
+      fontSize: '20px', color: '#ff9a9a',
+    })).setOrigin(0.5);
+
     const backBtn = this.add.image(w / 2, h - 70, 'ui_bar_bg').setDisplaySize(280, 70).setInteractive({ useHandCursor: true });
     this.add.text(w / 2, h - 70, '返回主選單', textStyle({ fontSize: '28px', color: '#10131a' })).setOrigin(0.5);
     backBtn.on('pointerover', () => backBtn.setTint(0x6fd3ff));
@@ -84,18 +94,57 @@ export default class InventoryScene extends Phaser.Scene {
       }
     });
 
-    // 重新畫出背包格的圖示
+    // 重新畫出背包格的圖示：可拖曳，拖到垃圾桶上放開就丟棄；
+    // 沒有拖動、單純點一下的話維持原本「點擊裝備」的行為。
     this.slotIcons.forEach((icon) => { if (icon) icon.destroy(); });
     this.inventory.forEach((itemId, idx) => {
       if (itemId && EQUIPMENT_DATA[itemId]) {
         const bg = this.slotBgs[idx];
-        this.slotIcons[idx] = this.add.image(bg.x, bg.y, EQUIPMENT_DATA[itemId].icon).setScale(0.9);
+        const icon = this.add.image(bg.x, bg.y, EQUIPMENT_DATA[itemId].icon).setScale(0.9);
+        icon.setInteractive({ useHandCursor: true, draggable: true });
+        icon.on('dragstart', () => {
+          icon.setData('dragged', false);
+          this.children.bringToTop(icon);
+        });
+        icon.on('drag', (pointer, dragX, dragY) => {
+          icon.setData('dragged', true);
+          icon.setPosition(dragX, dragY);
+          this.trashZone.setTint(this._isOverTrash(dragX, dragY) ? 0xff0000 : this.TRASH_TINT);
+        });
+        icon.on('dragend', () => {
+          this.trashZone.setTint(this.TRASH_TINT);
+          if (this._isOverTrash(icon.x, icon.y)) {
+            this._discardFromInventory(idx);
+          } else {
+            icon.setPosition(bg.x, bg.y);
+          }
+        });
+        icon.on('pointerup', () => {
+          if (!icon.getData('dragged')) this._equipFromInventory(idx);
+        });
+        this.slotIcons[idx] = icon;
       } else {
         this.slotIcons[idx] = null;
       }
     });
 
     this.goldText.setText(`金幣：${getGold()}`);
+  }
+
+  _isOverTrash(x, y) {
+    const half = 70; // 垃圾桶顯示尺寸 140x140 的一半
+    return Math.abs(x - this.trashX) < half && Math.abs(y - this.trashY) < half;
+  }
+
+  // 把背包裡的裝備永久丟棄（不會退還金幣），拖曳放開在垃圾桶上時呼叫
+  _discardFromInventory(idx) {
+    const itemId = this.inventory[idx];
+    if (!itemId) return;
+    const def = EQUIPMENT_DATA[itemId];
+    this.inventory[idx] = null;
+    setInventory(this.inventory);
+    this._refresh();
+    this._showToast(`已丟棄「${def ? def.name : itemId}」`);
   }
 
   // 點背包裡的裝備：穿上，原本穿的那件（如果有）換回同一格

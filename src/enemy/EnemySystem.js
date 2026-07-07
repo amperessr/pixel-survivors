@@ -197,8 +197,15 @@ export default class EnemySystem {
       if (dist(g.x, g.y, px, py) < 16) {
         const amount = g.getData('amount');
         this.expGemPool.free(g);
-        audioManager.pickup();
+        // 核心規則（加經驗值）一定要先生效，音效只是附加效果——就算音效播放出狀況
+        // （例如瀏覽器 AudioContext 出錯），也絕對不能連帶讓經驗值沒加到，
+        // 所以這裡把音效包起來單獨處理，不會影響到下面的 onGainExp()。
         this.scene.onGainExp(amount);
+        try {
+          audioManager.pickup();
+        } catch (err) {
+          console.error('[EnemySystem] 撿取音效播放失敗（經驗值已正常加入，不受影響）：', err);
+        }
       }
     });
   }
@@ -297,8 +304,14 @@ export default class EnemySystem {
     const exp = enemy.getData('exp');
     this.expGemPool.spawn(enemy.x, enemy.y, exp);
     this.scene.spawnKillFx(enemy.x, enemy.y);
-    audioManager.kill();
     this.scene.registerKill();
+    // 音效放在核心規則（掉經驗寶石／計入擊殺數）之後單獨包起來，就算播放出狀況
+    // 也不會連帶讓下面的擊殺獎勵、回收敵人物件都沒執行到。
+    try {
+      audioManager.kill();
+    } catch (err) {
+      console.error('[EnemySystem] 擊殺音效播放失敗（擊殺獎勵已正常結算，不受影響）：', err);
+    }
     // 擊殺時有 0.1% 機率直接在原地掉落血包（跟原本地圖上定時生成的血包共用同一個系統）
     if (Math.random() < 0.001 && this.scene.healthPackSystem) {
       this.scene.healthPackSystem.forceSpawn(enemy.x, enemy.y);

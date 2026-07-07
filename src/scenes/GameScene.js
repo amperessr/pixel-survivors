@@ -91,6 +91,10 @@ export default class GameScene extends Phaser.Scene {
         const elapsed = this.getElapsedSeconds();
         const score = this.killCount * 10 + this.player.level * 50 + Math.floor(elapsed * 0.5);
         setBestScore(score);
+        // 關卡進度原本只有每滿 5 關才存一次存檔點，玩家在中間關卡離開的話會漏掉
+        // 這幾關的進度，這裡連同金幣/分數一起把「目前關卡」存下去（只會往前推進，
+        // 不會蓋掉更高的紀錄，見 setCheckpointStage()）。
+        setCheckpointStage(this.getStage());
       } catch (err) {
         console.error('[GameScene] 離開前存檔失敗：', err);
       }
