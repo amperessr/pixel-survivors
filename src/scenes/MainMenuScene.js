@@ -1,4 +1,4 @@
-import { promptPlayerName, getGold, getCheckpointStage } from '../managers/SaveManager.js';
+import { promptPlayerName, getCheckpointStage } from '../managers/SaveManager.js';
 import { subscribeLeaderboard } from '../firebase/firebase.js';
 import { textStyle } from '../utils/TextStyle.js';
 
@@ -17,17 +17,20 @@ export default class MainMenuScene extends Phaser.Scene {
     // 疊一塊半透明深色底板上去，不管背景細節長怎樣，文字跟按鈕都保證看得清楚。
     this.add.rectangle(w / 2, 515, 660, 900, 0x0a0e16, 0.55).setDepth(-1);
 
-    this.add.text(w / 2, h * 0.14, '像素求生 Pixel Survivors', textStyle({
-      fontSize: '72px', color: '#ffe066',
+    // 標題招牌：深色橫幅 + 金色描邊粗體大字 + 下方小字英文名，讓標題在豐富的
+    // 背景美術圖上還是能一眼跳出來，看起來像正式的遊戲標題招牌，而不是隨手疊上去的文字。
+    this.add.rectangle(w / 2, 100, 860, 150, 0x0a0e16, 0.55).setStrokeStyle(3, 0xffe066, 0.6);
+    this.add.text(w / 2, 68, '像素求生', textStyle({
+      fontSize: '80px', color: '#ffe066', stroke: '#3a2413', strokeThickness: 10,
+      shadow: { offsetX: 0, offsetY: 4, color: '#000000', blur: 10, fill: true },
+    })).setOrigin(0.5);
+    this.add.text(w / 2, 136, 'P I X E L   S U R V I V O R S', textStyle({
+      fontSize: '26px', color: '#ffffff', stroke: '#3a2413', strokeThickness: 4,
     })).setOrigin(0.5);
 
     await promptPlayerName();
 
     this.add.image(w / 2, 340, 'player_balanced').setScale(2.4);
-
-    this.goldText = this.add.text(w / 2, h * 0.14 + 60, `金幣：${getGold()}`, textStyle({
-      fontSize: '30px', color: '#ffd93d',
-    })).setOrigin(0.5);
 
     // 存檔點：每 5 關會記錄一次目前最高關卡（見 GameScene._update()）。
     // 「開始遊戲」有兩個選項：從存檔點當前關卡開始，或從第一關重新開始。
