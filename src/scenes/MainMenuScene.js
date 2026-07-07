@@ -47,20 +47,25 @@ export default class MainMenuScene extends Phaser.Scene {
         onPick: () => this.scene.start('GameScene', { startStage: 1 }),
       },
     ];
-    // 按鈕區塊改用固定像素起點（不再用畫面高度百分比推算），確保上方角色圖片
-    // 跟按鈕上方的關卡數字標籤不會擠在一起重疊
+    // 按鈕區塊改用固定像素起點（不再用畫面高度百分比推算），確保上方角色圖片不會
+    // 跟按鈕擠在一起重疊。關卡數字改成直接畫在按鈕本體裡（跟按鈕文字同一顆按鈕、
+    // 分兩行顯示），而不是按鈕外部的浮動文字——不然會被上一顆按鈕的底部擋住一部分。
     let cy = 560;
 
     items.forEach((item) => {
-      if (item.stageLabel) {
-        this.add.text(w / 2, cy - btnH / 2 - 12, item.stageLabel, textStyle({
-          fontSize: '20px', color: '#ffd93d',
-        })).setOrigin(0.5, 1);
-      }
       const btn = this.add.image(w / 2, cy, 'ui_button_parchment').setDisplaySize(btnW, btnH).setInteractive({ useHandCursor: true });
-      this.add.text(w / 2, cy, item.label, textStyle({
-        fontSize: '38px', color: '#3a2413',
-      })).setOrigin(0.5);
+      if (item.stageLabel) {
+        this.add.text(w / 2, cy - 15, item.label, textStyle({
+          fontSize: '30px', color: '#3a2413',
+        })).setOrigin(0.5);
+        this.add.text(w / 2, cy + 20, item.stageLabel, textStyle({
+          fontSize: '19px', color: '#6b4423',
+        })).setOrigin(0.5);
+      } else {
+        this.add.text(w / 2, cy, item.label, textStyle({
+          fontSize: '38px', color: '#3a2413',
+        })).setOrigin(0.5);
+      }
       btn.on('pointerover', () => btn.setTint(0xfff3d0));
       btn.on('pointerout', () => btn.clearTint());
       btn.on('pointerdown', item.onPick);

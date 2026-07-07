@@ -96,6 +96,38 @@ export function setEquipped(equipped) {
   localStorage.setItem(EQUIPPED_KEY, JSON.stringify(equipped));
 }
 
+// 某個裝備 id 目前是否已經擁有（不管是穿在身上還是放在背包裡）——
+// 用來判斷商店裡「已購買」／「前一階是否已擁有」的狀態
+export function isItemOwned(itemId) {
+  if (!itemId) return false;
+  const equipped = getEquipped();
+  if (Object.values(equipped).includes(itemId)) return true;
+  return getInventory().includes(itemId);
+}
+
+// 把裝備從舊 id 升級成新 id：不管舊裝備目前是穿在身上（哪一個欄位）還是放在
+// 背包裡（哪一格），都直接原地換成新 id，不會在背包多長出一件；
+// 如果找不到舊裝備（例如買的是初心者階，沒有前一階可以升級），就照一般方式塞進背包空格。
+export function upgradeEquipment(oldItemId, newItemId) {
+  if (oldItemId) {
+    const equipped = getEquipped();
+    const equippedSlot = Object.keys(equipped).find((slot) => equipped[slot] === oldItemId);
+    if (equippedSlot) {
+      equipped[equippedSlot] = newItemId;
+      setEquipped(equipped);
+      return true;
+    }
+    const inv = getInventory();
+    const idx = inv.indexOf(oldItemId);
+    if (idx !== -1) {
+      inv[idx] = newItemId;
+      setInventory(inv);
+      return true;
+    }
+  }
+  return addItemToInventory(newItemId);
+}
+
 // ---------- 關卡存檔點（每 5 關記錄一次，只會往前推進、不會被較小的關卡數蓋掉）----------
 export function getCheckpointStage() {
   return Math.max(1, parseInt(localStorage.getItem(CHECKPOINT_KEY) || '1', 10));
