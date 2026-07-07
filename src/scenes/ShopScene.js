@@ -112,10 +112,19 @@ export default class ShopScene extends Phaser.Scene {
     });
   }
 
+  // 買中/高階時，前一階裝備會被「原地升級」成新 id，原本的 id 就不會再出現在
+  // 背包或身上任何地方——如果只單純判斷 isItemOwned(def.id)，買完高階之後
+  // 初/中階卡片會看起來「又變回可以買」，其實是已經升級過的裝備，不該再讓玩家重買一次。
+  // 這裡額外檢查同部位是否有更高階的版本已經擁有，有的話這一階也算「已購買」。
+  _isSurpassed(def) {
+    const line = EQUIP_LINES[def.slot];
+    return line.slice(def.tierIndex + 1).some((higherId) => isItemOwned(higherId));
+  }
+
   _buildCard(cx, cy, def) {
     const cardW = this.cardW, cardH = this.cardH;
-    const owned = isItemOwned(def.id);
-    const prevOwned = !def.prevId || isItemOwned(def.prevId);
+    const owned = isItemOwned(def.id) || this._isSurpassed(def);
+    const prevOwned = !def.prevId || isItemOwned(def.prevId) || this._isSurpassed(def);
     const locked = !owned && !prevOwned;
     const buyable = !owned && prevOwned;
 
