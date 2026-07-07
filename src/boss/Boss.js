@@ -293,9 +293,14 @@ export default class Boss {
 
   takeDamage(amount, critRate = 0, critDmg = 150) {
     let dmg = amount;
-    if (Math.random() * 100 < critRate) dmg *= critDmg / 100;
+    let isCrit = false;
+    if (Math.random() * 100 < critRate) {
+      dmg *= critDmg / 100;
+      isCrit = true;
+    }
     this.hp -= dmg;
     this.sprite.setTintFill(0xffffff);
+    this.scene.spawnDamageNumber(this.sprite.x, this.sprite.y - 30, dmg, isCrit);
     this.scene.time.delayedCall(60, () => {
       if (!this.sprite.active) return;
       // 若這時 Boss 還在充能衝撞（自己也有 tint），閃白計時器不該蓋掉衝撞色，
