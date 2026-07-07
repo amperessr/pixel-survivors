@@ -5,10 +5,12 @@ export default class BootScene extends Phaser.Scene {
   constructor() { super('BootScene'); }
 
   preload() {
-    // 目前的外部圖片素材：龍之翼遺物特效 + 主選單背景，
-    // 其餘所有材質都還是 TextureFactory 用程式產生，這兩張是特例。
+    // 目前的外部圖片素材：龍之翼遺物特效 + 主選單背景 + 兩隻 Boss 龍的正式美術圖，
+    // 其餘所有材質都還是 TextureFactory 用程式產生。
     this.load.image('fx_dragon_wing_pair', 'assets/dragon_wing.png');
     this.load.image('menu_bg', 'assets/menu_bg.jpg');
+    this.load.image('boss_red', 'assets/boss_red.png');
+    this.load.image('boss_black', 'assets/boss_black.png');
   }
 
   create() {

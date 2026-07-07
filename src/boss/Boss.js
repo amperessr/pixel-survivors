@@ -4,9 +4,10 @@ import { textStyle } from '../utils/TextStyle.js';
 
 const BOSS_BASE_HP = 900;
 const BOSS_BASE_DMG = 22;
-// Boss 材質已改成 128x128（原本 64x64 太模糊），
-// 用 2.1 倍縮放後顯示約 269px，安全超過一般小怪 5 倍以上的體型需求
-const BOSS_SCALE = 2.1;
+// Boss 現在用玩家提供的正式美術圖（去背後的黑龍/紅龍，見 assets/boss_black.png、
+// assets/boss_red.png），兩張圖都統一裁切/縮放成同樣的 574x320，不用再各自調整。
+// 0.9 倍縮放後龍的身體高度跟原本程式產生的貼圖差不多大，翅膀展開會比原本更寬更有氣勢。
+const BOSS_SCALE = 0.9;
 const BOSS_TOUCH_RADIUS = 100;   // Boss 對玩家造成接觸傷害的判定半徑（跟著體型放大）
 
 // 兩種 Boss 型態的外觀／技能配色與死亡時提供的遺物設定。
@@ -16,7 +17,7 @@ const BOSS_TYPES = {
   blue: {
     label: '⚠ 黑藍巨龍降臨！ ⚠',
     labelColor: '#6fd3ff',
-    tint: null, // 貼圖本身就是黑藍配色，不需要額外染色
+    texture: 'boss_black',
     aoeColor: 0x3355ff,
     breathColor: 0x3d6bff,
     breathTexture: 'fx_frost',
@@ -28,7 +29,7 @@ const BOSS_TYPES = {
   red: {
     label: '⚠ 血色紅龍降臨！ ⚠',
     labelColor: '#ff6a3d',
-    tint: 0xff4d2e, // 同一份龍造型直接染紅，做出「紅龍」的區隔，不用重畫新素材
+    texture: 'boss_red',
     aoeColor: 0xff3300,
     breathColor: 0xff6a2d,
     breathTexture: 'fx_flame',
@@ -38,6 +39,11 @@ const BOSS_TYPES = {
     relicId: 'dragonWings',
   },
 };
+
+// 三個技能發動前的「前搖」時間：Boss 會停下來、亮起警示色並顯示警告文字/範圍指示，
+// 讓玩家有充足時間看懂「牠要出招了」並閃開，過了這段時間才會真的造成傷害。
+const TELEGRAPH_MS = 2000;
+const TELEGRAPH_LABELS = { charge: '⚠ 衝刺！', claw: '⚠ 龍爪！', breath: '⚠ 龍息！' };
 
 // Boss 強度倍率：依「這是第幾隻王」(bossIndex，從 1 開始，每 5 分鐘一隻)決定，
 // 不再用存活分鐘數線性計算。數列從 1, 2 開始，之後每項是前兩項相加（費氏數列變體）：
@@ -67,7 +73,6 @@ export default class Boss {
     this.bossType = bossType;
     this.typeDef = BOSS_TYPES[bossType] || BOSS_TYPES.blue;
     this.relicId = this.typeDef.relicId;
-    this.baseTint = this.typeDef.tint;
 
     const scaling = bossStrengthMultiplier(bossIndex);
     this.maxHp = BOSS_BASE_HP * scaling;
@@ -79,11 +84,12 @@ export default class Boss {
     const x = px + Math.cos(angle) * 600;
     const y = py + Math.sin(angle) * 600;
 
-    this.sprite = scene.physics.add.sprite(x, y, 'boss_main');
+    this.sprite = scene.physics.add.sprite(x, y, this.typeDef.texture);
     this.sprite.setScale(BOSS_SCALE);
-    this.sprite.body.setCircle(40, 24, 30);
+    // 碰撞圓圈只用來讓物理身體存在（遊戲裡怪物碰撞判定都是手動算距離，不是靠這個），
+    // 圓心抓在新美術圖胸口／交叉的龍爪附近（貼圖寬 574、高 320，身體大約在中央偏下）。
+    this.sprite.body.setCircle(70, 574 / 2 - 70, 176 - 70);
     this.sprite.setDepth(y);
-    if (this.baseTint) this.sprite.setTint(this.baseTint);
 
     this.phase = 'chase'; // chase | charge | aoe | ranged
     this.phaseTimer = 0;
@@ -110,7 +116,7 @@ export default class Boss {
 
     // 登場震撼效果：閃光＋巨大陰影光環，凸顯體型巨大（不用鏡頭震動）
     scene.cameras.main.flash(300, 255, 255, 255);
-    const shadow = scene.add.image(x, y, 'fx_bossdeath').setTint(this.baseTint || 0x1a2a6c).setAlpha(0.5).setScale(0.5).setDepth(y - 1);
+    const shadow = scene.add.image(x, y, 'fx_bossdeath').setTint(this.typeDef.aoeColor).setAlpha(0.5).setScale(0.5).setDepth(y - 1);
     scene.tweens.add({ targets: shadow, scale: 3.2, alpha: 0, duration: 500, onComplete: () => shadow.destroy() });
 
     audioManager.bossRoar();
@@ -130,6 +136,8 @@ export default class Boss {
       this.sprite.body.setVelocity(Math.cos(ang) * 70, Math.sin(ang) * 70);
     } else if (this.phase === 'charge') {
       this._updateCharge(time);
+    } else if (this.phase === 'telegraph') {
+      this._updateTelegraph(time);
     }
 
     // 接觸傷害（判定半徑跟著巨大體型放大）
@@ -151,22 +159,107 @@ export default class Boss {
     this.headBarFill.setPosition(bx - 58, headY).setDisplaySize(116 * hpRatio, 8).setDepth(headY);
   }
 
-  // 三個技能輪流隨機挑選：龍之吐息（遠距噴火/噴冰）／衝刺（續力衝撞）／龍爪（三爪金色斬擊）
+  // 三個技能輪流隨機挑選：龍之吐息（遠距噴火/噴冰）／衝刺（續力衝撞）／龍爪（三爪金色斬擊）。
+  // 選好之後不會馬上出招，而是先進入「前搖」：瞄準方向/目標點在這一刻就鎖定，
+  // 停頓 TELEGRAPH_MS 讓玩家看到警示、有機會移動閃開，時間到才真的執行攻擊。
   _chooseSkill(time) {
     const r = Math.random();
-    if (r < 0.34) this._startCharge(time);
-    else if (r < 0.67) this._startClaw(time);
-    else this._startBreath(time);
+    const kind = r < 0.34 ? 'charge' : r < 0.67 ? 'claw' : 'breath';
+    this._startTelegraph(kind, time);
   }
 
-  // 技能一：衝刺 —— 鎖定玩家當下位置衝過去，持續 2 秒的續力衝刺（不是一瞬間衝撞完就結束），
+  _startTelegraph(kind, time) {
+    this.phase = 'telegraph';
+    this._telegraphKind = kind;
+    this._telegraphEndAt = time + TELEGRAPH_MS;
+    this._telegraphFx = [];
+    this.sprite.body.setVelocity(0, 0);
+
+    const bx = this.sprite.x, by = this.sprite.y;
+    const px = this.player.sprite.x, py = this.player.sprite.y;
+    // 鎖定瞄準：角度／目標點在前搖「開始」的這一刻就決定好，之後不會再重新瞄準，
+    // 玩家躲開鎖定範圍就真的躲得掉，而不是不管怎麼跑最後都精準命中。
+    this._telegraphAngle = angleTo(bx, by, px, py);
+    this._telegraphTarget = { x: px, y: py };
+
+    this.sprite.setTint(this.typeDef.chargeTint);
+    audioManager.bossRoar();
+
+    // 警示文字：跟著 Boss 頭頂浮動，清楚告訴玩家牠準備使出哪一招
+    const label = this.scene.add.text(bx, by - 150, TELEGRAPH_LABELS[kind], textStyle({
+      fontSize: '30px', color: '#ff4444', fontStyle: 'bold',
+    })).setOrigin(0.5).setDepth(20010);
+    this.scene.tweens.add({ targets: label, scale: 1.18, duration: 260, yoyo: true, repeat: -1 });
+    this._telegraphLabel = label;
+    this._telegraphFx.push(label);
+
+    if (kind === 'charge') {
+      this._telegraphFx.push(this._telegraphLine(bx, by, this._telegraphAngle, 620, 0xaaccff));
+    } else if (kind === 'claw') {
+      const reach = 130, hitRadius = 95;
+      const cx = bx + Math.cos(this._telegraphAngle) * reach;
+      const cy = by + Math.sin(this._telegraphAngle) * reach;
+      this._telegraphFx.push(this._telegraphRing(cx, cy, hitRadius));
+    } else {
+      this._telegraphFx.push(this._telegraphCone(bx, by, this._telegraphAngle));
+    }
+  }
+
+  // 衝刺前搖指示線：一條沿瞄準方向延伸的警示光柱，預告衝刺路徑
+  _telegraphLine(bx, by, ang, length, color) {
+    const midX = bx + Math.cos(ang) * length / 2;
+    const midY = by + Math.sin(ang) * length / 2;
+    const line = this.scene.add.rectangle(midX, midY, length, 18, color, 0.4).setRotation(ang).setDepth(20009);
+    this.scene.tweens.add({ targets: line, alpha: 0.85, duration: 240, yoyo: true, repeat: -1 });
+    return line;
+  }
+
+  // 龍爪前搖指示圈：從 0 慢慢長大到實際命中半徑，讓玩家清楚看到「危險範圍」在哪
+  _telegraphRing(x, y, endRadius) {
+    const ring = this.scene.add.circle(x, y, 4, 0xff2020, 0.28).setStrokeStyle(4, 0xff2020, 0.9).setDepth(20009);
+    this.scene.tweens.add({ targets: ring, radius: endRadius, duration: TELEGRAPH_MS, ease: 'Sine.easeIn' });
+    return ring;
+  }
+
+  // 龍息前搖指示錐：跟正式噴出的龍息同一張材質，但半透明、慢慢脹大，預告噴發方向與範圍
+  _telegraphCone(bx, by, ang) {
+    const cone = this.scene.add.image(bx, by, this.typeDef.breathTexture)
+      .setTint(this.typeDef.breathColor).setAlpha(0.35).setDepth(20008).setOrigin(0, 0.5)
+      .setRotation(ang).setScale(1, 1.4);
+    this.scene.tweens.add({ targets: cone, scaleX: 5.5, duration: TELEGRAPH_MS, ease: 'Sine.easeIn' });
+    this.scene.tweens.add({ targets: cone, alpha: 0.6, duration: 240, yoyo: true, repeat: -1 });
+    return cone;
+  }
+
+  _clearTelegraphFx() {
+    (this._telegraphFx || []).forEach((fx) => {
+      this.scene.tweens.killTweensOf(fx);
+      fx.destroy();
+    });
+    this._telegraphFx = [];
+    this._telegraphLabel = null;
+  }
+
+  _updateTelegraph(time) {
+    if (this._telegraphLabel) this._telegraphLabel.setPosition(this.sprite.x, this.sprite.y - 150);
+    if (time < this._telegraphEndAt) return;
+
+    this._clearTelegraphFx();
+    this._restoreTint();
+    const kind = this._telegraphKind;
+    if (kind === 'charge') this._executeCharge(time);
+    else if (kind === 'claw') this._executeClaw(time);
+    else this._executeBreath(time);
+  }
+
+  // 技能一：衝刺 —— 朝前搖鎖定的目標點衝過去，持續 2 秒的續力衝刺（不是一瞬間衝撞完就結束），
   // 衝刺期間身邊會持續冒出型態專屬色的風系粒子（紅龍是紅色、黑龍是黑色），
   // 讓玩家提前看出「牠正在衝刺」，方便閃避
-  _startCharge(time) {
+  _executeCharge(time) {
     this.phase = 'charge';
-    this.chargeTarget = { x: this.player.sprite.x, y: this.player.sprite.y };
+    this.chargeTarget = this._telegraphTarget;
     this.sprite.setTint(this.typeDef.chargeTint);
-    this.scene.cameras.main.flash(150, 100, 150, 255);
+    this.scene.cameras.main.flash(180, 100, 150, 255);
     this._chargeStartAt = time;
     this._nextWindFxAt = 0;
   }
@@ -193,27 +286,25 @@ export default class Boss {
     }
   }
 
-  // 恢復到這隻 Boss 原本的基底色調（紅龍是紅色 tint，藍龍則是完全不上色），
-  // 取代直接呼叫 clearTint()——不然紅龍每次充能/受傷閃白過後就會被洗回原始貼圖顏色
+  // 恢復成美術圖本身的顏色：充能/前搖警示/受傷閃白都只是暫時的 tint，
+  // 現在兩隻龍用的都是玩家提供的正式美術圖（本身就有正確配色），恢復時單純清掉 tint 即可。
   _restoreTint() {
-    if (this.baseTint) this.sprite.setTint(this.baseTint);
-    else this.sprite.clearTint();
+    this.sprite.clearTint();
   }
 
-  // 技能二：龍爪 —— 往玩家方向的前方揮出三條金色爪痕，短暫延遲後在揮擊點造成範圍傷害。
+  // 技能二：龍爪 —— 往前搖鎖定方向的前方揮出三條金色爪痕，短暫延遲後在揮擊點造成範圍傷害。
   // 三條爪痕垂直排列、依序些微延遲出現，模擬「三根爪子同時劃過」的斬擊感。
-  _startClaw(time) {
+  _executeClaw(time) {
     this.phase = 'claw';
     const bx = this.sprite.x, by = this.sprite.y;
-    const px = this.player.sprite.x, py = this.player.sprite.y;
-    const ang = angleTo(bx, by, px, py);
+    const ang = this._telegraphAngle;
     const reach = 130; // 爪擊點距離 Boss 中心多遠（往玩家方向前撲一段距離）
     const cx = bx + Math.cos(ang) * reach;
     const cy = by + Math.sin(ang) * reach;
     const hitRadius = 95;
 
-    this.scene.cameras.main.flash(150, 255, 224, 130);
-    this.scene.hitStop(90);
+    this.scene.cameras.main.flash(200, 255, 224, 130);
+    this.scene.hitStop(110);
     audioManager.bossRoar();
 
     const perpAng = ang + Math.PI / 2;
@@ -241,25 +332,24 @@ export default class Boss {
     });
   }
 
-  // 技能三：龍之吐息 —— 朝玩家方向噴出一道扇形龍息（藍龍是冰息、紅龍是火息），
+  // 技能三：龍之吐息 —— 朝前搖鎖定方向噴出一道扇形龍息（藍龍是冰息、紅龍是火息），
   // 沿瞄準方向連續噴出好幾波往前衝的火焰/冰霜粒子，做出「持續吐息」的感覺，
   // 而不是漫無目的的全方位彈幕，更符合西方龍的形象，也讓玩家能靠移動閃避
-  _startBreath(time) {
+  _executeBreath(time) {
     this.phase = 'breath';
     const bx = this.sprite.x, by = this.sprite.y;
-    const px = this.player.sprite.x, py = this.player.sprite.y;
-    const baseAng = angleTo(bx, by, px, py);
+    const baseAng = this._telegraphAngle;
     const t = this.typeDef;
 
     // 龍息噴發視覺：從龍口延伸出的長條光柱，沿瞄準方向拉長
     const breath = this.scene.add.image(bx, by, t.breathTexture)
-      .setTint(t.breathColor).setAlpha(0.55).setDepth(19998).setOrigin(0, 0.5)
+      .setTint(t.breathColor).setAlpha(0.7).setDepth(19998).setOrigin(0, 0.5)
       .setRotation(baseAng).setScale(6, 2.2);
     this.scene.tweens.add({
       targets: breath, alpha: 0, scaleX: 8, duration: 450,
       onComplete: () => breath.destroy(),
     });
-    this.scene.cameras.main.flash(120, 60, 100, 255);
+    this.scene.cameras.main.flash(160, 60, 100, 255);
     audioManager.bossRoar();
 
     // 沿瞄準方向連續噴出好幾波往前衝的粒子，強化「持續吐息」而不是單發特效的感覺
@@ -303,9 +393,9 @@ export default class Boss {
     this.scene.spawnDamageNumber(this.sprite.x, this.sprite.y - 30, dmg, isCrit);
     this.scene.time.delayedCall(60, () => {
       if (!this.sprite.active) return;
-      // 若這時 Boss 還在充能衝撞（自己也有 tint），閃白計時器不該蓋掉衝撞色，
-      // 交給 _updateCharge 結束時的 _restoreTint() 處理即可
-      if (this.phase !== 'charge') this._restoreTint();
+      // 若這時 Boss 還在充能衝撞／前搖警示（兩者都自己有 tint），閃白計時器不該蓋掉，
+      // 分別交給 _updateCharge / _updateTelegraph 結束時的 _restoreTint() 處理即可
+      if (this.phase !== 'charge' && this.phase !== 'telegraph') this._restoreTint();
     });
     if (this.hp <= 0 && this.alive) {
       this._die();
@@ -314,6 +404,7 @@ export default class Boss {
 
   _die() {
     this.alive = false;
+    this._clearTelegraphFx(); // 前搖到一半被打死的話，警示文字/範圍指示不該留在畫面上
     audioManager.bossDeath();
     this.scene.cameras.main.flash(500, 255, 255, 255);
     this.scene.hitStop(150);
@@ -350,6 +441,7 @@ export default class Boss {
   }
 
   destroy() {
+    this._clearTelegraphFx();
     if (this.sprite.active) this.sprite.destroy();
     this.barBg.destroy();
     this.barFill.destroy();
