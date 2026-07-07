@@ -515,7 +515,12 @@ export default class GameScene extends Phaser.Scene {
     const goToGameOver = () => {
       if (this._wentToGameOver) return;
       this._wentToGameOver = true;
-      try { this.scene.stop('UIScene'); } catch (err) { console.error('[GameScene] 關閉 UIScene 失敗：', err); }
+      // 死亡當下如果升級選單／遺物選擇視窗剛好開著（例如跟 Boss 同歸於盡），
+      // 這兩個視窗不會自己關掉，會一直蓋在畫面最上層，看起來像是「遊戲卡住沒結束」，
+      // 所以這裡強制把它們也一併關掉，確保一定會看到結算畫面。
+      ['UIScene', 'LevelUpScene', 'RelicChoiceScene'].forEach((key) => {
+        try { this.scene.stop(key); } catch (err) { console.error(`[GameScene] 關閉 ${key} 失敗：`, err); }
+      });
       this.scene.start('GameOverScene', { kills, level, time: elapsed });
     };
 
