@@ -4,6 +4,7 @@ import { getEquipped } from '../managers/SaveManager.js';
 
 const PLAYER_BASE_SCALE = 0.5;
 const AUTO_PILOT_AVOID_RADIUS = 160; // 自動戒指：怪物進入這個範圍就會被當成威脅開始閃避
+const AUTO_PILOT_DANGER_RADIUS = 90; // 自動戒指：怪物貼近到這個範圍內才會無條件優先逃命（範圍外優先去吃拾取物）
 
 // 四種初始角色設定 (依規格百分比修正基礎數值)
 export const CHARACTERS = {
@@ -155,7 +156,7 @@ export default class Player {
   // 兩者都沒有就停在原地不動（不亂跑，避免看起來像失控）。
   _computeAutoPilotDirection() {
     const px = this.sprite.x, py = this.sprite.y;
-    let avoidX = 0, avoidY = 0, threatCount = 0;
+    let avoidX = 0, avoidY = 0, threatCount = 0, dangerCount = 0;
 
     if (this.scene.enemySystem && this.scene.enemySystem.pool) {
       this.scene.enemySystem.pool.forEachActive((e) => {
@@ -165,16 +166,22 @@ export default class Player {
           avoidX += ((px - e.x) / d) * w;
           avoidY += ((py - e.y) / d) * w;
           threatCount++;
+          if (d < AUTO_PILOT_DANGER_RADIUS) dangerCount++;
         }
       });
     }
-    if (threatCount > 0) return { vx: avoidX, vy: avoidY };
+    // 怪物貼身到危險距離內，無條件優先逃命，不管旁邊有沒有拾取物
+    if (dangerCount > 0) return { vx: avoidX, vy: avoidY };
 
+    // 危險距離外時，拾取物優先於一般閃避——怪物幾乎隨時都會在閃避範圍內徘徊，
+    // 若閃避永遠優先，玩家會被卡在「一直躲、永遠吃不到血包/磁鐵」的狀態
     const target = this._findNearestPickup();
     if (target) {
       const d = dist(px, py, target.x, target.y) || 1;
       return { vx: (target.x - px) / d, vy: (target.y - py) / d };
     }
+
+    if (threatCount > 0) return { vx: avoidX, vy: avoidY };
     return { vx: 0, vy: 0 };
   }
 
