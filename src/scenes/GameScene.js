@@ -895,10 +895,12 @@ export default class GameScene extends Phaser.Scene {
       const tex = this.textures.get('fx_dragon_wing_pair').getSourceImage();
       const displayW = 130;
       const displayH = displayW * (tex.height / tex.width);
-      // 錨點改成貼近圖片頂端（兩片翅膀交會的關節縫隙處），讓這個縫隙對齊角色肩膀，
-      // 翅膀主體大部分往下往外展開，而不是像之前那樣整片翅膀懸在角色偏下方的位置
+      // 錨點原本設在貼近圖片頂端（0.18），角色又只有 32x25.5 這麼小一隻，圖片
+      // 82% 的面積都畫在錨點下方，實際看起來翅膀整坨往角色下方（腳邊）垂，而不是
+      // 貼在背後——改成錨點抓在圖片高度 32% 左右（兩片翅膀交會關節再往下一點），
+      // 上下面積比較平均，才會是「翅膀從背後展開」而不是「掛在腳下」的感覺。
       this.dragonWingPair = this.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_dragon_wing_pair')
-        .setOrigin(0.5, 0.18).setDisplaySize(displayW, displayH).setDepth(9996);
+        .setOrigin(0.5, 0.32).setDisplaySize(displayW, displayH).setDepth(9996);
       // 記住 setDisplaySize 算出來的基準縮放值，之後拍動動畫要在這個基準上疊加，
       // 不能直接呼叫 setScale(1±flap)，那樣會蓋掉 setDisplaySize 的效果，
       // 讓翅膀突然變回原始貼圖的超大尺寸（1351x781）。
@@ -914,7 +916,9 @@ export default class GameScene extends Phaser.Scene {
 
     // 呼吸般的拍動感：用 sin 波讓翅膀輕微縮放擺盪，不會呆板地完全靜止
     const flap = Math.sin(time / 260) * 0.05;
-    this.dragonWingPair.setPosition(p.x, p.y - 16);
+    // 錨點再往上拉一點（配合上面 origin 從 0.18 改成 0.32），讓翅膀整體貼在角色
+    // 背後、上下均勻展開，而不是重心偏低垂在角色下方
+    this.dragonWingPair.setPosition(p.x, p.y - 22);
     this.dragonWingPair.setScale(
       this.dragonWingBaseScaleX * (1 + flap * 0.4),
       this.dragonWingBaseScaleY * (1 - flap)
