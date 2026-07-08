@@ -146,7 +146,7 @@ export const EQUIPMENT_DATA = {
   // 效果本身是真的有作用的（見 HealthPackSystem._rollHoming() / Player._computeAutoPilotDirection()），
   // 只是扭蛋機制還沒實作，玩家目前還沒有辦法真的抽到、穿上這兩個戒指。
   ring_heal: {
-    id: 'ring_heal', slot: 'ring1', tier: null, tierIndex: 0, prevId: null, rarity: 'epic',
+    id: 'ring_heal', slot: 'ring1', tier: null, tierIndex: 0, prevId: null, rarity: 'legendary',
     name: '回血戒指', desc: '掉落的血包有 30% 機率自動飛向玩家。（僅扭蛋機取得）',
     icon: 'ring_heal', bonus: {},
   },
@@ -224,14 +224,17 @@ EQUIP_SLOTS.forEach((slot) => {
   });
 });
 
-// 抽獎機率表：直接是百分比，加總剛好 100%。神話壓到 0.1%（目前神話池只有自動戒指
-// 一種，抽到就是它），其餘依「越稀有掉率越低」的原則，照原本權重的比例往上補到
-// 99.9%。傳說目前沒有任何裝備歸在這階，不列進機率表（列了也抽不到東西）。
+// 抽獎機率表：直接是百分比，加總剛好 100%。六個稀有度全部有對應的裝備可抽到：
+// 普通/優秀/稀有/史詩是 100 件一般裝備（1-7/8-12/13-17/18-20），傳說＝回血戒指、
+// 神話＝自動戒指（見 EQUIPMENT_DATA 的 ring_heal/ring_auto rarity）。
+// 神話壓到 0.1%，傳說也刻意壓低（1%，仍比神話容易一些），其餘依「越稀有掉率越低」
+// 的原則，照原本權重的比例往上補滿剩下的 98.9%。
 export const GACHA_RARITY_WEIGHTS = {
-  common: 46.8,
-  uncommon: 28.1,
-  rare: 15.6,
-  epic: 9.4,
+  common: 46.4,
+  uncommon: 27.8,
+  rare: 15.4,
+  epic: 9.3,
+  legendary: 1.0,
   mythic: 0.1,
 };
 
