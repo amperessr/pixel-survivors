@@ -1,6 +1,7 @@
 import ObjectPool from '../managers/ObjectPool.js';
 import { dist, randRange } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
+import { getEquipped } from '../managers/SaveManager.js';
 
 const MAX_MAGNETS = 1; // 同時間地圖上最多存在的磁鐵數量（比血包稀有，同時只會有一個）
 const MIN_INTERVAL = 35000; // 最短生成間隔（毫秒），刻意比血包更久，維持「偶爾掉落」的稀有感
@@ -48,8 +49,12 @@ export default class MagnetSystem {
       this.nextSpawnAt = time + randRange(MIN_INTERVAL, MAX_INTERVAL);
     }
 
+    // 引力戒：任一戒指欄裝著引力戒時，撿取範圍變成三倍（跟血包同一套規則）
+    const equipped = getEquipped();
+    const hasGravity = equipped.ring1 === 'ring_gravity' || equipped.ring2 === 'ring_gravity';
+    const pickupRadius = hasGravity ? 66 : 22;
     this.pool.forEachActive((img) => {
-      if (dist(img.x, img.y, px, py) < 22) {
+      if (dist(img.x, img.y, px, py) < pickupRadius) {
         this._pickup(img);
       }
     });

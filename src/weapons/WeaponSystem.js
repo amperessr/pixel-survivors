@@ -110,11 +110,10 @@ export default class WeaponSystem {
     // 鋸片環繞更新
     if (this.owned.sawblade) {
       const data = this._getEffectiveData('sawblade');
-      // 上一版把倍率上限訂在 3.5 倍還是太快：被動攻速疊到 10 級（+80）算出來是
-      // 2.6 倍，接近上限，公轉+自轉疊加後看起來還是很誇張。這次把係數降到 0.015、
-      // 上限降到 2.2 倍，同樣量級的攻速大概只會到 ~2.2 倍封頂，肉眼看起來更合理。
-      const atkSpeedMult = Math.min(2.2, 1 + this.player.stats.atkSpeed * 0.015);
-      const rot = data.rotSpeed * atkSpeedMult; // 公轉角速度（繞著玩家轉的速度）
+      // 轉速只受「疾風之刃（攻速）卡片」張數影響（每張 +8%），
+      // 不受角色永久能力值或裝備影響。
+      const spinCards = this.player.passiveLevels.atkSpeed || 0;
+      const rot = data.rotSpeed * (1 + spinCards * 0.08); // 公轉角速度（繞著玩家轉的速度）
       this.sawbladeAngle += rot * (delta / 1000);
       const n = this.sawbladeSprites.length;
       // 鋸片「自轉」（貼圖本身的旋轉，純視覺效果，不影響命中判定）改成固定速度、
@@ -139,28 +138,43 @@ export default class WeaponSystem {
     });
   }
 
-  // 回傳是否真的開火（frost 一律開火；其餘武器需要有目標敵人）
+  // 回傳是否真的開火（frost 一律開火；其餘武器需要有目標敵人）。
+  // 分身戒：本尊開火後，若場上有分身，分身也從自己的位置對它最近的目標
+  // 再開一輪火，傷害為本尊的一半（鋸片是持續環繞型武器，分身不複製）。
   _fire(id, time) {
-    const enemy = this._findTarget(this.player.sprite.x, this.player.sprite.y);
+    const px = this.player.sprite.x, py = this.player.sprite.y;
+    const enemy = this._findTarget(px, py);
     if (id !== 'frost' && !enemy) return false;
-    const data = this._getEffectiveData(id);
-    const stats = this.player.stats;
+    this._fireFrom(id, px, py, enemy, 1);
 
-    switch (id) {
-      case 'fireball': this._fireFireball(data, stats, enemy); break;
-      case 'lightning': this._fireLightning(data, stats, enemy); break;
-      case 'knife': this._fireKnife(data, stats, enemy); break;
-      case 'frost': this._fireFrost(data, stats); break;
+    const clone = this.scene.cloneSprite;
+    if (clone && clone.active) {
+      const cloneEnemy = this._findTarget(clone.x, clone.y);
+      if (id === 'frost' || cloneEnemy) {
+        this._fireFrom(id, clone.x, clone.y, cloneEnemy, 0.5);
+      }
     }
     audioManager.attack();
     return true;
   }
 
-  _fireFireball(data, stats, enemy) {
-    // Attack 越高，體積(scale)與 aoe 越大
-    const scaleBonus = (1 + stats.attack * 0.01) * (data.evolved ? 1.3 : 1);
-    const px = this.player.sprite.x, py = this.player.sprite.y;
-    const dmg = data.dmg * (1 + stats.attack * 0.02);
+  _fireFrom(id, ox, oy, enemy, dmgMult) {
+    const data = this._getEffectiveData(id);
+    const stats = this.player.stats;
+    switch (id) {
+      case 'fireball': this._fireFireball(data, stats, enemy, ox, oy, dmgMult); break;
+      case 'lightning': this._fireLightning(data, stats, enemy, ox, oy, dmgMult); break;
+      case 'knife': this._fireKnife(data, stats, enemy, ox, oy, dmgMult); break;
+      case 'frost': this._fireFrost(data, stats, ox, oy, dmgMult); break;
+    }
+  }
+
+  _fireFireball(data, stats, enemy, px, py, dmgMult = 1) {
+    // 體積/爆炸範圍只受「力量卡片」在本場選取的張數影響（每張 +8%），
+    // 不受角色永久能力值或裝備影響；傷害仍吃攻擊力（含裝備），讓裝備維持意義。
+    const powerCards = this.player.passiveLevels.attack || 0;
+    const scaleBonus = (1 + powerCards * 0.08) * (data.evolved ? 1.3 : 1);
+    const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult;
     const aoe = data.aoe * scaleBonus;
 
     if (data.evolved) {
@@ -190,11 +204,11 @@ export default class WeaponSystem {
     this.scene.spawnCastFx(px, py, 'fireball', ang, 0, false);
   }
 
-  _fireLightning(data, stats, enemy) {
-    // CritRate 越高，分裂數越多；攻擊力比照火球術的公式，同步反映到傷害上
-    const bonusChains = Math.floor(stats.critRate / 20);
-    const dmg = data.dmg * (1 + stats.attack * 0.02);
-    const px = this.player.sprite.x, py = this.player.sprite.y;
+  _fireLightning(data, stats, enemy, px, py, dmgMult = 1) {
+    // 分裂數只受「幸運符文（爆擊）卡片」張數影響（每 2 張多分裂 1 次），
+    // 不受角色永久能力值或裝備影響；傷害仍吃攻擊力（含裝備）。
+    const bonusChains = Math.floor((this.player.passiveLevels.critRate || 0) / 2);
+    const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult;
     const ang = angleTo(px, py, enemy.x, enemy.y);
     const proj = this.projectilePool.spawn();
     proj.setTexture('proj_lightning');
@@ -212,12 +226,11 @@ export default class WeaponSystem {
     this.scene.spawnCastFx(px, py, 'lightning', ang, 0, data.evolved);
   }
 
-  _fireKnife(data, stats, enemy) {
-    // AttackSpeed 越高，飛刀數量越多；攻擊力比照火球術的公式，同步反映到傷害上
-    const bonusCount = Math.floor(stats.atkSpeed / 25);
-    const totalCount = data.count + bonusCount;
-    const dmg = data.dmg * (1 + stats.attack * 0.02);
-    const px = this.player.sprite.x, py = this.player.sprite.y;
+  _fireKnife(data, stats, enemy, px, py, dmgMult = 1) {
+    // 飛刀數量只受「疾風之刃（攻速）卡片」張數影響（每 2 張多 1 把），
+    // 不受角色永久能力值或裝備影響；傷害仍吃攻擊力（含裝備）。
+    const totalCount = data.count + Math.floor((this.player.passiveLevels.atkSpeed || 0) / 2);
+    const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult;
     const baseAng = angleTo(px, py, enemy.x, enemy.y);
     const spread = 0.18;
     this.scene.spawnCastFx(px, py, 'knife', baseAng, 0, data.evolved);
@@ -238,12 +251,11 @@ export default class WeaponSystem {
     }
   }
 
-  _fireFrost(data, stats) {
-    // Defense 越高，範圍越大；攻擊力比照火球術的公式，同步反映到傷害上
-    const bonusRadius = stats.defense * 1.2;
-    const totalRadius = data.radius + bonusRadius;
-    const dmg = data.dmg * (1 + stats.attack * 0.02);
-    const px = this.player.sprite.x, py = this.player.sprite.y;
+  _fireFrost(data, stats, px, py, dmgMult = 1) {
+    // 冰霜原本連動的是防禦力，但被動卡片沒有「防禦」這張，所以冰霜範圍只由
+    // 武器等級與進化決定（同樣不受角色永久能力值或裝備影響）；傷害仍吃攻擊力。
+    const totalRadius = data.radius;
+    const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult;
     const kb = WEAPON_KNOCKBACK.frost;
     const knockback = { force: kb.force, duration: kb.duration };
 

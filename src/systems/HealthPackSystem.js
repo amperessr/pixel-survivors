@@ -1,24 +1,23 @@
 import ObjectPool from '../managers/ObjectPool.js';
-import { dist, randRange } from '../utils/MathUtils.js';
+import { dist } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { getEquipped } from '../managers/SaveManager.js';
 
 const MAX_PACKS = 3; // 同時間地圖上最多存在的血包數量
-const MIN_INTERVAL = 16000; // 最短生成間隔（毫秒）
-const MAX_INTERVAL = 26000; // 最長生成間隔（毫秒）
-// 血包離玩家太遠（例如玩家往反方向跑走了）就直接回收，重新等下一次計時生成在
-// 玩家「現在」附近的位置——不然畫面邊緣的箭頭會一直指向一個越來越遠、
-// 玩家可能要走超久才追得到的舊血包，體感就是「走了很久都沒找到」。
+// 血包離玩家太遠（例如玩家往反方向跑走了）就直接回收——不然畫面邊緣的箭頭會
+// 一直指向一個越來越遠、玩家可能要走超久才追得到的舊血包。
 const MAX_KEEP_DIST = 1400;
 const HEAL_RING_CHANCE = 0.3; // 回血戒指：每個血包生成時有 30% 機率自動飛向玩家
 const HOMING_SPEED = 260;
+const PICKUP_RADIUS = 22; // 走到血包多近算撿到；引力戒裝備時放大三倍
 
-// 血包系統：偶爾在地圖上生成愛心圖案的補血道具，走過去即可回復生命值
+// 血包系統：血包不再定時自動生成，改成純掉落制——小怪擊殺 10% 機率掉落
+// （EnemySystem._killEnemy）、魔王 100% 掉落（GameScene.onBossDefeated），
+// 都是透過 forceSpawn() 在擊殺點生成。
 export default class HealthPackSystem {
   constructor(scene, player) {
     this.scene = scene;
     this.player = player;
-    this.nextSpawnAt = scene.time.now + randRange(MIN_INTERVAL, MAX_INTERVAL);
 
     this.pool = new ObjectPool(
       scene,
@@ -29,6 +28,13 @@ export default class HealthPackSystem {
       },
       MAX_PACKS
     );
+  }
+
+  // 引力戒：任一戒指欄裝著引力戒時，撿取範圍變成三倍
+  _pickupRadius() {
+    const equipped = getEquipped();
+    const hasGravity = equipped.ring1 === 'ring_gravity' || equipped.ring2 === 'ring_gravity';
+    return hasGravity ? PICKUP_RADIUS * 3 : PICKUP_RADIUS;
   }
 
   update(time, delta) {
@@ -52,13 +58,9 @@ export default class HealthPackSystem {
       }
     });
 
-    if (time > this.nextSpawnAt && this.pool.activeCount < MAX_PACKS) {
-      this._trySpawn();
-      this.nextSpawnAt = time + randRange(MIN_INTERVAL, MAX_INTERVAL);
-    }
-
+    const pickupRadius = this._pickupRadius();
     this.pool.forEachActive((img) => {
-      if (dist(img.x, img.y, px, py) < 22) {
+      if (dist(img.x, img.y, px, py) < pickupRadius) {
         this._pickup(img);
       }
     });
@@ -74,28 +76,20 @@ export default class HealthPackSystem {
     }
   }
 
-  // 讓外部（例如擊殺怪物時）直接在指定座標生成一個血包，不受一般的計時器限制，
-  // 但仍然遵守 MAX_PACKS 上限（避免同時間地圖上血包爆量）
-  forceSpawn(x, y) {
-    if (this.pool.activeCount >= MAX_PACKS) return;
-    const img = this.pool.spawn(x, y);
-    img.setData('baseY', y);
-    img.setData('homing', false);
-    img.setDepth(y);
-    this._rollHoming(img);
-  }
-
-  _trySpawn() {
-    const cam = this.scene.cameras.main;
-    const halfW = cam.width / (2 * cam.zoom);
-    const halfH = cam.height / (2 * cam.zoom);
-    const edge = Math.hypot(halfW, halfH);
-    const px = this.player.sprite.x, py = this.player.sprite.y;
-    // 生成在鏡頭邊緣附近，讓玩家探索移動時剛好會發現，而不是憑空出現在眼前
-    const angle = randRange(0, Math.PI * 2);
-    const radius = randRange(edge * 0.5, edge * 0.9);
-    const x = px + Math.cos(angle) * radius;
-    const y = py + Math.sin(angle) * radius;
+  // 在指定座標生成一個血包（擊殺怪物/魔王掉落用）。一般掉落遵守 MAX_PACKS 上限
+  // 避免血包爆量；guaranteed=true（魔王 100% 掉落）時上限已滿就回收離玩家最遠的
+  // 那一個來讓位，確保魔王的血包一定會掉出來。
+  forceSpawn(x, y, guaranteed = false) {
+    if (this.pool.activeCount >= MAX_PACKS) {
+      if (!guaranteed) return;
+      let farthest = null, farthestD = -1;
+      const px = this.player.sprite.x, py = this.player.sprite.y;
+      this.pool.forEachActive((img) => {
+        const d = dist(img.x, img.y, px, py);
+        if (d > farthestD) { farthestD = d; farthest = img; }
+      });
+      if (farthest) this.pool.free(farthest);
+    }
     const img = this.pool.spawn(x, y);
     img.setData('baseY', y);
     img.setData('homing', false);

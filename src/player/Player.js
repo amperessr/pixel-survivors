@@ -121,13 +121,23 @@ export default class Player {
     if (this.hp <= 0) return;
     const speed = this.stats.moveSpeed * (this.isDashing ? 2.6 : 1);
     let vx = 0, vy = 0;
+    let mvx = 0, mvy = 0;
+    if (this.keys.up.isDown) mvy -= 1;
+    if (this.keys.down.isDown) mvy += 1;
+    if (this.keys.left.isDown) mvx -= 1;
+    if (this.keys.right.isDown) mvx += 1;
     if (this._hasRing('ring_auto')) {
-      ({ vx, vy } = this._computeAutoPilotDirection());
+      // 自動戒指：玩家手動操作永遠優先——只要有按方向鍵就聽玩家的，
+      // 並記錄最後一次手動輸入時間；放開按鍵後 1 秒內維持不動（讓玩家
+      // 有喘息空間、不會手一放開就被自動駕駛拉走），滿 1 秒才恢復自動模式。
+      if (mvx !== 0 || mvy !== 0) {
+        vx = mvx; vy = mvy;
+        this._lastManualInputAt = time;
+      } else if (time - (this._lastManualInputAt || 0) >= 1000) {
+        ({ vx, vy } = this._computeAutoPilotDirection());
+      }
     } else {
-      if (this.keys.up.isDown) vy -= 1;
-      if (this.keys.down.isDown) vy += 1;
-      if (this.keys.left.isDown) vx -= 1;
-      if (this.keys.right.isDown) vx += 1;
+      vx = mvx; vy = mvy;
     }
     const len = Math.hypot(vx, vy) || 1;
     this.sprite.body.setVelocity((vx / len) * speed, (vy / len) * speed);
@@ -185,7 +195,7 @@ export default class Player {
     return { vx: 0, vy: 0 };
   }
 
-  // 找最近的血包／磁鐵（兩個系統各自的物件池都掃過，取距離最近的那一個）
+  // 找最近的血包／磁鐵／經驗寶石（各物件池都掃過，取距離最近的那一個）
   _findNearestPickup() {
     const px = this.sprite.x, py = this.sprite.y;
     let best = null, bestDist = Infinity;
@@ -198,6 +208,7 @@ export default class Player {
     };
     scan(this.scene.healthPackSystem && this.scene.healthPackSystem.pool);
     scan(this.scene.magnetSystem && this.scene.magnetSystem.pool);
+    scan(this.scene.enemySystem && this.scene.enemySystem.expGemPool);
     return best;
   }
 

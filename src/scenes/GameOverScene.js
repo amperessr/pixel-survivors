@@ -8,6 +8,7 @@ export default class GameOverScene extends Phaser.Scene {
   init(data) {
     this.kills = data.kills || 0;
     this.level = data.level || 1;
+    this.bossKills = data.bossKills || 0;
     // 注意：不可用 this.time，那是 Phaser Scene 內建的計時器物件，
     // 之前覆蓋掉它會導致本場景與計時相關的功能出錯（重要 bug 修正）。
     this.playTime = data.time || 0;
@@ -22,7 +23,8 @@ export default class GameOverScene extends Phaser.Scene {
     this.add.rectangle(w / 2, 70, 640, 84, 0x0a0e16, 0.6);
     this.add.text(w / 2, 70, '⚠ 遊戲結束 ⚠', textStyle({ fontSize: '58px', color: '#ff6b6b' })).setOrigin(0.5);
 
-    const score = this.kills * 10 + this.level * 50 + Math.floor(this.playTime * 0.5);
+    // 擊殺魔王每隻額外 +1000 分（跟 GameScene._saveOnExit 的公式一致）
+    const score = this.kills * 10 + this.level * 50 + Math.floor(this.playTime * 0.5) + this.bossKills * 1000;
     setBestScore(score);
 
     // 擊殺數直接轉換成金幣（1 擊殺 = 1 金幣），存進永久金幣存款，可以拿去商店買裝備
@@ -55,6 +57,7 @@ export default class GameOverScene extends Phaser.Scene {
       `分數：${score}`,
       `等級：Lv.${this.level}`,
       `擊殺數：${this.kills}`,
+      `擊殺魔王：${this.bossKills}（每隻 +1000 分）`,
       `存活時間：${mm}:${ss}`,
       `歷史最佳：${getBestScore()}`,
       `💰 獲得金幣：+${goldEarned}（目前總金幣：${getGold()}）`,

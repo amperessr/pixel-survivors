@@ -2,6 +2,7 @@ import { WEAPON_DATA, WEAPON_EVOLUTIONS } from '../weapons/WeaponData.js';
 import { EQUIP_SLOTS, RING_SLOTS, EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
 import { PASSIVE_IDS, PASSIVE_DATA } from '../skills/PassiveData.js';
 import { getEquipped } from '../managers/SaveManager.js';
+import { audioManager } from '../managers/AudioManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 
 // 底部數值狀態列的六個項目：圖示 + 中文標籤 + 數值，參考英雄聯盟角色面板
@@ -36,7 +37,7 @@ export default class UIScene extends Phaser.Scene {
 
     // ---- 右上：擊殺數 / FPS ----
     this.killText = this.add.text(w - 32, 26, '', textStyle({ fontSize: '28px', color: '#ffd93d' })).setOrigin(1, 0).setScrollFactor(0);
-    this.fpsText = this.add.text(w - 32, 64, '', textStyle({ fontSize: '20px', color: '#999' })).setOrigin(1, 0).setScrollFactor(0);
+    this.fpsText = this.add.text(w - 32, 64, '', textStyle({ fontSize: '20px', color: '#ffffff' })).setOrigin(1, 0).setScrollFactor(0);
 
     // ---- 正上方置中：目前關卡（1 分鐘 = 1 關，取代原本的時間顯示）----
     // 白色粗體；魔王關（每 5 關）改成紅色，並在文字前加骷髏圖案提醒玩家小心
@@ -163,13 +164,31 @@ export default class UIScene extends Phaser.Scene {
     // 一起關掉，不然回到主選單後這些場景還留在背景繼續跑。
     const menuBtnY = bottomBarY - bottomBarH / 2 - 30;
     const menuBtn = this.add.image(90, menuBtnY, 'ui_button_parchment')
-      .setDisplaySize(130, 40).setScrollFactor(0).setInteractive({ useHandCursor: true });
+      .setDisplaySize(150, 46).setScrollFactor(0).setInteractive({ useHandCursor: true });
     this.add.text(90, menuBtnY, '返回主選單', textStyle({
-      fontSize: '15px', color: '#3a2413',
+      fontSize: '22px', color: '#3a2413',
     })).setOrigin(0.5).setScrollFactor(0);
     menuBtn.on('pointerover', () => menuBtn.setTint(0xfff3d0));
     menuBtn.on('pointerout', () => menuBtn.clearTint());
     menuBtn.on('pointerdown', () => this._showLeaveConfirm());
+
+    // ---- 靜音按鈕：返回主選單旁邊，切換所有音效/BGM 的開關 ----
+    const muteBtn = this.add.image(205, menuBtnY, 'ui_button_parchment')
+      .setDisplaySize(56, 46).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    this.muteBtnText = this.add.text(205, menuBtnY, audioManager.enabled ? '🔊' : '🔇', textStyle({
+      fontSize: '24px', color: '#3a2413',
+    })).setOrigin(0.5).setScrollFactor(0);
+    muteBtn.on('pointerover', () => muteBtn.setTint(0xfff3d0));
+    muteBtn.on('pointerout', () => muteBtn.clearTint());
+    muteBtn.on('pointerdown', () => {
+      audioManager.enabled = !audioManager.enabled;
+      if (audioManager.enabled) {
+        audioManager.startBgm();
+      } else {
+        audioManager.stopBgm();
+      }
+      this.muteBtnText.setText(audioManager.enabled ? '🔊' : '🔇');
+    });
 
     // ---- 畫面邊緣指示箭頭：血包（紅）／磁鐵（藍紫）不在畫面內時，指出方向 ----
     this.healthArrow = this.add.image(0, 0, 'ui_arrow').setTint(0xff5a5a).setScale(1.1)

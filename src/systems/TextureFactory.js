@@ -487,6 +487,52 @@ export default class TextureFactory {
       ctx.fill();
       this._finish(tex);
     }
+    // 引力戒：金色戒環 + 中央同心圓＋往內的四個小箭頭（示意「吸引」）
+    {
+      const { tex, ctx } = this._canvas('ring_gravity', 128, 128);
+      drawRingBase(ctx);
+      ctx.strokeStyle = '#b98cff';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(64, 68, 24, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(64, 68, 12, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#b98cff';
+      [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([dx, dy]) => {
+        const bx = 64 + dx * 36, by = 68 + dy * 36;
+        ctx.beginPath();
+        ctx.moveTo(bx - dy * 7 - dx * 2, by - dx * 7 - dy * 2);
+        ctx.lineTo(bx + dy * 7 - dx * 2, by + dx * 7 - dy * 2);
+        ctx.lineTo(bx - dx * 12, by - dy * 12);
+        ctx.closePath();
+        ctx.fill();
+      });
+      this._finish(tex);
+    }
+    // 分身戒：金色戒環 + 中央兩個交疊的人形剪影（實體＋半透明幻影）
+    {
+      const { tex, ctx } = this._canvas('ring_clone', 128, 128);
+      drawRingBase(ctx);
+      const drawFigure = (fx, fy, color, alpha) => {
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(fx, fy - 12, 9, 0, Math.PI * 2); // 頭
+        ctx.fill();
+        ctx.beginPath(); // 身體（圓角梯形近似）
+        ctx.moveTo(fx - 11, fy + 16);
+        ctx.quadraticCurveTo(fx - 12, fy - 4, fx, fy - 2);
+        ctx.quadraticCurveTo(fx + 12, fy - 4, fx + 11, fy + 16);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      };
+      drawFigure(72, 70, '#ff5b8f', 0.55); // 幻影（半透明，疊在後面偏右）
+      drawFigure(56, 70, '#ffe066', 1);    // 本尊
+      this._finish(tex);
+    }
   }
 
   // ---------- 地圖 Tile (草地/樹/石頭/花/河流/小路) ----------

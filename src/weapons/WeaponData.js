@@ -1,17 +1,13 @@
-// 五種武器，每種五階，每階外觀/效果/攻擊方式皆不同
-// 聯動設計 (Build 感)：
-//   火球 (fireball)  : Attack 越高 -> 火球體積越大 -> 爆炸範圍越大 -> 傷害越高
-//   雷電 (lightning) : CritRate 越高 -> 閃電分裂數越多
-//   飛刀 (knife)     : AttackSpeed 越高 -> 飛刀數量越多
-//   鋸片 (sawblade)  : AttackSpeed 越高 -> 旋轉速度越快、命中頻率提高
-//   冰霜 (frost)     : Defense 越高 -> 凍結範圍越大、減速效果越強
+// 五種武器，每種五階，每階外觀/效果/攻擊方式皆不同。
+// 技能的體積/數量/範圍/轉速只由「武器等級 + 是否進化」決定，不再受角色能力值影響
+// （攻擊力仍會透過統一公式提升所有武器的傷害，爆擊率/爆傷影響爆擊，見 PassiveData）。
 export const WEAPON_IDS = ['fireball', 'lightning', 'knife', 'sawblade', 'frost'];
 
 export const WEAPON_DATA = {
   fireball: {
     id: 'fireball',
     name: '火球術',
-    desc: '朝最近敵人發射火球，命中後爆炸造成範圍傷害。Attack 越高，火球越大、爆炸範圍越大。',
+    desc: '朝最近敵人發射火球，命中後爆炸造成範圍傷害。升級可提升傷害、爆炸範圍與穿透。',
     projectile: 'proj_fireball',
     synergyStat: 'attack',
     levels: [
@@ -25,7 +21,7 @@ export const WEAPON_DATA = {
   lightning: {
     id: 'lightning',
     name: '雷電鎖鏈',
-    desc: '對最近敵人發射閃電並可跳躍到附近敵人。CritRate 越高，分裂數越多。',
+    desc: '對最近敵人發射閃電並可跳躍到附近敵人。升級可提升傷害與分裂（跳躍）數。',
     projectile: 'proj_lightning',
     synergyStat: 'critRate',
     levels: [
@@ -39,7 +35,7 @@ export const WEAPON_DATA = {
   knife: {
     id: 'knife',
     name: '旋風飛刀',
-    desc: '朝滑鼠方向連續投擲飛刀。AttackSpeed 越高，同時發射的飛刀數量越多。',
+    desc: '朝最近敵人連續投擲飛刀。升級可提升傷害、飛刀數量與穿透。',
     projectile: 'proj_knife',
     synergyStat: 'atkSpeed',
     levels: [
@@ -53,7 +49,7 @@ export const WEAPON_DATA = {
   sawblade: {
     id: 'sawblade',
     name: '旋轉鋸片',
-    desc: '環繞玩家旋轉的鋸片，持續對接觸敵人造成傷害。AttackSpeed 越高，旋轉越快。',
+    desc: '環繞玩家旋轉的鋸片，持續對接觸敵人造成傷害。升級可提升傷害、數量與轉速。',
     projectile: 'proj_sawblade',
     synergyStat: 'atkSpeed',
     levels: [
@@ -67,7 +63,7 @@ export const WEAPON_DATA = {
   frost: {
     id: 'frost',
     name: '冰霜新星',
-    desc: '定期在玩家周圍釋放冰霜衝擊波，減速並傷害範圍內敵人。Defense 越高，範圍越大。',
+    desc: '定期從地面冒出冰柱，減速並傷害範圍內敵人。升級可提升傷害與範圍。',
     projectile: 'proj_frost',
     synergyStat: 'defense',
     levels: [

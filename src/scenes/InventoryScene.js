@@ -1,7 +1,7 @@
-import { EQUIPMENT_DATA, EQUIP_SLOTS, RING_SLOTS, SLOT_LABELS, RARITY_DATA } from '../equipment/EquipmentData.js';
+import { EQUIPMENT_DATA, EQUIP_SLOTS, RING_SLOTS, SLOT_LABELS, RARITY_DATA, RARITY_IDS, SELL_PRICES } from '../equipment/EquipmentData.js';
 import { createRarityFrame } from '../utils/RarityFrame.js';
 import {
-  getInventory, setInventory, getEquipped, setEquipped, getGold,
+  getInventory, setInventory, getEquipped, setEquipped, getGold, addGold,
   getStatLevel, getStatExp, getStatExpToNext, getStatPoints, getStatInvest,
   getStatBonus, investStatPoint, resetStatPoints,
   RESET_STAT_POINTS_GOLD_COST, STAT_INVEST_DEFS,
@@ -22,6 +22,7 @@ const SLOT_SIDE_OFFSET = {
   shoes: { x: 155, y: 0 },
   ring1: { x: -38, y: -170 },
   ring2: { x: 38, y: -170 },
+  pet: { x: 155, y: 85 }, // 寵物欄：右排最下面（寵物系統尚未實作，先保留欄位）
 };
 
 const PORTRAIT_SCALE = 3.4;
@@ -96,10 +97,20 @@ export default class InventoryScene extends Phaser.Scene {
       bg.on('pointerover', () => {
         bg.setTint(0xffe066);
         const itemId = this.equipped[slot];
-        if (itemId && EQUIPMENT_DATA[itemId]) this._showTooltip(sx, sy, EQUIPMENT_DATA[itemId]);
+        if (itemId && EQUIPMENT_DATA[itemId]) this._showTooltip(sx, sy, EQUIPMENT_DATA[itemId], { isEquipped: true });
       });
       bg.on('pointerout', () => { bg.clearTint(); this._hideTooltip(); });
     });
+
+    // 寵物欄：純介面佔位（寵物系統還沒實作，先把欄位放在右排最下面）
+    {
+      const off = SLOT_SIDE_OFFSET.pet;
+      const sx = leftX + off.x, sy = portraitY + off.y;
+      this.add.image(sx, sy, 'ui_equip_slot').setDisplaySize(SLOT_SIZE, SLOT_SIZE).setDepth(10).setAlpha(0.85);
+      this.add.text(sx, sy, '寵物', textStyle({
+        fontSize: '15px', color: '#ffe066',
+      })).setOrigin(0.5).setAlpha(0.6).setDepth(11);
+    }
 
     // ---------- 左側下方：能力值面板（每項能力值旁邊都能直接加點）----------
     this._buildStatsPanel(leftX, 480);
@@ -108,6 +119,8 @@ export default class InventoryScene extends Phaser.Scene {
     const gridW = 720, gridH = 380;
     const startX = w * 0.42, startY = 220;
     const cellW = gridW / COLS, cellH = gridH / ROWS;
+    // 拖曳裝備到任一格時要反查「放開位置是哪一格」，把格線幾何存起來
+    this.gridGeom = { startX, startY, cellW, cellH };
     this.add.text(startX + gridW / 2, 170, '背包（點擊裝備／拖曳到垃圾桶丟棄）', textStyle({
       fontSize: '26px', color: '#9fd3ff',
     })).setOrigin(0.5);
@@ -121,12 +134,46 @@ export default class InventoryScene extends Phaser.Scene {
         const cx = startX + c * cellW + cellW / 2;
         const cy = startY + r * cellH + cellH / 2;
         const bg = this.add.image(cx, cy, 'ui_slot').setDisplaySize(cellW - 6, cellH - 6).setInteractive({ useHandCursor: true });
-        bg.on('pointerdown', () => this._equipFromInventory(idx));
+        bg.on('pointerdown', () => this._handleSlotClick(idx));
         bg.on('pointerover', () => bg.setTint(0x6fd3ff));
         bg.on('pointerout', () => bg.clearTint());
         this.slotBgs.push(bg);
         this.slotIcons.push(null);
       }
+    }
+
+    // ---------- 一鍵出售／整理背包：放在背包格正下方一排 ----------
+    // 依稀有度一鍵賣掉背包內全部該階裝備（只賣背包，身上穿著的不動；
+    // 戒指是傳說/神話級稀有品，不提供出售避免誤賣）。
+    const sellRowY = 650;
+    const sellDefs = ['common', 'uncommon', 'rare', 'epic'];
+    const sellBtnW = 158, sellGap = 12;
+    const sortBtnW = 120;
+    const rowTotalW = sellDefs.length * sellBtnW + sellDefs.length * sellGap + sortBtnW;
+    let bx = startX + gridW / 2 - rowTotalW / 2 + sellBtnW / 2;
+    sellDefs.forEach((rarityId) => {
+      const rarity = RARITY_DATA[rarityId];
+      const hex = '#' + rarity.color.toString(16).padStart(6, '0');
+      const btn = this.add.image(bx, sellRowY, 'ui_button_parchment').setDisplaySize(sellBtnW, 52).setInteractive({ useHandCursor: true });
+      this.add.text(bx, sellRowY - 10, `出售全部${rarity.label}`, textStyle({
+        fontSize: '16px', color: hex === '#e8e8e8' ? '#5a5a5a' : hex,
+      })).setOrigin(0.5);
+      this.add.text(bx, sellRowY + 12, `${SELL_PRICES[rarityId]} 金幣/件`, textStyle({
+        fontSize: '12px', color: '#3a2413',
+      })).setOrigin(0.5);
+      btn.on('pointerover', () => btn.setTint(0xfff3d0));
+      btn.on('pointerout', () => btn.clearTint());
+      btn.on('pointerdown', () => this._sellAllOfRarity(rarityId));
+      bx += sellBtnW + sellGap;
+    });
+    {
+      const btn = this.add.image(bx - sellBtnW / 2 + sortBtnW / 2, sellRowY, 'ui_button_parchment').setDisplaySize(sortBtnW, 52).setInteractive({ useHandCursor: true });
+      this.add.text(bx - sellBtnW / 2 + sortBtnW / 2, sellRowY, '整理背包', textStyle({
+        fontSize: '17px', color: '#3a2413',
+      })).setOrigin(0.5);
+      btn.on('pointerover', () => btn.setTint(0xfff3d0));
+      btn.on('pointerout', () => btn.clearTint());
+      btn.on('pointerdown', () => this._sortInventory());
     }
 
     // ---------- 垃圾桶：把背包裡的裝備拖過來就丟棄 ----------
@@ -135,7 +182,7 @@ export default class InventoryScene extends Phaser.Scene {
     this.TRASH_TINT = 0xff6b6b;
     this.trashZone = this.add.image(this.trashX, this.trashY, 'ui_slot').setDisplaySize(140, 140).setTint(this.TRASH_TINT);
     this.add.text(this.trashX, this.trashY, '🗑', textStyle({ fontSize: '52px', color: '#ffffff' })).setOrigin(0.5);
-    this.add.text(this.trashX, this.trashY + 84, '拖曳裝備到這裡丟棄', textStyle({
+    this.add.text(this.trashX, this.trashY + 84, '拖曳裝備到這裡丟棄（拖到其他格子可換位置）', textStyle({
       fontSize: '20px', color: '#ff9a9a',
     })).setOrigin(0.5);
 
@@ -332,12 +379,23 @@ export default class InventoryScene extends Phaser.Scene {
           this.trashZone.setTint(this.TRASH_TINT);
           if (this._isOverTrash(icon.x, icon.y)) {
             this._discardFromInventory(idx);
-          } else {
-            icon.setPosition(bg.x, bg.y);
+            return;
           }
+          // 拖到背包的其他格子上放開＝把裝備移到那一格（目標格有東西就交換位置），
+          // 讓玩家可以自由決定每件裝備放在哪
+          const targetIdx = this._cellIndexAt(icon.x, icon.y);
+          if (targetIdx != null && targetIdx !== idx) {
+            const tmp = this.inventory[targetIdx];
+            this.inventory[targetIdx] = this.inventory[idx];
+            this.inventory[idx] = tmp;
+            setInventory(this.inventory);
+            this._refresh();
+            return;
+          }
+          icon.setPosition(bg.x, bg.y);
         });
         icon.on('pointerup', () => {
-          if (!icon.getData('dragged')) this._equipFromInventory(idx);
+          if (!icon.getData('dragged')) this._handleSlotClick(idx);
         });
         icon.on('pointerover', () => this._showTooltip(bg.x, bg.y, def));
         icon.on('pointerout', () => this._hideTooltip());
@@ -356,10 +414,12 @@ export default class InventoryScene extends Phaser.Scene {
   // 滑鼠移到裝備上顯示的名稱／數值提示框，固定畫在裝備正上方。
   // 敘述文字（尤其戒指說明很長）套用 wordWrap 自動換行，並且先量出換行後的
   // 實際高度才決定整個框的高度／位置，避免長敘述超出框外或被切掉。
-  _showTooltip(x, y, def) {
+  // 滑到背包裝備時，額外顯示「跟身上同部位目前裝備的數值比較」；
+  // 滑到身上穿著的裝備時，標示「目前裝備」。
+  _showTooltip(x, y, def, opts = {}) {
     this._hideTooltip();
     const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
-    const boxW = 260;
+    const boxW = 280;
     const padding = 14;
     const headerH = 56; // 稀有度標籤 + 名稱 + 間距佔用的高度
 
@@ -368,14 +428,34 @@ export default class InventoryScene extends Phaser.Scene {
       wordWrap: { width: boxW - padding * 2, useAdvancedWrap: true },
     })).setOrigin(0.5, 0).setDepth(901);
 
-    const boxH = padding * 2 + headerH + desc.height;
+    // 背包裝備 vs. 身上同部位目前裝備的比較文字（戒指沒有數值屬性，不做比較）
+    let compare = null;
+    if (!opts.isEquipped && def.slot !== 'ring') {
+      const equippedId = this.equipped[def.slot];
+      if (equippedId && EQUIPMENT_DATA[equippedId] && equippedId !== def.id) {
+        const cur = EQUIPMENT_DATA[equippedId];
+        const statKey = Object.keys(def.bonus)[0];
+        const newVal = def.bonus[statKey] || 0;
+        const curVal = (cur.bonus || {})[statKey] || 0;
+        const diff = newVal - curVal;
+        const diffText = diff > 0 ? `↑ +${diff}` : diff < 0 ? `↓ ${diff}` : '＝相同';
+        const diffColor = diff > 0 ? '#5bff8f' : diff < 0 ? '#ff6b6b' : '#cfcfcf';
+        compare = this.add.text(0, 0, `目前裝備：${cur.name}\n${curVal} → ${newVal}（${diffText}）`, textStyle({
+          fontSize: '16px', color: diffColor, align: 'center',
+          wordWrap: { width: boxW - padding * 2, useAdvancedWrap: true },
+        })).setOrigin(0.5, 0).setDepth(901);
+      }
+    }
+
+    const compareH = compare ? compare.height + 10 : 0;
+    const boxH = padding * 2 + headerH + desc.height + compareH;
     const bottomGap = 40; // 提示框底部跟圖示之間的距離
     const topY = y - bottomGap - boxH;
     const centerY = topY + boxH / 2;
 
     const bg = this.add.rectangle(x, centerY, boxW, boxH, 0x0a0e16, 0.92)
       .setStrokeStyle(2, rarity.color, 0.9).setDepth(900);
-    const rarityLabel = this.add.text(x, topY + padding, rarity.label, textStyle({
+    const rarityLabel = this.add.text(x, topY + padding, opts.isEquipped ? `${rarity.label}（目前裝備）` : rarity.label, textStyle({
       fontSize: '15px', color: this._rarityHex(def),
     })).setOrigin(0.5, 0).setDepth(901);
     const name = this.add.text(x, topY + padding + 22, def.name, textStyle({
@@ -384,6 +464,10 @@ export default class InventoryScene extends Phaser.Scene {
     desc.setPosition(x, topY + padding + headerH);
 
     this._tooltip = [bg, rarityLabel, name, desc];
+    if (compare) {
+      compare.setPosition(x, topY + padding + headerH + desc.height + 10);
+      this._tooltip.push(compare);
+    }
   }
 
   _hideTooltip() {
@@ -408,13 +492,78 @@ export default class InventoryScene extends Phaser.Scene {
     this._showToast(`已丟棄「${def ? def.name : itemId}」`);
   }
 
-  // 點背包裡的裝備：穿上，原本穿的那件（如果有）換回同一格
+  // 背包格點擊：改成「雙擊才穿上」防止誤穿——第一下只記錄，400ms 內點同一格
+  // 第二下才真的執行穿裝備。
+  _handleSlotClick(idx) {
+    const now = this.time.now;
+    if (this._lastClickIdx === idx && now - (this._lastClickAt || 0) < 400) {
+      this._lastClickIdx = null;
+      this._equipFromInventory(idx);
+    } else {
+      this._lastClickIdx = idx;
+      this._lastClickAt = now;
+    }
+  }
+
+  // 把座標反查成背包格 index；不在格線範圍內回傳 null
+  _cellIndexAt(x, y) {
+    const g = this.gridGeom;
+    const c = Math.floor((x - g.startX) / g.cellW);
+    const r = Math.floor((y - g.startY) / g.cellH);
+    if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return null;
+    return r * COLS + c;
+  }
+
+  // 一鍵出售背包內全部指定稀有度的裝備（身上穿著的不賣、戒指不在出售清單內）
+  _sellAllOfRarity(rarityId) {
+    const price = SELL_PRICES[rarityId];
+    if (!price) return;
+    let sold = 0;
+    this.inventory.forEach((itemId, idx) => {
+      const def = itemId && EQUIPMENT_DATA[itemId];
+      if (def && def.rarity === rarityId && def.slot !== 'ring') {
+        this.inventory[idx] = null;
+        sold++;
+      }
+    });
+    if (sold === 0) {
+      this._showToast(`背包內沒有${RARITY_DATA[rarityId].label}裝備`);
+      return;
+    }
+    addGold(sold * price);
+    setInventory(this.inventory);
+    this._refresh();
+    this._showToast(`已出售 ${sold} 件${RARITY_DATA[rarityId].label}裝備，獲得 ${sold * price} 金幣`);
+  }
+
+  // 整理背包：由高稀有度到低排序（同稀有度依部位、再依數值高到低），空格全部擠到後面
+  _sortInventory() {
+    const items = this.inventory.filter(Boolean);
+    const rarityOrder = (id) => RARITY_IDS.indexOf(EQUIPMENT_DATA[id]?.rarity ?? 'common');
+    const slotOrder = (id) => [...EQUIP_SLOTS, 'ring'].indexOf(EQUIPMENT_DATA[id]?.slot);
+    const bonusValue = (id) => Object.values(EQUIPMENT_DATA[id]?.bonus || {})[0] || 0;
+    items.sort((a, b) =>
+      rarityOrder(b) - rarityOrder(a) || slotOrder(a) - slotOrder(b) || bonusValue(b) - bonusValue(a));
+    while (items.length < this.inventory.length) items.push(null);
+    this.inventory = items;
+    setInventory(this.inventory);
+    this._refresh();
+    this._showToast('背包整理完成');
+  }
+
+  // 雙擊背包裡的裝備：穿上，原本穿的那件（如果有）換回同一格。
+  // 戒指共用兩個戒指欄：優先裝進空的那格，兩格都滿了就換掉 ring1。
   _equipFromInventory(idx) {
     const itemId = this.inventory[idx];
     if (!itemId || !EQUIPMENT_DATA[itemId]) return;
     const def = EQUIPMENT_DATA[itemId];
-    const prev = this.equipped[def.slot];
-    this.equipped[def.slot] = itemId;
+    let targetSlot = def.slot;
+    if (def.slot === 'ring') {
+      if (this.equipped.ring1 === itemId || this.equipped.ring2 === itemId) return; // 同一種戒指不能戴兩個
+      targetSlot = !this.equipped.ring1 ? 'ring1' : (!this.equipped.ring2 ? 'ring2' : 'ring1');
+    }
+    const prev = this.equipped[targetSlot];
+    this.equipped[targetSlot] = itemId;
     this.inventory[idx] = prev || null;
     setEquipped(this.equipped);
     setInventory(this.inventory);

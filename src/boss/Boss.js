@@ -571,7 +571,7 @@ export default class Boss {
     this.hpText.destroy();
     this.headBarBg.destroy();
     this.headBarFill.destroy();
-    this.scene.onBossDefeated(this.bossType, this.relicId);
+    this.scene.onBossDefeated(this.bossType, this.relicId, dx, dy);
   }
 
   destroy() {

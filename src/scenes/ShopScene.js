@@ -1,7 +1,8 @@
 import {
   EQUIPMENT_DATA, EQUIP_SLOTS, SLOT_LABELS, EQUIP_LINES, RARITY_DATA, rollGachaItem,
+  GACHA_RARITY_WEIGHTS, GACHA_POOL_BY_RARITY, RARITY_IDS,
 } from '../equipment/EquipmentData.js';
-import { getGold, spendGold, addGold, isItemOwned, upgradeEquipment, addItemToInventory } from '../managers/SaveManager.js';
+import { getGold, spendGold, addGold, isItemOwned, upgradeEquipment, addItemToInventory, getInventory } from '../managers/SaveManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 import { createRarityFrame } from '../utils/RarityFrame.js';
 
@@ -82,6 +83,59 @@ export default class ShopScene extends Phaser.Scene {
     const btnW = panelW - 100;
     this._buildGachaButton(cx, panelTop + 521, btnW, `一抽　💰 ${GACHA_SINGLE_PRICE}`, () => this._gachaPull(1, GACHA_SINGLE_PRICE));
     this._buildGachaButton(cx, panelTop + 611, btnW, `十抽　💰 ${GACHA_TEN_PRICE}`, () => this._gachaPull(10, GACHA_TEN_PRICE));
+    this._buildGachaButton(cx, panelTop + 701, btnW, '📜 出現道具', () => this._showDropList());
+  }
+
+  // 「出現道具」清單：整畫面覆蓋層，依稀有度分欄列出扭蛋抽得到的所有道具、
+  // 能力效果與各稀有度的機率，讓玩家抽之前知道獎池內容。
+  _showDropList() {
+    const w = this.scale.width, h = this.scale.height;
+    const overlay = this.add.container(0, 0).setDepth(9500);
+    overlay.add(this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.88).setInteractive());
+    overlay.add(this.add.text(w / 2, 44, '🎰 扭蛋出現道具一覽', textStyle({
+      fontSize: '34px', color: '#ff9ad6',
+    })).setOrigin(0.5));
+
+    // 六個稀有度各一欄（含機率標題），道具多的欄位字級縮小塞得下
+    const colW = w / RARITY_IDS.length;
+    RARITY_IDS.forEach((rarityId, col) => {
+      const rarity = RARITY_DATA[rarityId];
+      const pool = GACHA_POOL_BY_RARITY[rarityId] || [];
+      const weight = GACHA_RARITY_WEIGHTS[rarityId];
+      const cx = colW * col + colW / 2;
+      const hex = '#' + rarity.color.toString(16).padStart(6, '0');
+
+      overlay.add(this.add.text(cx, 100, `${rarity.label}`, textStyle({
+        fontSize: '26px', color: hex,
+      })).setOrigin(0.5));
+      overlay.add(this.add.text(cx, 132, weight != null ? `機率 ${weight}%` : '（暫無）', textStyle({
+        fontSize: '18px', color: hex,
+      })).setOrigin(0.5));
+      overlay.add(this.add.rectangle(cx, 152, colW - 40, 2, rarity.color, 0.5));
+
+      // 一般裝備一行一件「名稱 效果」；戒指的效果說明較長，交給 wordWrap 換行
+      const fontSize = pool.length > 30 ? 15 : 17;
+      const rowH = pool.length > 30 ? 23 : 27;
+      let y = 172;
+      pool.forEach((id) => {
+        const def = EQUIPMENT_DATA[id];
+        const effect = def.desc.replace('（僅扭蛋機取得）', '');
+        const line = this.add.text(cx - colW / 2 + 22, y, `${def.name}　${effect}`, textStyle({
+          fontSize: `${fontSize}px`, color: '#cfe9ff',
+          wordWrap: { width: colW - 44, useAdvancedWrap: true },
+        })).setOrigin(0, 0);
+        overlay.add(line);
+        y += Math.max(rowH, line.height + 6);
+      });
+    });
+
+    const closeBtn = this.add.image(w / 2, h - 56, 'ui_button_parchment').setDisplaySize(200, 56)
+      .setInteractive({ useHandCursor: true });
+    overlay.add(closeBtn);
+    overlay.add(this.add.text(w / 2, h - 56, '關閉', textStyle({ fontSize: '24px', color: '#3a2413' })).setOrigin(0.5));
+    closeBtn.on('pointerover', () => closeBtn.setTint(0xfff3d0));
+    closeBtn.on('pointerout', () => closeBtn.clearTint());
+    closeBtn.on('pointerdown', () => overlay.destroy());
   }
 
   _buildGachaButton(cx, cy, btnW, label, onClick) {
@@ -92,27 +146,23 @@ export default class ShopScene extends Phaser.Scene {
     btn.on('pointerdown', onClick);
   }
 
-  // 扣款＋依機率表抽出 times 件裝備／戒指、塞進背包，最後播開獎動畫。
-  // 中途背包滿了發不出去的部分按比例退款，不讓玩家平白損失金幣。
+  // 抽獎前先確認背包有足夠空格，不夠就直接擋下、不扣款——避免抽了裝備卻發不出去。
+  // 通過檢查後才扣款、依機率表抽出 times 件裝備／戒指、塞進背包、播開獎動畫。
   _gachaPull(times, price) {
+    const freeSlots = getInventory().filter((s) => !s).length;
+    if (freeSlots < times) {
+      this._showToast(`背包已滿（需要 ${times} 格空位，目前只有 ${freeSlots} 格），請先整理背包！`);
+      return;
+    }
     if (!spendGold(price)) {
       this._showToast('金幣不足！');
       return;
     }
     const results = [];
     for (let i = 0; i < times; i++) results.push(rollGachaItem());
-
-    let granted = 0;
-    results.forEach((id) => { if (addItemToInventory(id)) granted++; });
-    if (granted < results.length) {
-      const refund = Math.round((price * (results.length - granted)) / results.length);
-      if (refund > 0) addGold(refund);
-    }
+    results.forEach((id) => addItemToInventory(id));
     this.goldText.setText(`金幣：${getGold()}`);
     this._showGachaReveal(results);
-    if (granted < results.length) {
-      this.time.delayedCall(200, () => this._showToast(`背包已滿，${results.length - granted} 件未能發放（已退款）`));
-    }
   }
 
   // 開獎動畫：暗幕蓋住整個畫面擋掉底下互動。單抽是置中大卡片＋稀有度色光爆閃；

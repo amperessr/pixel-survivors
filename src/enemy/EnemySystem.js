@@ -11,7 +11,7 @@ export default class EnemySystem {
     this.scene = scene;
     this.player = player;
     this.difficultyMinutes = 0;
-    this.spawnInterval = 900;
+    this.spawnInterval = 600; // 出怪節奏加快（原 900ms 一波，玩家反應太慢熱）
     this.lastSpawn = 0;
     this.grid = new Map(); // "gx,gy" -> [enemy, ...]，每幀重建一次
 
@@ -212,7 +212,8 @@ export default class EnemySystem {
 
   _spawnWave() {
     const px = this.player.sprite.x, py = this.player.sprite.y;
-    const count = Math.min(3 + Math.floor(this.difficultyMinutes * 1.3), 14);
+    // 每波數量也加快成長（原 3 + 分鐘*1.3、上限 14），配合縮短的出怪間隔
+    const count = Math.min(4 + Math.floor(this.difficultyMinutes * 1.6), 18);
     const { min, max } = this._computeSpawnRadius();
     for (let i = 0; i < count; i++) {
       if (this.pool.activeCount >= MAX_ENEMIES) break;
@@ -312,8 +313,9 @@ export default class EnemySystem {
     } catch (err) {
       console.error('[EnemySystem] 擊殺音效播放失敗（擊殺獎勵已正常結算，不受影響）：', err);
     }
-    // 擊殺時有 0.1% 機率直接在原地掉落血包（跟原本地圖上定時生成的血包共用同一個系統）
-    if (Math.random() < 0.001 && this.scene.healthPackSystem) {
+    // 血包改成純掉落制：擊殺小怪有 10% 機率在原地掉落血包（魔王 100%，
+    // 見 GameScene.onBossDefeated；地圖不再定時自動生成血包）
+    if (Math.random() < 0.1 && this.scene.healthPackSystem) {
       this.scene.healthPackSystem.forceSpawn(enemy.x, enemy.y);
     }
     this.pool.free(enemy);

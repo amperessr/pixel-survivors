@@ -44,6 +44,7 @@ export default class GameScene extends Phaser.Scene {
 
     this.player = new Player(this, 0, 0, this.characterId);
     this._applyEquipmentBonuses();
+    this._setupCloneRing();
     this.cameras.main.startFollow(this.player.sprite, true, 0.12, 0.12);
     this.cameras.main.setZoom(2.1); // 鏡頭拉近，讓角色與怪物看起來更清楚、不會太小太遠
 
@@ -67,6 +68,7 @@ export default class GameScene extends Phaser.Scene {
     this.nextBossAt = ((this.bossSpawnCount + 1) * BOSS_STAGE_INTERVAL - 1) * 60000;
 
     this.killCount = 0;
+    this.bossKillCount = 0; // 擊殺魔王數：結算時每隻額外加分
     this.paused = false;
     this.escPaused = false; // 僅代表玩家手動按 ESC 暫停（用於顯示「已暫停」遮罩）
     this.dragonAuraActive = false; // 是否已接受龍之光環（永久跟隨光環視覺開關）
@@ -103,7 +105,8 @@ export default class GameScene extends Phaser.Scene {
       try {
         addGold(this.killCount);
         const elapsed = this.getElapsedSeconds();
-        const score = this.killCount * 10 + this.player.level * 50 + Math.floor(elapsed * 0.5);
+        const score = this.killCount * 10 + this.player.level * 50 + Math.floor(elapsed * 0.5)
+          + this.bossKillCount * 1000; // 擊殺魔王額外加分，跟 GameOverScene 的公式一致
         setBestScore(score);
         // 關卡進度原本只有每滿 5 關才存一次存檔點，玩家在中間關卡離開的話會漏掉
         // 這幾關的進度，這裡連同金幣/分數一起把「目前關卡」存下去（只會往前推進，
@@ -188,6 +191,37 @@ export default class GameScene extends Phaser.Scene {
     stats.critDmg += getStatBonus('critDmg');
   }
 
+  // 分身戒：開局時召喚一個半透明的分身幻影。分身沒有物理實體（怪物打不到、
+  // 不會擋路），純粹跟在本尊附近；攻擊由 WeaponSystem._fire() 讀取
+  // this.cloneSprite，在本尊每次開火後從分身位置補一輪半傷害的攻擊。
+  _setupCloneRing() {
+    this.cloneSprite = null;
+    const equipped = getEquipped();
+    if (equipped.ring1 !== 'ring_clone' && equipped.ring2 !== 'ring_clone') return;
+    const px = this.player.sprite.x, py = this.player.sprite.y;
+    this.cloneSprite = this.add.sprite(px - 46, py, this.player.charDef.texture)
+      .setScale(0.5).setAlpha(0.55).setTint(0xb9a8ff);
+  }
+
+  // 分身用「彈性跟隨」貼在本尊左後方：lerp 追過去會自然產生一點延遲感，
+  // 看起來像殘影在跟著跑，而不是硬綁在固定位置的貼圖。
+  _updateClone(time, delta) {
+    const clone = this.cloneSprite;
+    if (!clone || !clone.active) return;
+    const p = this.player.sprite;
+    const facing = p.flipX ? 1 : -1; // 跟在玩家背後那一側
+    const targetX = p.x + facing * 46;
+    const targetY = p.y;
+    const t = Math.min(1, (delta / 1000) * 6);
+    clone.x += (targetX - clone.x) * t;
+    clone.y += (targetY - clone.y) * t;
+    clone.setFlipX(p.flipX);
+    clone.setDepth(clone.y);
+    // 跟本尊一樣的 Q 彈呼吸縮放，只是幅度小一點
+    const wave = Math.sin((time / 300) * Math.PI * 2) * 0.06;
+    clone.setScale(0.5 * (1 - wave * 0.6), 0.5 * (1 + wave));
+  }
+
   update(time, delta) {
     // 死亡監控放在最前面、不受 this.paused 影響——onPlayerDeath() 本身就會把
     // paused 設成 true 來凍結玩法，如果這段被 paused 擋在後面，下面「血量歸零
@@ -229,6 +263,7 @@ export default class GameScene extends Phaser.Scene {
   _update(time, delta) {
 
     this.player.update(time, delta);
+    this._updateClone(time, delta);
     this.map.update(this.player.sprite.x, this.player.sprite.y);
 
     // 每滿 5 關就記錄一次存檔點（只會往前推進，見 SaveManager.setCheckpointStage）
@@ -498,11 +533,16 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  // Boss 死亡時由 Boss._die() 呼叫，帶入這隻 Boss 的型態與對應遺物 id
-  onBossDefeated(bossType, relicId) {
+  // Boss 死亡時由 Boss._die() 呼叫，帶入這隻 Boss 的型態、對應遺物 id 與死亡座標
+  onBossDefeated(bossType, relicId, bossX, bossY) {
     if (this.gameEnded) return; // 玩家跟 Boss 同時陣亡就不用再處理擊殺獎勵了
     this.boss = null;
     this.registerKill();
+    this.bossKillCount++; // 結算時每隻魔王額外加 1000 分
+    // 魔王 100% 掉落血包（一般小怪是 10% 機率，見 EnemySystem._killEnemy）
+    if (this.healthPackSystem && bossX != null) {
+      this.healthPackSystem.forceSpawn(bossX, bossY, true);
+    }
     // 慶祝特效一定會播放，不受任何選單開關影響
     this.spawnSuperSaiyanAura();
 
@@ -612,7 +652,7 @@ export default class GameScene extends Phaser.Scene {
     ['UIScene', 'LevelUpScene', 'RelicChoiceScene', 'StartSkillScene'].forEach((key) => {
       try { this.scene.stop(key); } catch (err) { console.error(`[GameScene] 關閉 ${key} 失敗：`, err); }
     });
-    this.scene.start('GameOverScene', { kills, level, time: elapsed });
+    this.scene.start('GameOverScene', { kills, level, time: elapsed, bossKills: this.bossKillCount });
   }
 
   // 玩家死亡瞬間的原地爆炸特效：紅白兩色碎片＋擴散光環＋角色本體淡出放大消失，

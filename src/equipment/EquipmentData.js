@@ -143,17 +143,27 @@ export const EQUIPMENT_DATA = {
   },
 
   // 戒指：僅能從扭蛋機抽到，商店不販售（不會出現在 SHOP_ITEM_IDS），沒有階級/升級。
-  // 效果本身是真的有作用的（見 HealthPackSystem._rollHoming() / Player._computeAutoPilotDirection()），
-  // 只是扭蛋機制還沒實作，玩家目前還沒有辦法真的抽到、穿上這兩個戒指。
+  // slot 統一是 'ring'：四種戒指共用兩個戒指欄位（ring1/ring2），穿戴時裝進
+  // 第一個空的戒指欄，兩欄都滿了就換掉 ring1（見 InventoryScene._equipFromInventory）。
   ring_heal: {
-    id: 'ring_heal', slot: 'ring1', tier: null, tierIndex: 0, prevId: null, rarity: 'legendary',
+    id: 'ring_heal', slot: 'ring', tier: null, tierIndex: 0, prevId: null, rarity: 'legendary',
     name: '回血戒指', desc: '掉落的血包有 30% 機率自動飛向玩家。（僅扭蛋機取得）',
     icon: 'ring_heal', bonus: {},
   },
   ring_auto: {
-    id: 'ring_auto', slot: 'ring2', tier: null, tierIndex: 0, prevId: null, rarity: 'mythic',
-    name: '自動戒指', desc: '自動幫玩家移動、閃避怪物、拾取血包與磁鐵。（僅扭蛋機取得）',
+    id: 'ring_auto', slot: 'ring', tier: null, tierIndex: 0, prevId: null, rarity: 'mythic',
+    name: '自動戒指', desc: '自動幫玩家移動、閃避怪物、拾取血包/磁鐵/經驗值。玩家手動操作時優先聽玩家的，停止操作 1 秒後恢復自動。（僅扭蛋機取得）',
     icon: 'ring_auto', bonus: {},
+  },
+  ring_gravity: {
+    id: 'ring_gravity', slot: 'ring', tier: null, tierIndex: 0, prevId: null, rarity: 'legendary',
+    name: '引力戒', desc: '撿取地圖物件（血包、磁鐵）的範圍變成三倍。（僅扭蛋機取得）',
+    icon: 'ring_gravity', bonus: {},
+  },
+  ring_clone: {
+    id: 'ring_clone', slot: 'ring', tier: null, tierIndex: 0, prevId: null, rarity: 'mythic',
+    name: '分身戒', desc: '召喚一個怪物打不到的分身幻影，跟隨本尊一起攻擊，攻擊力為本尊的一半。（僅扭蛋機取得）',
+    icon: 'ring_clone', bonus: {},
   },
 };
 
@@ -166,9 +176,8 @@ export const EQUIP_LINES = {
   shoes: ['shoes_basic', 'shoes_mid', 'shoes_high'],
 };
 
-// 兩種戒指目前只能從扭蛋機取得（扭蛋機制本身還沒實作，見 ShopScene._gachaPull()），
-// 這份清單先列出來供未來扭蛋獎勵表使用，不會出現在商店購買清單裡。
-export const GACHA_RING_IDS = ['ring_heal', 'ring_auto'];
+// 四種戒指只能從扭蛋機取得，不會出現在商店購買清單裡。
+export const GACHA_RING_IDS = ['ring_heal', 'ring_auto', 'ring_gravity', 'ring_clone'];
 
 // 商店排版順序：以部位分欄、階級由低到高分排
 export const SHOP_ITEM_IDS = EQUIP_SLOTS.flatMap((slot) => EQUIP_LINES[slot]);
@@ -217,7 +226,9 @@ EQUIP_SLOTS.forEach((slot) => {
         id, slot, tier: null, tierIndex: 0, prevId: null, rarity: band.rarity,
         name: `${GACHA_NAME_BASE[slot][band.rarity]}·${i + 1}`,
         desc: `${GACHA_STAT_LABEL[statKey]} +${val}（僅扭蛋機取得）`,
-        icon: id, bonus: { [statKey]: val },
+        // 圖示材質 key 是 BootScene 載入的 equip_<slot>_gNN（之前少了 equip_ 前綴，
+        // 導致背包/開獎畫面顯示成 Phaser 的「找不到材質」預設綠黑小方塊）
+        icon: `equip_${id}`, bonus: { [statKey]: val },
       };
       GACHA_EQUIPMENT_IDS.push(id);
     });
@@ -225,17 +236,25 @@ EQUIP_SLOTS.forEach((slot) => {
 });
 
 // 抽獎機率表：直接是百分比，加總剛好 100%。六個稀有度全部有對應的裝備可抽到：
-// 普通/優秀/稀有/史詩是 100 件一般裝備（1-7/8-12/13-17/18-20），傳說＝回血戒指、
-// 神話＝自動戒指（見 EQUIPMENT_DATA 的 ring_heal/ring_auto rarity）。
-// 神話壓到 0.1%，傳說也刻意壓低（1%，仍比神話容易一些），其餘依「越稀有掉率越低」
-// 的原則，照原本權重的比例往上補滿剩下的 98.9%。
+// 普通/優秀/稀有/史詩是 100 件一般裝備（1-7/8-12/13-17/18-20），
+// 傳說＝回血戒指/引力戒、神話＝自動戒指/分身戒。
+// 神話 0.03%、傳說 0.1%，其餘依「越稀有掉率越低」照比例補滿剩下的 99.87%。
 export const GACHA_RARITY_WEIGHTS = {
-  common: 46.4,
-  uncommon: 27.8,
-  rare: 15.4,
-  epic: 9.3,
-  legendary: 1.0,
-  mythic: 0.1,
+  common: 46.87,
+  uncommon: 28.07,
+  rare: 15.55,
+  epic: 9.38,
+  legendary: 0.1,
+  mythic: 0.03,
+};
+
+// 背包一鍵出售的單件售價（依稀有度）；戒指類不在出售範圍（傳說/神話太稀有，
+// 誤賣損失太大，先不提供出售）。
+export const SELL_PRICES = {
+  common: 100,
+  uncommon: 300,
+  rare: 800,
+  epic: 2000,
 };
 
 // 依稀有度分組的完整抽獎池（一般裝備 100 件 + 兩種戒指），供 rollGachaItem() 使用。
