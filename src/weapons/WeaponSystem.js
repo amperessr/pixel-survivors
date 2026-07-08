@@ -22,6 +22,15 @@ export default class WeaponSystem {
     );
   }
 
+  // Boss 出現時優先鎖定 Boss 當攻擊目標——玩家對戰王的時候，火力應該集中在王身上，
+  // 不會因為旁邊剛好有小怪離得比較近，武器瞄準方向就跑去打雜兵。Boss 物件本身
+  // 沒有 x/y，實際用的是牠的 sprite（跟一般敵人 sprite 一樣有 x/y，下游程式碼
+  // 不用另外判斷是 Boss 還是小怪）。
+  _findTarget(px, py) {
+    if (this.scene.boss && this.scene.boss.alive) return this.scene.boss.sprite;
+    return this.enemySystem.findNearest(px, py);
+  }
+
   hasWeapon(id) { return !!this.owned[id]; }
   getLevel(id) { return this.owned[id] || 0; }
   ownedWeaponIds() { return Object.keys(this.owned); }
@@ -132,7 +141,7 @@ export default class WeaponSystem {
 
   // 回傳是否真的開火（frost 一律開火；其餘武器需要有目標敵人）
   _fire(id, time) {
-    const enemy = this.enemySystem.findNearest(this.player.sprite.x, this.player.sprite.y);
+    const enemy = this._findTarget(this.player.sprite.x, this.player.sprite.y);
     if (id !== 'frost' && !enemy) return false;
     const data = this._getEffectiveData(id);
     const stats = this.player.stats;
@@ -258,8 +267,8 @@ export default class WeaponSystem {
         }
       }
     } else {
-      // 一般：從自己所在位置，往最近敵人的方向，一根接一根冒出冰柱
-      const enemy = this.enemySystem.findNearest(px, py);
+      // 一般：從自己所在位置，往目標（優先鎖定 Boss）的方向，一根接一根冒出冰柱
+      const enemy = this._findTarget(px, py);
       const ang = enemy ? angleTo(px, py, enemy.x, enemy.y) : Math.random() * Math.PI * 2;
       const count = 4;
       const step = totalRadius / count;
