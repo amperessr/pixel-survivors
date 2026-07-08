@@ -193,6 +193,13 @@ export default class EnemySystem {
       } else if (d < 60) {
         const ang = Math.atan2(py - g.y, px - g.x);
         g.body.setVelocity(Math.cos(ang) * 380, Math.sin(ang) * 380);
+      } else {
+        // 重要修正：以前這裡沒有 else，寶石一旦因為磁鐵效果結束或玩家移動離開
+        // 60px 拾取範圍而不再符合上面兩個條件，殘留的舊速度（磁鐵模式下最高可達
+        // 1400px/s）會永遠留著繼續飛，且方向再也不會更新——這就是「經驗寶石亂飛」
+        // 的成因：寶石朝玩家「舊」位置直線飛出，超出範圍後既不會轉向、也不會停下來。
+        // 不在任何吸引範圍內時明確歸零，寶石才會乖乖停在原地等玩家靠近。
+        g.body.setVelocity(0, 0);
       }
       if (dist(g.x, g.y, px, py) < 16) {
         const amount = g.getData('amount');

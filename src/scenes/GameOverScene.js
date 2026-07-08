@@ -25,9 +25,9 @@ export default class GameOverScene extends Phaser.Scene {
     this.add.text(w / 2, 70, '⚠ 遊戲結束 ⚠', textStyle({ fontSize: '58px', color: '#ff6b6b' })).setOrigin(0.5);
 
     // 分數不再看存活時間，改用「目前關卡數」代表推進深度（關卡數越高代表打的怪
-    // 越硬，比單純看擊殺數更能反映真實強度）；擊殺魔王每隻額外 +1000 分。
+    // 越硬，比單純看擊殺數更能反映真實強度）；擊殺魔王每隻額外 +5000 分。
     // 跟 GameScene._saveOnExit 的公式一致。
-    const score = this.kills * 10 + this.level * 50 + this.stage * 150 + this.bossKills * 1000;
+    const score = this.kills * 10 + this.level * 50 + this.stage * 150 + this.bossKills * 5000;
     setBestScore(score);
 
     // 擊殺數直接轉換成金幣（1 擊殺 = 1 金幣），存進永久金幣存款，可以拿去商店買裝備
@@ -60,7 +60,7 @@ export default class GameOverScene extends Phaser.Scene {
       `分數：${score}`,
       `等級：Lv.${this.level}`,
       `擊殺數：${this.kills}`,
-      `擊殺魔王：${this.bossKills}（每隻 +1000 分）`,
+      `擊殺魔王：${this.bossKills}（每隻 +5000 分）`,
       `抵達關卡：第 ${this.stage} 關（每關 +150 分）`,
       `存活時間：${mm}:${ss}`,
       `歷史最佳：${getBestScore()}`,

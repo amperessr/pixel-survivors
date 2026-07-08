@@ -21,11 +21,13 @@ const config = {
     arcade: { gravity: { x: 0, y: 0 }, debug: false },
   },
   // 限制單一畫格最多模擬的時間長度：瀏覽器分頁被切到背景、或某一幀因為
-  // 生成大量物件（例如 Boss 登場一次建立好幾個物件）而卡頓時，預設情況下
-  // Phaser 會把「卡住的這段時間」一次補算給下一格，造成角色瞬間被推走一大段
-  // 距離、看起來像瞬間移動。把 min 拉高（=容許的最大單幀時間變短），
-  // 卡頓恢復時最多只會補算一小段時間，就不會再有這種瞬移感。
-  fps: { min: 30 },
+  // 生成大量物件（例如 Boss 登場一次建立好幾個物件、融合武器的爆炸特效疊了
+  // 好幾層粒子）而卡頓時，預設情況下 Phaser 會把「卡住的這段時間」一次補算
+  // 給下一格，造成角色瞬間被推走一大段距離、看起來像瞬間移動。原本設 30
+  // 玩家反應偶爾還是會遇到，拉高到 45（=容許的最大單幀時間更短），卡頓恢復時
+  // 最多只會補算更小一段時間。分頁背景造成的瞬移另外由 GameScene 的
+  // visibilitychange 監聽器直接暫停物理世界處理，兩邊互補。
+  fps: { min: 45 },
   scene: [BootScene, MainMenuScene, InventoryScene, ShopScene, GameScene, StartSkillScene, UIScene, LevelUpScene, RelicChoiceScene, GameOverScene],
   scale: {
     mode: Phaser.Scale.FIT,

@@ -46,7 +46,6 @@ export default class TextureFactory {
       ['generateBoss', () => this.generateBoss()],
       ['generateWeaponIcons', () => this.generateWeaponIcons()],
       ['generateFusionWeaponIcons', () => this.generateFusionWeaponIcons()],
-      ['generateLegendaryEquipmentIcons', () => this.generateLegendaryEquipmentIcons()],
       ['generateProjectiles', () => this.generateProjectiles()],
       ['generatePassiveIcons', () => this.generatePassiveIcons()],
       ['generateTiles', () => this.generateTiles()],
@@ -468,96 +467,6 @@ export default class TextureFactory {
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
       this._finish(tex);
     }
-  }
-
-  // ---------- 扭蛋機傳說階裝備圖示（5 部位 x 3 件，共 15 張）----------
-  // 這批傳說裝備沒有玩家提供的美術圖（原本 g01~g20 是切自參考圖，只到史詩階為止），
-  // 改用 Canvas 動態畫：放射狀金橘光暈 + 部位剪影，三個變體用暖色系（金／橙／紅）
-  // 由淺到深區分，跟稀有度外框的傳說金色系呼應，一眼就認得出是高階裝備。
-  generateLegendaryEquipmentIcons() {
-    const size = 128;
-    const slotShapes = {
-      weapon: (ctx, cx, cy, s) => {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(Math.PI / 4);
-        ctx.fillRect(-s * 0.06, -s * 0.42, s * 0.12, s * 0.7); // 劍身
-        ctx.fillRect(-s * 0.22, s * 0.18, s * 0.44, s * 0.09); // 劍柄橫檔
-        ctx.fillRect(-s * 0.05, s * 0.24, s * 0.1, s * 0.16); // 握把
-        ctx.restore();
-      },
-      helmet: (ctx, cx, cy, s) => {
-        ctx.beginPath();
-        ctx.arc(cx, cy - s * 0.05, s * 0.32, Math.PI, 0);
-        ctx.lineTo(cx + s * 0.32, cy + s * 0.18);
-        ctx.lineTo(cx - s * 0.32, cy + s * 0.18);
-        ctx.closePath();
-        ctx.fill();
-        ctx.clearRect(cx - s * 0.14, cy - s * 0.02, s * 0.28, s * 0.12); // 面罩開口
-      },
-      clothes: (ctx, cx, cy, s) => {
-        ctx.beginPath();
-        ctx.moveTo(cx - s * 0.2, cy - s * 0.32);
-        ctx.lineTo(cx + s * 0.2, cy - s * 0.32);
-        ctx.lineTo(cx + s * 0.3, cy - s * 0.12);
-        ctx.lineTo(cx + s * 0.22, cy + s * 0.34);
-        ctx.lineTo(cx - s * 0.22, cy + s * 0.34);
-        ctx.lineTo(cx - s * 0.3, cy - s * 0.12);
-        ctx.closePath();
-        ctx.fill();
-      },
-      pants: (ctx, cx, cy, s) => {
-        ctx.fillRect(cx - s * 0.22, cy - s * 0.3, s * 0.16, s * 0.6);
-        ctx.fillRect(cx + s * 0.06, cy - s * 0.3, s * 0.16, s * 0.6);
-      },
-      shoes: (ctx, cx, cy, s) => {
-        ctx.beginPath();
-        ctx.moveTo(cx - s * 0.2, cy - s * 0.28);
-        ctx.lineTo(cx + s * 0.1, cy - s * 0.28);
-        ctx.lineTo(cx + s * 0.1, cy + s * 0.06);
-        ctx.lineTo(cx + s * 0.3, cy + s * 0.14);
-        ctx.lineTo(cx + s * 0.3, cy + s * 0.28);
-        ctx.lineTo(cx - s * 0.2, cy + s * 0.28);
-        ctx.closePath();
-        ctx.fill();
-      },
-    };
-    const variantColors = [
-      { glow: '#ffe6a8', mid: '#ffb84d', edge: '#ff8a00' }, // ·1 琥珀金
-      { glow: '#ffd4a8', mid: '#ff8f4d', edge: '#e0521a' }, // ·2 焰橙
-      { glow: '#ffc2c2', mid: '#ff5d5d', edge: '#c81e1e' }, // ·3 赤紅
-    ];
-
-    Object.keys(slotShapes).forEach((slot) => {
-      for (let i = 0; i < 3; i++) {
-        const { tex, ctx } = this._canvas(`equip_legendary_${slot}_${i + 1}`, size, size);
-        const cx = size / 2, cy = size / 2;
-        const c = variantColors[i];
-
-        // 放射狀光暈底
-        const glow = ctx.createRadialGradient(cx, cy, 4, cx, cy, size * 0.5);
-        glow.addColorStop(0, c.glow);
-        glow.addColorStop(0.55, c.mid);
-        glow.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(cx, cy, size * 0.48, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 外圈稀有度光環
-        ctx.strokeStyle = c.edge;
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(cx, cy, size * 0.42, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // 部位剪影（米白色，襯托在暖色光暈上）
-        ctx.fillStyle = '#fffaf0';
-        slotShapes[slot](ctx, cx, cy, size);
-
-        this._finish(tex);
-      }
-    });
   }
 
   // ---------- 飛行道具實體 (用於場上實際發射的物件) ----------

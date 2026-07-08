@@ -107,7 +107,7 @@ export default class GameScene extends Phaser.Scene {
         // 分數不再看存活時間，改用「目前關卡數」代表推進深度（關卡數越高代表打的
         // 怪越硬，比單純看擊殺數更能反映真實強度），跟 GameOverScene 的公式一致。
         const score = this.killCount * 10 + this.player.level * 50 + this.getStage() * 150
-          + this.bossKillCount * 1000; // 擊殺魔王額外加分
+          + this.bossKillCount * 5000; // 擊殺魔王額外加分
         setBestScore(score);
         // 關卡進度原本只有每滿 5 關才存一次存檔點，玩家在中間關卡離開的話會漏掉
         // 這幾關的進度，這裡連同金幣/分數一起把「目前關卡」存下去（只會往前推進，
@@ -123,8 +123,28 @@ export default class GameScene extends Phaser.Scene {
     // 不一定每次都會確實觸發，額外掛 visibilitychange 當保險。因為 `_exitSaveDone`
     // 這個旗標只會在「開新的一局」時重置，同一局遊戲裡不管切幾次分頁都只會
     // 存一次，不會被重複觸發、也不會被拿來重複洗金幣。
+    // 分頁切到背景時額外暫停物理世界（不只是存檔）：分頁背景期間瀏覽器通常會
+    // 節流/停止 requestAnimationFrame，切回來的那一刻 Phaser 量到的「這一幀經過的
+    // 時間」會是一大段背景期間，即使有 fps.min 限制單幀最大補算量，背景時間夠長
+    // 還是會補算好幾幀，玩家/怪物看起來像瞬間被推走一段距離——直接暫停物理世界
+    // 就不會有東西需要補算。`_bgPaused` 只標記「是這裡自己暫停的」，避免跟
+    // ESC/升級選單等其他暫停來源互相蓋掉彼此的狀態。
+    this._bgPaused = false;
     this._onVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') this._saveOnExit();
+      if (this.gameEnded) return;
+      if (document.visibilityState === 'hidden') {
+        this._saveOnExit();
+        if (!this.paused) {
+          this.paused = true;
+          this.physics.world.pause();
+          this._bgPaused = true;
+        }
+      } else if (document.visibilityState === 'visible' && this._bgPaused) {
+        this._bgPaused = false;
+        this.paused = false;
+        this.physics.world.resume();
+        if (this.player) this.player.clearBankedInput();
+      }
     };
     document.addEventListener('visibilitychange', this._onVisibilityChange);
 
@@ -639,7 +659,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.gameEnded) return; // 玩家跟 Boss 同時陣亡就不用再處理擊殺獎勵了
     this.boss = null;
     this.registerKill();
-    this.bossKillCount++; // 結算時每隻魔王額外加 1000 分
+    this.bossKillCount++; // 結算時每隻魔王額外加 5000 分
     this._advanceStage(); // 魔王關要打死魔王才會進下一關
     // 魔王 100% 掉落血包（一般小怪是 10% 機率，見 EnemySystem._killEnemy）
     if (this.healthPackSystem && bossX != null) {
@@ -814,11 +834,13 @@ export default class GameScene extends Phaser.Scene {
   // 也比較廉價，hit stop 是很多動作遊戲慣用的手法）。
   hitStop(duration = 70, scaleTo = 0.05) {
     if (this._hitStopUntil && this.time.now < this._hitStopUntil) return; // 短時間內不重疊觸發，避免疊加卡頓
-    const prevScale = this.physics.world.timeScale;
+    // 還原固定寫死回 1（正常速度），不要讀「呼叫當下」的 timeScale 當 prevScale——
+    // 遊戲正常運作時 timeScale 本來就該一直是 1，用固定值還原比較保險，不會有
+    // 極端情況下讀到還沒還原完的舊值、把時間流速卡在慢動作或凍結的風險。
     this.physics.world.timeScale = scaleTo;
     this._hitStopUntil = this.time.now + duration;
     this.time.delayedCall(duration, () => {
-      this.physics.world.timeScale = prevScale;
+      this.physics.world.timeScale = 1;
     });
   }
 

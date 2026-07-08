@@ -30,8 +30,8 @@ export const RARITY_STAT_RANGES = {
   attack: { common: [1, 10], uncommon: [8, 20], rare: [18, 35], epic: [30, 55], legendary: [50, 90], mythic: [85, 150] },
   defense: { common: [1, 5], uncommon: [4, 10], rare: [8, 18], epic: [15, 30], legendary: [28, 50], mythic: [45, 80] },
   maxHp: { common: [10, 30], uncommon: [25, 60], rare: [55, 120], epic: [100, 200], legendary: [180, 320], mythic: [300, 500] },
-  // moveSpeed 只有鞋子在用（見 GACHA_STAT_KEY），玩家反應鞋子跑速加成太多，全部砍半
-  moveSpeed: { common: [3, 8], uncommon: [6, 14], rare: [13, 25], epic: [23, 38], legendary: [35, 55], mythic: [53, 80] },
+  // moveSpeed 只有鞋子在用（見 GACHA_STAT_KEY）；砍半後玩家反應還是太快，這次再砍掉約 40%
+  moveSpeed: { common: [2, 5], uncommon: [4, 8], rare: [8, 15], epic: [14, 23], legendary: [21, 33], mythic: [32, 48] },
 };
 
 export const SLOT_LABELS = {
@@ -127,21 +127,22 @@ export const EQUIPMENT_DATA = {
     bonus: { defense: 10 },
   },
 
-  // 鞋子的移動速度加成原本 10/22/40，玩家反應太多，全部砍半
+  // 鞋子的移動速度加成原本 10/22/40，先砍半到 5/11/20 玩家反應還是太快，
+  // 這次再砍掉約 40%
   shoes_basic: {
     id: 'shoes_basic', slot: 'shoes', tier: 'beginner', tierIndex: 0, prevId: null, rarity: 'common',
-    name: '初心者鞋子', desc: '移動速度 +5', price: TIER_PRICES.beginner, icon: 'equip_shoes_beginner',
-    bonus: { moveSpeed: 5 },
+    name: '初心者鞋子', desc: '移動速度 +3', price: TIER_PRICES.beginner, icon: 'equip_shoes_beginner',
+    bonus: { moveSpeed: 3 },
   },
   shoes_mid: {
     id: 'shoes_mid', slot: 'shoes', tier: 'mid', tierIndex: 1, prevId: 'shoes_basic', rarity: 'uncommon',
-    name: '中階鞋子', desc: '移動速度 +11', price: TIER_PRICES.mid, icon: 'equip_shoes_mid',
-    bonus: { moveSpeed: 11 },
+    name: '中階鞋子', desc: '移動速度 +7', price: TIER_PRICES.mid, icon: 'equip_shoes_mid',
+    bonus: { moveSpeed: 7 },
   },
   shoes_high: {
     id: 'shoes_high', slot: 'shoes', tier: 'high', tierIndex: 2, prevId: 'shoes_mid', rarity: 'rare',
-    name: '高階鞋子', desc: '移動速度 +20', price: TIER_PRICES.high, icon: 'equip_shoes_high',
-    bonus: { moveSpeed: 20 },
+    name: '高階鞋子', desc: '移動速度 +12', price: TIER_PRICES.high, icon: 'equip_shoes_high',
+    bonus: { moveSpeed: 12 },
   },
 
   // 戒指：僅能從扭蛋機抽到，商店不販售（不會出現在 SHOP_ITEM_IDS），沒有階級/升級。
@@ -184,29 +185,25 @@ export const GACHA_RING_IDS = ['ring_heal', 'ring_auto', 'ring_gravity', 'ring_c
 // 商店排版順序：以部位分欄、階級由低到高分排
 export const SHOP_ITEM_IDS = EQUIP_SLOTS.flatMap((slot) => EQUIP_LINES[slot]);
 
-// 扭蛋機專用裝備：5 部位 x 23 款，只能扭蛋抽到、不會出現在商店（不列在
-// EQUIP_LINES / SHOP_ITEM_IDS 裡）。1~7 普通／8~12 優秀／13~17 稀有／18~20 史詩
-// 是切自玩家提供的參考圖（assets/equip_<slot>_g01~g20.png）；21~23 傳說階
-// 沒有對應美術圖，改用 TextureFactory 動態產生的圖示。數值依 RARITY_STAT_RANGES
-// 的 [下限,上限] 在同一稀有度區間內平均遞增分佈，越後面的編號數值越高。
+// 扭蛋機專用裝備：5 部位 x 20 款普通～史詩（assets/equip_<slot>_g01~g20.png，
+// 切自玩家提供的參考圖）＋ 5 部位 x 5 套傳說（見下面 LEGENDARY_SERIES），
+// 只能扭蛋抽到、不會出現在商店（不列在 EQUIP_LINES / SHOP_ITEM_IDS 裡）。
+// 1~7 普通／8~12 優秀／13~17 稀有／18~20 史詩，數值依 RARITY_STAT_RANGES 的
+// [下限,上限] 在同一稀有度區間內平均遞增分佈，越後面的編號數值越高。
 const GACHA_STAT_KEY = { weapon: 'attack', helmet: 'defense', clothes: 'maxHp', pants: 'defense', shoes: 'moveSpeed' };
 const GACHA_STAT_LABEL = { attack: '攻擊力', defense: '防禦力', maxHp: '生命上限', moveSpeed: '移動速度' };
 const GACHA_NAME_BASE = {
-  weapon: { common: '訓練劍', uncommon: '精鋼劍', rare: '秘銀劍', epic: '龍紋劍', legendary: '王者聖劍' },
-  helmet: { common: '皮革帽', uncommon: '精鋼盔', rare: '秘銀盔', epic: '龍紋盔', legendary: '王者聖冠' },
-  clothes: { common: '布甲', uncommon: '精鋼鎧', rare: '秘銀鎧', epic: '龍紋鎧', legendary: '王者聖鎧' },
-  pants: { common: '布褲', uncommon: '精鋼護腿', rare: '秘銀護腿', epic: '龍紋護腿', legendary: '王者聖護腿' },
-  shoes: { common: '布鞋', uncommon: '精鋼靴', rare: '秘銀靴', epic: '龍紋靴', legendary: '王者聖靴' },
+  weapon: { common: '訓練劍', uncommon: '精鋼劍', rare: '秘銀劍', epic: '龍紋劍' },
+  helmet: { common: '皮革帽', uncommon: '精鋼盔', rare: '秘銀盔', epic: '龍紋盔' },
+  clothes: { common: '布甲', uncommon: '精鋼鎧', rare: '秘銀鎧', epic: '龍紋鎧' },
+  pants: { common: '布褲', uncommon: '精鋼護腿', rare: '秘銀護腿', epic: '龍紋護腿' },
+  shoes: { common: '布鞋', uncommon: '精鋼靴', rare: '秘銀靴', epic: '龍紋靴' },
 };
 const GACHA_BANDS = [
   { rarity: 'common', count: 7 },
   { rarity: 'uncommon', count: 5 },
   { rarity: 'rare', count: 5 },
   { rarity: 'epic', count: 3 },
-  // 傳說階：每部位新增 3 件。原本 g01~g20 的圖示都是切自玩家提供的參考圖，
-  // 傳說階沒有對應的美術素材，改用 TextureFactory.generateLegendaryEquipmentIcons()
-  // 動態產生的圖示（見下面組裝迴圈裡對 legendary 的特殊處理）。
-  { rarity: 'legendary', count: 3 },
 ];
 
 // 把 [min,max] 依 n 等份算出遞增數值（n=1 時直接回傳上限）
@@ -229,25 +226,50 @@ EQUIP_SLOTS.forEach((slot) => {
       idx++;
       const g = String(idx).padStart(2, '0');
       const id = `${slot}_g${g}`;
-      // 傳說階沒有外部美術圖，圖示改指向 TextureFactory 動態產生的材質
-      // （equip_legendary_<slot>_<1~3>）；其餘四階仍用 BootScene 載入的
-      // equip_<slot>_gNN 正式美術圖，行為不變。
-      const icon = band.rarity === 'legendary' ? `equip_legendary_${slot}_${i + 1}` : `equip_${id}`;
       EQUIPMENT_DATA[id] = {
         id, slot, tier: null, tierIndex: 0, prevId: null, rarity: band.rarity,
         name: `${GACHA_NAME_BASE[slot][band.rarity]}·${i + 1}`,
         desc: `${GACHA_STAT_LABEL[statKey]} +${val}（僅扭蛋機取得）`,
-        icon, bonus: { [statKey]: val },
+        icon: `equip_${id}`, bonus: { [statKey]: val },
       };
       GACHA_EQUIPMENT_IDS.push(id);
     });
   });
 });
 
+// 傳說階：5 個主題套裝（烈焰/寒冰/聖光/狂風/雷霆），每套 5 部位，共 25 件，
+// 用玩家提供的正式美術圖（assets/equip_legendary_<slot>_<slug>.png，切自
+// D:\遊戲檔案\素材 底下的 5 張系列圖）。數值統一用該部位 legendary 級距的上限
+// （不像普通～史詩那樣依編號遞增分佈——5 套之間是主題不同，不是強度分級）。
+const LEGENDARY_SERIES = [
+  { slug: 'flame', label: '烈焰' },
+  { slug: 'ice', label: '寒冰' },
+  { slug: 'holy', label: '聖光' },
+  { slug: 'wind', label: '狂風' },
+  { slug: 'thunder', label: '雷霆' },
+];
+const LEGENDARY_SLOT_SUFFIX = { weapon: '劍', helmet: '盔', clothes: '鎧', pants: '護腿', shoes: '靴' };
+
+EQUIP_SLOTS.forEach((slot) => {
+  const statKey = GACHA_STAT_KEY[slot];
+  const [, hi] = RARITY_STAT_RANGES[statKey].legendary;
+  LEGENDARY_SERIES.forEach(({ slug, label }) => {
+    const id = `${slot}_legendary_${slug}`;
+    EQUIPMENT_DATA[id] = {
+      id, slot, tier: null, tierIndex: 0, prevId: null, rarity: 'legendary',
+      name: `${label}${LEGENDARY_SLOT_SUFFIX[slot]}`,
+      desc: `${GACHA_STAT_LABEL[statKey]} +${hi}（僅扭蛋機取得）`,
+      icon: `equip_legendary_${slot}_${slug}`, bonus: { [statKey]: hi },
+    };
+    GACHA_EQUIPMENT_IDS.push(id);
+  });
+});
+
 // 抽獎機率表：直接是百分比，加總剛好 100%。六個稀有度全部有對應的裝備可抽到：
-// 普通/優秀/稀有/史詩/傳說是一般裝備（1-7/8-12/13-17/18-20/21-23），
-// 傳說額外多兩個戒指（回血戒指/引力戒）、神話＝自動戒指/分身戒。
-// 神話 0.03%、傳說 0.1%，其餘依「越稀有掉率越低」照比例補滿剩下的 99.87%。
+// 普通/優秀/稀有/史詩是編號式一般裝備（1-7/8-12/13-17/18-20），傳說是 5 部位
+// x 5 套主題裝（見 LEGENDARY_SERIES）額外加兩個戒指（回血戒指/引力戒）、
+// 神話＝自動戒指/分身戒。神話 0.03%、傳說 0.1%，其餘依「越稀有掉率越低」
+// 照比例補滿剩下的 99.87%。
 export const GACHA_RARITY_WEIGHTS = {
   common: 46.87,
   uncommon: 28.07,

@@ -5,8 +5,9 @@ export default class BootScene extends Phaser.Scene {
   constructor() { super('BootScene'); }
 
   preload() {
-    // 目前的外部圖片素材：龍之翼遺物特效 + 主選單背景 + 兩隻 Boss 龍的正式美術圖 +
-    // 15 張裝備圖示（5 部位 x 3 階級的正式美術圖），其餘材質還是 TextureFactory 產生。
+    // 目前的外部圖片素材：龍之翼遺物特效 + 主選單背景 + 五隻 Boss 的正式美術圖 +
+    // 裝備圖示（商店三階 15 張／扭蛋一般裝備 100 張／扭蛋傳說裝備 25 張／四種戒指），
+    // 其餘材質還是 TextureFactory 產生。
     this.load.image('fx_dragon_wing_pair', 'assets/dragon_wing.png');
     this.load.image('menu_bg', 'assets/menu_bg.jpg');
     this.load.image('boss_red', 'assets/boss_red.png');
@@ -45,6 +46,16 @@ export default class BootScene extends Phaser.Scene {
         this.load.image(key, `assets/${key}.png`);
       });
     }
+
+    // 傳說階裝備：5 主題套裝（烈焰/寒冰/聖光/狂風/雷霆）x 5 部位，正式美術圖切自
+    // D:\遊戲檔案\素材 的系列圖，取代原本 TextureFactory 動態畫的簡易圖示。
+    const legendarySlugs = ['flame', 'ice', 'holy', 'wind', 'thunder'];
+    legendarySlugs.forEach((slug) => {
+      equipSlots.forEach((slot) => {
+        const key = `equip_legendary_${slot}_${slug}`;
+        this.load.image(key, `assets/${key}.png`);
+      });
+    });
   }
 
   create() {
