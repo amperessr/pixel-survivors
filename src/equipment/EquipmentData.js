@@ -11,8 +11,8 @@ export const EQUIP_SLOTS = ['weapon', 'helmet', 'clothes', 'pants', 'shoes'];
 export const RING_SLOTS = ['ring1', 'ring2'];
 
 // 裝備稀有度：純視覺分級（名稱＋顏色），目前商店三階固定對應
-// 初心者=普通／中階=優秀／高階=稀有，兩種戒指對應史詩（回血）／神話（自動）；
-// 傳說目前沒有裝備使用，先保留給未來擴充新裝備。
+// 初心者=普通／中階=優秀／高階=稀有；扭蛋機的一般裝備涵蓋普通～傳說五階
+// （見下面 GACHA_BANDS），戒指則是傳說（回血/引力）／神話（自動/分身）。
 export const RARITY_IDS = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
 export const RARITY_DATA = {
   common: { id: 'common', label: '普通', color: 0xe8e8e8 },
@@ -182,24 +182,29 @@ export const GACHA_RING_IDS = ['ring_heal', 'ring_auto', 'ring_gravity', 'ring_c
 // 商店排版順序：以部位分欄、階級由低到高分排
 export const SHOP_ITEM_IDS = EQUIP_SLOTS.flatMap((slot) => EQUIP_LINES[slot]);
 
-// 扭蛋機專用裝備：5 部位 x 20 款正式美術圖（assets/equip_<slot>_g01~g20.png），
-// 只能扭蛋抽到、不會出現在商店（不列在 EQUIP_LINES / SHOP_ITEM_IDS 裡）。
-// 1~7 普通／8~12 優秀／13~17 稀有／18~20 史詩，數值依 RARITY_STAT_RANGES 的
-// [下限,上限] 在同一稀有度區間內平均遞增分佈，越後面的編號數值越高。
+// 扭蛋機專用裝備：5 部位 x 23 款，只能扭蛋抽到、不會出現在商店（不列在
+// EQUIP_LINES / SHOP_ITEM_IDS 裡）。1~7 普通／8~12 優秀／13~17 稀有／18~20 史詩
+// 是切自玩家提供的參考圖（assets/equip_<slot>_g01~g20.png）；21~23 傳說階
+// 沒有對應美術圖，改用 TextureFactory 動態產生的圖示。數值依 RARITY_STAT_RANGES
+// 的 [下限,上限] 在同一稀有度區間內平均遞增分佈，越後面的編號數值越高。
 const GACHA_STAT_KEY = { weapon: 'attack', helmet: 'defense', clothes: 'maxHp', pants: 'defense', shoes: 'moveSpeed' };
 const GACHA_STAT_LABEL = { attack: '攻擊力', defense: '防禦力', maxHp: '生命上限', moveSpeed: '移動速度' };
 const GACHA_NAME_BASE = {
-  weapon: { common: '訓練劍', uncommon: '精鋼劍', rare: '秘銀劍', epic: '龍紋劍' },
-  helmet: { common: '皮革帽', uncommon: '精鋼盔', rare: '秘銀盔', epic: '龍紋盔' },
-  clothes: { common: '布甲', uncommon: '精鋼鎧', rare: '秘銀鎧', epic: '龍紋鎧' },
-  pants: { common: '布褲', uncommon: '精鋼護腿', rare: '秘銀護腿', epic: '龍紋護腿' },
-  shoes: { common: '布鞋', uncommon: '精鋼靴', rare: '秘銀靴', epic: '龍紋靴' },
+  weapon: { common: '訓練劍', uncommon: '精鋼劍', rare: '秘銀劍', epic: '龍紋劍', legendary: '王者聖劍' },
+  helmet: { common: '皮革帽', uncommon: '精鋼盔', rare: '秘銀盔', epic: '龍紋盔', legendary: '王者聖冠' },
+  clothes: { common: '布甲', uncommon: '精鋼鎧', rare: '秘銀鎧', epic: '龍紋鎧', legendary: '王者聖鎧' },
+  pants: { common: '布褲', uncommon: '精鋼護腿', rare: '秘銀護腿', epic: '龍紋護腿', legendary: '王者聖護腿' },
+  shoes: { common: '布鞋', uncommon: '精鋼靴', rare: '秘銀靴', epic: '龍紋靴', legendary: '王者聖靴' },
 };
 const GACHA_BANDS = [
   { rarity: 'common', count: 7 },
   { rarity: 'uncommon', count: 5 },
   { rarity: 'rare', count: 5 },
   { rarity: 'epic', count: 3 },
+  // 傳說階：每部位新增 3 件。原本 g01~g20 的圖示都是切自玩家提供的參考圖，
+  // 傳說階沒有對應的美術素材，改用 TextureFactory.generateLegendaryEquipmentIcons()
+  // 動態產生的圖示（見下面組裝迴圈裡對 legendary 的特殊處理）。
+  { rarity: 'legendary', count: 3 },
 ];
 
 // 把 [min,max] 依 n 等份算出遞增數值（n=1 時直接回傳上限）
@@ -222,13 +227,15 @@ EQUIP_SLOTS.forEach((slot) => {
       idx++;
       const g = String(idx).padStart(2, '0');
       const id = `${slot}_g${g}`;
+      // 傳說階沒有外部美術圖，圖示改指向 TextureFactory 動態產生的材質
+      // （equip_legendary_<slot>_<1~3>）；其餘四階仍用 BootScene 載入的
+      // equip_<slot>_gNN 正式美術圖，行為不變。
+      const icon = band.rarity === 'legendary' ? `equip_legendary_${slot}_${i + 1}` : `equip_${id}`;
       EQUIPMENT_DATA[id] = {
         id, slot, tier: null, tierIndex: 0, prevId: null, rarity: band.rarity,
         name: `${GACHA_NAME_BASE[slot][band.rarity]}·${i + 1}`,
         desc: `${GACHA_STAT_LABEL[statKey]} +${val}（僅扭蛋機取得）`,
-        // 圖示材質 key 是 BootScene 載入的 equip_<slot>_gNN（之前少了 equip_ 前綴，
-        // 導致背包/開獎畫面顯示成 Phaser 的「找不到材質」預設綠黑小方塊）
-        icon: `equip_${id}`, bonus: { [statKey]: val },
+        icon, bonus: { [statKey]: val },
       };
       GACHA_EQUIPMENT_IDS.push(id);
     });
@@ -236,8 +243,8 @@ EQUIP_SLOTS.forEach((slot) => {
 });
 
 // 抽獎機率表：直接是百分比，加總剛好 100%。六個稀有度全部有對應的裝備可抽到：
-// 普通/優秀/稀有/史詩是 100 件一般裝備（1-7/8-12/13-17/18-20），
-// 傳說＝回血戒指/引力戒、神話＝自動戒指/分身戒。
+// 普通/優秀/稀有/史詩/傳說是一般裝備（1-7/8-12/13-17/18-20/21-23），
+// 傳說額外多兩個戒指（回血戒指/引力戒）、神話＝自動戒指/分身戒。
 // 神話 0.03%、傳說 0.1%，其餘依「越稀有掉率越低」照比例補滿剩下的 99.87%。
 export const GACHA_RARITY_WEIGHTS = {
   common: 46.87,
