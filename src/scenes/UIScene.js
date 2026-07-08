@@ -152,11 +152,11 @@ export default class UIScene extends Phaser.Scene {
     // 用跟主選單按鈕一樣的米色羊皮紙風格＋深咖啡色文字，維持全遊戲按鈕視覺統一。
     // 點下去要把 GameScene 本身跟可能還開著的關卡內彈出視窗（升級/遺物/開局選技能）
     // 一起關掉，不然回到主選單後這些場景還留在背景繼續跑。
-    const menuBtnY = bottomBarY - bottomBarH / 2 - 36;
-    const menuBtn = this.add.image(120, menuBtnY, 'ui_button_parchment')
-      .setDisplaySize(180, 56).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    this.add.text(120, menuBtnY, '返回主選單', textStyle({
-      fontSize: '20px', color: '#3a2413',
+    const menuBtnY = bottomBarY - bottomBarH / 2 - 30;
+    const menuBtn = this.add.image(90, menuBtnY, 'ui_button_parchment')
+      .setDisplaySize(130, 40).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    this.add.text(90, menuBtnY, '返回主選單', textStyle({
+      fontSize: '15px', color: '#3a2413',
     })).setOrigin(0.5).setScrollFactor(0);
     menuBtn.on('pointerover', () => menuBtn.setTint(0xfff3d0));
     menuBtn.on('pointerout', () => menuBtn.clearTint());

@@ -1051,10 +1051,10 @@ export default class GameScene extends Phaser.Scene {
     // 進化版改用兩張不同的正式美術圖（小冰柱／大冰柱），各自調過縮放倍率，
     // 讓兩張圖在遊戲裡的視覺大小跟舊版數值手感差不多。
     const pillarTexture = evolved ? 'fx_ice_pillar_evo' : 'fx_ice_pillar_normal';
-    // 進化版原圖是 420x338 的寬幅爆裂特效（含左側漂浮的光環），跟一般版 160x190
-    // 的瘦長冰柱比起來寬非常多，原本 0.42 縮放讓它看起來比一般版大上快兩倍，
-    // 縮小到 0.3 讓體型跟命中半徑（evolved 50 / 一般 36，約 1.4 倍）比較搭。
-    const pillarScale = evolved ? 0.3 : 0.55;
+    // 進化版原圖是 283x420 的高聳冰柱（跟一般版 160x190 的瘦長冰柱同款畫風，只是
+    // 更高更尖），縮放倍率調到讓它比一般版高上約 1.4 倍，跟命中半徑（evolved 50 /
+    // 一般 36）的比例搭起來，視覺上有「進化後更巨大」的份量感。
+    const pillarScale = evolved ? 0.35 : 0.55;
     const pillar = this.add.image(x, y, pillarTexture).setOrigin(0.5, 1).setDepth(y + 1).setScale(pillarScale, pillarScale * 0.05).setAlpha(0.95);
 
     this.tweens.add({

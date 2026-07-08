@@ -1,6 +1,8 @@
 import { clamp } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 
+const PLAYER_BASE_SCALE = 0.5;
+
 // 四種初始角色設定 (依規格百分比修正基礎數值)
 export const CHARACTERS = {
   attacker: {
@@ -44,7 +46,7 @@ export default class Player {
     this.sprite = scene.physics.add.sprite(x, y, char.texture);
     // 角色材質已改成 64x64（原本 32x32 的兩倍解析度，讓選角畫面更清晰），
     // 這裡縮小回 0.5 倍讓遊戲內實際顯示大小維持不變。
-    this.sprite.setScale(0.5);
+    this.sprite.setScale(PLAYER_BASE_SCALE);
     this.sprite.setCollideWorldBounds(false);
     // 碰撞圓圈用「原始貼圖尺寸的比例」算，而不是寫死數字——'balanced' 現在改用
     // 玩家提供的藍色史萊姆正式美術圖，是緊貼裁切過的圖（64x51，沒有程式產生貼圖
@@ -129,8 +131,22 @@ export default class Player {
       this._dash(time);
     }
 
+    this._updateSquishAnim(time, vx !== 0 || vy !== 0);
     this._updateHeadBar();
     this.sprite.setDepth(this.sprite.y);
+  }
+
+  // 史萊姆的 Q 彈動畫：只有一張靜態圖，沒有影格可以切換，改用「擠壓/拉伸」
+  // 直接算縮放做出彈跳感——移動時彈得快、待機時緩慢呼吸，讓角色不會像貼紙
+  // 一樣呆站在原地。用 sin 波即時算，不用額外的 tween 物件，跟衝刺/受傷閃白
+  // 這些也會動到 sprite 的效果互不干擾。
+  _updateSquishAnim(time, moving) {
+    const freq = moving ? 260 : 900;
+    const amp = moving ? 0.12 : 0.05;
+    const wave = Math.sin((time / freq) * Math.PI * 2);
+    const squashY = 1 + wave * amp;
+    const squashX = 1 - wave * amp * 0.6; // 體積守恆感：縱向拉長時橫向跟著收窄一點
+    this.sprite.setScale(PLAYER_BASE_SCALE * squashX, PLAYER_BASE_SCALE * squashY);
   }
 
   _updateHeadBar() {
