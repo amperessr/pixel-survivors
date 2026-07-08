@@ -223,3 +223,35 @@ EQUIP_SLOTS.forEach((slot) => {
     });
   });
 });
+
+// 抽獎機率表：數字是相對權重，總和不用剛好 100（rollGachaItem() 會自己除以總和）。
+// 神話刻意壓得很低（目前神話池只有自動戒指一種），史詩其次，越稀有的階級掉率越低；
+// 傳說目前沒有任何裝備歸在這階，不列進權重表（列了也抽不到東西）。
+export const GACHA_RARITY_WEIGHTS = {
+  common: 45,
+  uncommon: 27,
+  rare: 15,
+  epic: 9,
+  mythic: 4,
+};
+
+// 依稀有度分組的完整抽獎池（一般裝備 100 件 + 兩種戒指），供 rollGachaItem() 使用。
+export const GACHA_POOL_BY_RARITY = {};
+[...GACHA_EQUIPMENT_IDS, ...GACHA_RING_IDS].forEach((id) => {
+  const r = EQUIPMENT_DATA[id].rarity;
+  (GACHA_POOL_BY_RARITY[r] = GACHA_POOL_BY_RARITY[r] || []).push(id);
+});
+
+// 抽一次：先依權重表隨機決定稀有度，再從該稀有度的池子裡均勻隨機選一件。
+export function rollGachaItem() {
+  const total = Object.values(GACHA_RARITY_WEIGHTS).reduce((a, b) => a + b, 0);
+  let roll = Math.random() * total;
+  let picked = 'common';
+  for (const rarity of Object.keys(GACHA_RARITY_WEIGHTS)) {
+    const w = GACHA_RARITY_WEIGHTS[rarity];
+    if (roll < w) { picked = rarity; break; }
+    roll -= w;
+  }
+  const pool = GACHA_POOL_BY_RARITY[picked] || GACHA_POOL_BY_RARITY.common;
+  return pool[Math.floor(Math.random() * pool.length)];
+}

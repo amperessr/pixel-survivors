@@ -1,7 +1,7 @@
 import {
-  EQUIPMENT_DATA, EQUIP_SLOTS, SLOT_LABELS, EQUIP_LINES, RARITY_DATA,
+  EQUIPMENT_DATA, EQUIP_SLOTS, SLOT_LABELS, EQUIP_LINES, RARITY_DATA, rollGachaItem,
 } from '../equipment/EquipmentData.js';
-import { getGold, spendGold, addGold, isItemOwned, upgradeEquipment } from '../managers/SaveManager.js';
+import { getGold, spendGold, addGold, isItemOwned, upgradeEquipment, addItemToInventory } from '../managers/SaveManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 import { createRarityFrame } from '../utils/RarityFrame.js';
 
@@ -60,8 +60,6 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   // 抽獎機面板：日式扭蛋機圖片 + 一抽／十抽兩個按鈕。
-  // 獎勵內容表還沒定案（使用者要求先保留），所以按鈕目前只會顯示「準備中」提示、
-  // 不會扣款——之後獎勵表決定了，只需要改 `_gachaPull()` 這個函式接上真正的抽獎邏輯即可。
   _buildGachaPanel(panelLeft, screenW) {
     const panelW = screenW - panelLeft - 60;
     const cx = panelLeft + panelW / 2;
@@ -94,9 +92,118 @@ export default class ShopScene extends Phaser.Scene {
     btn.on('pointerdown', onClick);
   }
 
+  // 扣款＋依機率表抽出 times 件裝備／戒指、塞進背包，最後播開獎動畫。
+  // 中途背包滿了發不出去的部分按比例退款，不讓玩家平白損失金幣。
   _gachaPull(times, price) {
-    // TODO: 獎勵表定案後在這裡實作真正的抽獎邏輯（扣款＋開獎＋發獎勵）。
-    this._showToast('抽獎機制準備中，敬請期待！');
+    if (!spendGold(price)) {
+      this._showToast('金幣不足！');
+      return;
+    }
+    const results = [];
+    for (let i = 0; i < times; i++) results.push(rollGachaItem());
+
+    let granted = 0;
+    results.forEach((id) => { if (addItemToInventory(id)) granted++; });
+    if (granted < results.length) {
+      const refund = Math.round((price * (results.length - granted)) / results.length);
+      if (refund > 0) addGold(refund);
+    }
+    this.goldText.setText(`金幣：${getGold()}`);
+    this._showGachaReveal(results);
+    if (granted < results.length) {
+      this.time.delayedCall(200, () => this._showToast(`背包已滿，${results.length - granted} 件未能發放（已退款）`));
+    }
+  }
+
+  // 開獎動畫：暗幕蓋住整個畫面擋掉底下互動。單抽是置中大卡片＋稀有度色光爆閃；
+  // 十抽是 5x2 排列、依序滾出的小卡片牆。稀有度外框沿用商店卡片同一套 RarityFrame，
+  // 讓抽到高階裝備時，畫面上的視覺份量跟商店展示一致。
+  _showGachaReveal(results) {
+    const w = this.scale.width, h = this.scale.height;
+    const overlay = this.add.container(0, 0).setDepth(9000);
+    overlay.add(this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.82).setInteractive());
+
+    const closeBtn = this.add.image(w / 2, h - 70, 'ui_button_parchment').setDisplaySize(200, 56)
+      .setInteractive({ useHandCursor: true }).setAlpha(0);
+    const closeText = this.add.text(w / 2, h - 70, '關閉', textStyle({
+      fontSize: '24px', color: '#3a2413',
+    })).setOrigin(0.5).setAlpha(0);
+    overlay.add([closeBtn, closeText]);
+    closeBtn.on('pointerover', () => closeBtn.setTint(0xfff3d0));
+    closeBtn.on('pointerout', () => closeBtn.clearTint());
+    closeBtn.on('pointerdown', () => overlay.destroy());
+    const revealCloseBtn = () => { closeBtn.setAlpha(1); closeText.setAlpha(1); };
+
+    if (results.length === 1) {
+      this._revealSingleCard(overlay, w / 2, h / 2 - 20, results[0], revealCloseBtn);
+    } else {
+      const cols = 5, rows = 2, cardW = 190, cardH = 230, gapX = 22, gapY = 30;
+      const totalW = cols * cardW + (cols - 1) * gapX;
+      const startX = w / 2 - totalW / 2 + cardW / 2;
+      const startY = h / 2 - (rows * cardH + (rows - 1) * gapY) / 2 + cardH / 2 - 30;
+      results.forEach((id, i) => {
+        const col = i % cols, row = Math.floor(i / cols);
+        const cx = startX + col * (cardW + gapX);
+        const cy = startY + row * (cardH + gapY);
+        this.time.delayedCall(i * 130, () => this._revealSmallCard(overlay, cx, cy, cardW, cardH, id));
+      });
+      this.time.delayedCall(results.length * 130 + 400, revealCloseBtn);
+    }
+  }
+
+  // 單抽大卡片：先炸一圈跟稀有度同色的光暈，卡片、圖示、稀有度標籤、名稱、
+  // 敘述依序淡入＋彈跳縮放，強化「開獎瞬間」的驚喜感。
+  _revealSingleCard(overlay, cx, cy, id, onDone) {
+    const def = EQUIPMENT_DATA[id];
+    const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
+    const rarityHex = '#' + rarity.color.toString(16).padStart(6, '0');
+    const cardW = 300, cardH = 360;
+
+    const flash = this.add.circle(cx, cy, 10, rarity.color, 0.9);
+    overlay.add(flash);
+    this.tweens.add({
+      targets: flash, radius: 260, alpha: 0, duration: 500, ease: 'Cubic.easeOut',
+      onComplete: () => flash.destroy(),
+    });
+
+    const card = this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH).setScale(0.3).setAlpha(0);
+    const frame = createRarityFrame(this, cx, cy, cardW - 6, cardH - 6, def.rarity).setScale(0.3).setAlpha(0);
+    const icon = this.add.image(cx, cy - 90, def.icon).setScale(0).setAlpha(0);
+    const rarityLabel = this.add.text(cx, cy - 160, rarity.label, textStyle({
+      fontSize: '22px', color: rarityHex,
+    })).setOrigin(0.5).setAlpha(0);
+    const nameText = this.add.text(cx, cy + 40, def.name, textStyle({
+      fontSize: '28px', color: '#fff',
+    })).setOrigin(0.5).setAlpha(0);
+    const descText = this.add.text(cx, cy + 90, def.desc, textStyle({
+      fontSize: '18px', color: '#9fd3ff', align: 'center',
+      wordWrap: { width: cardW - 30, useAdvancedWrap: true },
+    })).setOrigin(0.5).setAlpha(0);
+    overlay.add([card, frame, icon, rarityLabel, nameText, descText]);
+
+    this.tweens.add({ targets: [card, frame], scale: 1, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 120 });
+    this.tweens.add({ targets: icon, scale: 0.68, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 200 });
+    this.tweens.add({
+      targets: [rarityLabel, nameText, descText], alpha: 1, duration: 380, delay: 420,
+      onComplete: onDone,
+    });
+  }
+
+  // 十抽網格用的小卡片：比較簡單的縮放淡入，避免十張同時大爆閃洗版面
+  _revealSmallCard(overlay, cx, cy, cardW, cardH, id) {
+    const def = EQUIPMENT_DATA[id];
+    const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
+    const card = this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH).setScale(0.5).setAlpha(0);
+    const frame = createRarityFrame(this, cx, cy, cardW - 6, cardH - 6, def.rarity).setScale(0.5).setAlpha(0);
+    const icon = this.add.image(cx, cy - cardH * 0.16, def.icon).setScale(0.42).setAlpha(0);
+    const rarityHex = '#' + rarity.color.toString(16).padStart(6, '0');
+    const nameText = this.add.text(cx, cy + cardH * 0.24, def.name, textStyle({
+      fontSize: '15px', color: rarityHex, align: 'center',
+      wordWrap: { width: cardW - 20, useAdvancedWrap: true },
+    })).setOrigin(0.5).setAlpha(0);
+    overlay.add([card, frame, icon, nameText]);
+    this.tweens.add({ targets: [card, frame], scale: 1, alpha: 1, duration: 320, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: [icon, nameText], alpha: 1, duration: 320, ease: 'Cubic.easeOut' });
   }
 
   _buildGrid() {
