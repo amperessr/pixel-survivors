@@ -86,6 +86,24 @@ const BOSS_TYPES = {
     novaRadius: 170,
     scale: 0.61, // 原始圖接近正方形，縮小一點避免體型看起來比龍誇張
   },
+  griffin: {
+    label: '⚠ 獅鷲王降臨！ ⚠',
+    labelColor: '#ffd24d',
+    texture: 'boss_griffin',
+    aoeColor: 0xffc233,
+    breathColor: 0xfff0b3,
+    breathTexture: 'fx_frost',
+    boltTexture: 'proj_frost',
+    chargeTint: 0xfff2c2,
+    windColor: 0xb8860b, // 獅鷲王施放技能時周圍的金褐色風系粒子
+    clawColor: 0xffe066,
+    relicId: null, // 遺物之後補上
+    skills: ['breath', 'nova', 'claw'], // 遠距：疾風彈幕／特殊：王者威壓／近戰：利爪連擊
+    skillLabels: { breath: '⚠ 疾風彈幕！', nova: '⚠ 王者威壓！', claw: '⚠ 利爪連擊！' },
+    novaCenter: 'self', // 王者威壓以獅鷲王自己為中心炸開，逼玩家退開
+    novaRadius: 250,
+    scale: 0.5, // 原圖 700x616，展翅姿態跟龍類似，體型調到跟兩隻龍差不多的視覺份量
+  },
 };
 
 // 三個技能發動前的「前搖」時間：Boss 會停下來、亮起警示色並顯示警告文字/範圍指示，
