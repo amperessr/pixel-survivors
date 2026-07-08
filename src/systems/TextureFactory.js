@@ -615,53 +615,92 @@ export default class TextureFactory {
   // ---------- 戒指圖示（僅扭蛋機取得，效果尚未開放，見 EquipmentData.js 的 GACHA_RING_IDS）----------
   // 跟裝備圖示一樣用 128x128 繪製，縮放倍率才能跟 InventoryScene/UIScene 裡其他
   // 裝備圖示（真人美術圖）維持一致的清晰度，不會因為程式產生的圖只有小尺寸而變模糊。
+  // 四種戒指的圖示重畫成「金屬立體感」版本：外圈柔光暈＋徑向漸層戒環＋高光弧線＋
+  // 鑲嵌寶石（原本是單色平塗的細戒環，看起來比較陽春）。戒環顏色依稀有度區分——
+  // 傳說（回血戒指／引力戒）用暖金色系、神話（自動戒指／分身戒）用艷紅色系，
+  // 呼應 InventoryScene 外框的稀有度配色，圖示本身就看得出等級高低。
   generateRingIcons() {
-    const drawRingBase = (ctx) => {
-      ctx.strokeStyle = '#ffd93d';
-      ctx.lineWidth = 16;
-      ctx.beginPath();
-      ctx.arc(64, 74, 42, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.strokeStyle = '#c79a1e';
+    const size = 128, cx = 64, cy = 74;
+
+    const drawRingBase = (ctx, band, gem) => {
+      // 外圈柔光暈，營造「發光神器」的質感
+      const glow = ctx.createRadialGradient(cx, cy, 20, cx, cy, 58);
+      glow.addColorStop(0, band.glow);
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(cx, cy, 58, 0, Math.PI * 2); ctx.fill();
+
+      // 戒環本體：徑向漸層做出金屬立體感，不是單一平塗色
+      const bandGrad = ctx.createRadialGradient(cx, cy - 10, 10, cx, cy, 46);
+      bandGrad.addColorStop(0, band.hi);
+      bandGrad.addColorStop(0.6, band.mid);
+      bandGrad.addColorStop(1, band.low);
+      ctx.strokeStyle = bandGrad;
+      ctx.lineWidth = 15;
+      ctx.beginPath(); ctx.arc(cx, cy, 40, 0, Math.PI * 2); ctx.stroke();
+      // 內外描邊收邊
+      ctx.strokeStyle = band.low;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(cx, cy, 47.5, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, 32.5, 0, Math.PI * 2); ctx.stroke();
+      // 左上角一道白色細亮弧，模擬打光反射
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
       ctx.lineWidth = 4;
-      ctx.stroke();
-      ctx.fillStyle = '#3d8bff';
-      ctx.beginPath();
-      ctx.arc(64, 32, 9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#1a4a99';
+      ctx.beginPath(); ctx.arc(cx, cy, 40, Math.PI * 1.05, Math.PI * 1.45); ctx.stroke();
+
+      // 頂部鑲嵌寶石：徑向漸層 + 高光點
+      const gemGrad = ctx.createRadialGradient(cx - 3, cy - 44, 1, cx, cy - 40, 11);
+      gemGrad.addColorStop(0, '#ffffff');
+      gemGrad.addColorStop(0.35, gem.hi);
+      gemGrad.addColorStop(1, gem.low);
+      ctx.fillStyle = gemGrad;
+      ctx.beginPath(); ctx.arc(cx, cy - 40, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = gem.edge;
       ctx.lineWidth = 2;
       ctx.stroke();
     };
-    // 回血戒指：金色戒環 + 中央紅色愛心
+
+    const LEGENDARY_BAND = { hi: '#fff3c4', mid: '#ffcf5c', low: '#c9821a', glow: 'rgba(255,180,60,0.55)' };
+    const MYTHIC_BAND = { hi: '#ffd0d0', mid: '#ff5a5a', low: '#9c1414', glow: 'rgba(255,60,60,0.55)' };
+    const BLUE_GEM = { hi: '#9fd8ff', low: '#2f6fd6', edge: '#1a4a99' };
+
+    // 回血戒指（傳說）：暖金戒環 + 藍寶石 + 漸層紅愛心，呼應「生命」意象
     {
-      const { tex, ctx } = this._canvas('ring_heal', 128, 128);
-      drawRingBase(ctx);
-      const hx = 64, hy = 68;
-      ctx.fillStyle = '#ff5b6b';
+      const { tex, ctx } = this._canvas('ring_heal', size, size);
+      drawRingBase(ctx, LEGENDARY_BAND, BLUE_GEM);
+      const hx = cx, hy = cy;
+      const heartGrad = ctx.createRadialGradient(hx - 6, hy - 6, 2, hx, hy, 22);
+      heartGrad.addColorStop(0, '#ffb3bd');
+      heartGrad.addColorStop(1, '#ff3d55');
+      ctx.fillStyle = heartGrad;
       ctx.beginPath();
-      ctx.moveTo(hx, hy + 16);
-      ctx.bezierCurveTo(hx - 28, hy - 10, hx - 15, hy - 34, hx, hy - 10);
-      ctx.bezierCurveTo(hx + 15, hy - 34, hx + 28, hy - 10, hx, hy + 16);
+      ctx.moveTo(hx, hy + 17);
+      ctx.bezierCurveTo(hx - 30, hy - 10, hx - 16, hy - 36, hx, hy - 11);
+      ctx.bezierCurveTo(hx + 16, hy - 36, hx + 30, hy - 10, hx, hy + 17);
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = '#8a1f2b';
+      ctx.strokeStyle = '#7a1420';
       ctx.lineWidth = 2.5;
       ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.beginPath(); ctx.ellipse(hx - 9, hy - 8, 4, 6, -0.5, 0, Math.PI * 2); ctx.fill();
       this._finish(tex);
     }
-    // 自動戒指：金色戒環 + 中央循環箭頭（示意「自動」）
+
+    // 自動戒指（神話）：艷紅戒環 + 藍寶石 + 發光循環箭頭（示意「自動」）
     {
-      const { tex, ctx } = this._canvas('ring_auto', 128, 128);
-      drawRingBase(ctx);
-      ctx.strokeStyle = '#5bd4ff';
+      const { tex, ctx } = this._canvas('ring_auto', size, size);
+      drawRingBase(ctx, MYTHIC_BAND, BLUE_GEM);
+      ctx.save();
+      ctx.shadowColor = '#5bd4ff';
+      ctx.shadowBlur = 8;
+      ctx.strokeStyle = '#8fe9ff';
       ctx.lineWidth = 8;
-      ctx.beginPath();
-      ctx.arc(64, 68, 22, 0.35 * Math.PI, 1.85 * Math.PI);
-      ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, 23, 0.35 * Math.PI, 1.85 * Math.PI); ctx.stroke();
+      ctx.restore();
       const ang = 1.85 * Math.PI;
-      const ax = 64 + Math.cos(ang) * 22, ay = 68 + Math.sin(ang) * 22;
-      ctx.fillStyle = '#5bd4ff';
+      const ax = cx + Math.cos(ang) * 23, ay = cy + Math.sin(ang) * 23;
+      ctx.fillStyle = '#8fe9ff';
       ctx.beginPath();
       ctx.moveTo(ax + 10, ay - 4);
       ctx.lineTo(ax - 6, ay - 9);
@@ -670,21 +709,22 @@ export default class TextureFactory {
       ctx.fill();
       this._finish(tex);
     }
-    // 引力戒：金色戒環 + 中央同心圓＋往內的四個小箭頭（示意「吸引」）
+
+    // 引力戒（傳說）：暖金戒環 + 紫寶石 + 發光同心圓與內縮箭頭（示意「吸引力場」）
     {
-      const { tex, ctx } = this._canvas('ring_gravity', 128, 128);
-      drawRingBase(ctx);
-      ctx.strokeStyle = '#b98cff';
+      const { tex, ctx } = this._canvas('ring_gravity', size, size);
+      drawRingBase(ctx, LEGENDARY_BAND, { hi: '#e0c2ff', low: '#8a3fd9', edge: '#5c1f99' });
+      ctx.save();
+      ctx.shadowColor = '#c79bff';
+      ctx.shadowBlur = 6;
+      ctx.strokeStyle = '#c79bff';
       ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.arc(64, 68, 24, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(64, 68, 12, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = '#b98cff';
+      ctx.beginPath(); ctx.arc(cx, cy, 25, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, 13, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = '#c79bff';
       [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([dx, dy]) => {
-        const bx = 64 + dx * 36, by = 68 + dy * 36;
+        const bx = cx + dx * 37, by = cy + dy * 37;
         ctx.beginPath();
         ctx.moveTo(bx - dy * 7 - dx * 2, by - dx * 7 - dy * 2);
         ctx.lineTo(bx + dy * 7 - dx * 2, by + dx * 7 - dy * 2);
@@ -694,26 +734,25 @@ export default class TextureFactory {
       });
       this._finish(tex);
     }
-    // 分身戒：金色戒環 + 中央兩個交疊的人形剪影（實體＋半透明幻影）
+
+    // 分身戒（神話）：艷紅戒環 + 粉寶石 + 本尊與半透明幻影交疊
     {
-      const { tex, ctx } = this._canvas('ring_clone', 128, 128);
-      drawRingBase(ctx);
+      const { tex, ctx } = this._canvas('ring_clone', size, size);
+      drawRingBase(ctx, MYTHIC_BAND, { hi: '#ffc2e6', low: '#c93f8f', edge: '#7a1f57' });
       const drawFigure = (fx, fy, color, alpha) => {
         ctx.globalAlpha = alpha;
         ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(fx, fy - 12, 9, 0, Math.PI * 2); // 頭
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(fx, fy - 13, 9, 0, Math.PI * 2); ctx.fill(); // 頭
         ctx.beginPath(); // 身體（圓角梯形近似）
-        ctx.moveTo(fx - 11, fy + 16);
+        ctx.moveTo(fx - 11, fy + 17);
         ctx.quadraticCurveTo(fx - 12, fy - 4, fx, fy - 2);
-        ctx.quadraticCurveTo(fx + 12, fy - 4, fx + 11, fy + 16);
+        ctx.quadraticCurveTo(fx + 12, fy - 4, fx + 11, fy + 17);
         ctx.closePath();
         ctx.fill();
         ctx.globalAlpha = 1;
       };
-      drawFigure(72, 70, '#ff5b8f', 0.55); // 幻影（半透明，疊在後面偏右）
-      drawFigure(56, 70, '#ffe066', 1);    // 本尊
+      drawFigure(cx + 9, cy, '#ff8fc2', 0.5); // 幻影（半透明，疊在後面偏右）
+      drawFigure(cx - 7, cy, '#ffe066', 1);   // 本尊
       this._finish(tex);
     }
   }
