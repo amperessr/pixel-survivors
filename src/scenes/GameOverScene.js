@@ -12,6 +12,7 @@ export default class GameOverScene extends Phaser.Scene {
     // 注意：不可用 this.time，那是 Phaser Scene 內建的計時器物件，
     // 之前覆蓋掉它會導致本場景與計時相關的功能出錯（重要 bug 修正）。
     this.playTime = data.time || 0;
+    this.stage = data.stage || 1;
   }
 
   create() {
@@ -23,8 +24,10 @@ export default class GameOverScene extends Phaser.Scene {
     this.add.rectangle(w / 2, 70, 640, 84, 0x0a0e16, 0.6);
     this.add.text(w / 2, 70, '⚠ 遊戲結束 ⚠', textStyle({ fontSize: '58px', color: '#ff6b6b' })).setOrigin(0.5);
 
-    // 擊殺魔王每隻額外 +1000 分（跟 GameScene._saveOnExit 的公式一致）
-    const score = this.kills * 10 + this.level * 50 + Math.floor(this.playTime * 0.5) + this.bossKills * 1000;
+    // 分數不再看存活時間，改用「目前關卡數」代表推進深度（關卡數越高代表打的怪
+    // 越硬，比單純看擊殺數更能反映真實強度）；擊殺魔王每隻額外 +1000 分。
+    // 跟 GameScene._saveOnExit 的公式一致。
+    const score = this.kills * 10 + this.level * 50 + this.stage * 150 + this.bossKills * 1000;
     setBestScore(score);
 
     // 擊殺數直接轉換成金幣（1 擊殺 = 1 金幣），存進永久金幣存款，可以拿去商店買裝備
@@ -58,6 +61,7 @@ export default class GameOverScene extends Phaser.Scene {
       `等級：Lv.${this.level}`,
       `擊殺數：${this.kills}`,
       `擊殺魔王：${this.bossKills}（每隻 +1000 分）`,
+      `抵達關卡：第 ${this.stage} 關（每關 +150 分）`,
       `存活時間：${mm}:${ss}`,
       `歷史最佳：${getBestScore()}`,
       `💰 獲得金幣：+${goldEarned}（目前總金幣：${getGold()}）`,
@@ -65,7 +69,10 @@ export default class GameOverScene extends Phaser.Scene {
         ? `⭐ 帳號經驗：+${statExpEarned}（升級了！目前 Lv.${getStatLevel()}）`
         : `⭐ 帳號經驗：+${statExpEarned}（目前 Lv.${getStatLevel()}）`,
     ];
-    const statLineH = 36;
+    // 多加了「抵達關卡」這行之後統計行數從 8 行變 9 行，行距從 36 收到 33，
+    // 總高度只多 9px（9*33=297 vs 原本 8*36=288），面板剩餘留白還夠塞下，
+    // 不用連動調整面板高度或下面排行榜面板的位置。
+    const statLineH = 33;
     statLines.forEach((line, i) => {
       this.add.text(w / 2, infoPanelTop + 96 + i * statLineH, line, textStyle({
         fontSize: '27px', color: '#ffffff',

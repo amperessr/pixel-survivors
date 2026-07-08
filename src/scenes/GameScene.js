@@ -104,9 +104,10 @@ export default class GameScene extends Phaser.Scene {
       this._exitSaveDone = true;
       try {
         addGold(this.killCount);
-        const elapsed = this.getElapsedSeconds();
-        const score = this.killCount * 10 + this.player.level * 50 + Math.floor(elapsed * 0.5)
-          + this.bossKillCount * 1000; // 擊殺魔王額外加分，跟 GameOverScene 的公式一致
+        // 分數不再看存活時間，改用「目前關卡數」代表推進深度（關卡數越高代表打的
+        // 怪越硬，比單純看擊殺數更能反映真實強度），跟 GameOverScene 的公式一致。
+        const score = this.killCount * 10 + this.player.level * 50 + this.getStage() * 150
+          + this.bossKillCount * 1000; // 擊殺魔王額外加分
         setBestScore(score);
         // 關卡進度原本只有每滿 5 關才存一次存檔點，玩家在中間關卡離開的話會漏掉
         // 這幾關的進度，這裡連同金幣/分數一起把「目前關卡」存下去（只會往前推進，
@@ -657,13 +658,16 @@ export default class GameScene extends Phaser.Scene {
     const kills = this.killCount;
     const level = this.player ? this.player.level : 1;
     const elapsed = Math.floor((this.time.now - this.startTime) / 1000);
+    const stage = this.getStage();
     // 死亡當下如果升級選單／遺物選擇視窗／開局選技能視窗剛好開著（例如跟 Boss
     // 同歸於盡），這些視窗不會自己關掉，會一直蓋在畫面最上層，看起來像是
     // 「遊戲卡住沒結束」，所以這裡強制把它們也一併關掉，確保一定會看到結算畫面。
     ['UIScene', 'LevelUpScene', 'RelicChoiceScene', 'StartSkillScene'].forEach((key) => {
       try { this.scene.stop(key); } catch (err) { console.error(`[GameScene] 關閉 ${key} 失敗：`, err); }
     });
-    this.scene.start('GameOverScene', { kills, level, time: elapsed, bossKills: this.bossKillCount });
+    // time 只留給結算畫面當「存活時間」資訊顯示用，分數計算已經改用 stage（見
+    // GameOverScene 的分數公式），不再吃時間。
+    this.scene.start('GameOverScene', { kills, level, time: elapsed, stage, bossKills: this.bossKillCount });
   }
 
   // 玩家死亡瞬間的原地爆炸特效：紅白兩色碎片＋擴散光環＋角色本體淡出放大消失，
