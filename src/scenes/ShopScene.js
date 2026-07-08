@@ -152,7 +152,8 @@ export default class ShopScene extends Phaser.Scene {
       fontSize: '15px', color: owned ? '#7a7a7a' : rarityHex,
     })).setOrigin(0.5));
     this.gridContainer.add(this.add.text(cx, cy + 28, def.desc, textStyle({
-      fontSize: '19px', color: owned ? '#6a6a6a' : '#9fd3ff',
+      fontSize: '19px', color: owned ? '#6a6a6a' : '#9fd3ff', align: 'center',
+      wordWrap: { width: cardW - 30, useAdvancedWrap: true },
     })).setOrigin(0.5));
 
     if (buyable) {

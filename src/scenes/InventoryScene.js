@@ -356,23 +356,36 @@ export default class InventoryScene extends Phaser.Scene {
     this._refreshStatsPanel();
   }
 
-  // 滑鼠移到裝備上顯示的名稱／數值提示框，固定畫在裝備正上方
+  // 滑鼠移到裝備上顯示的名稱／數值提示框，固定畫在裝備正上方。
+  // 敘述文字（尤其戒指說明很長）套用 wordWrap 自動換行，並且先量出換行後的
+  // 實際高度才決定整個框的高度／位置，避免長敘述超出框外或被切掉。
   _showTooltip(x, y, def) {
     this._hideTooltip();
     const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
-    const boxW = 260, boxH = 92;
-    const ty = y - 80;
-    const bg = this.add.rectangle(x, ty, boxW, boxH, 0x0a0e16, 0.92)
+    const boxW = 260;
+    const padding = 14;
+    const headerH = 56; // 稀有度標籤 + 名稱 + 間距佔用的高度
+
+    const desc = this.add.text(0, 0, def.desc, textStyle({
+      fontSize: '18px', color: '#9fd3ff', align: 'center',
+      wordWrap: { width: boxW - padding * 2, useAdvancedWrap: true },
+    })).setOrigin(0.5, 0).setDepth(901);
+
+    const boxH = padding * 2 + headerH + desc.height;
+    const bottomGap = 40; // 提示框底部跟圖示之間的距離
+    const topY = y - bottomGap - boxH;
+    const centerY = topY + boxH / 2;
+
+    const bg = this.add.rectangle(x, centerY, boxW, boxH, 0x0a0e16, 0.92)
       .setStrokeStyle(2, rarity.color, 0.9).setDepth(900);
-    const rarityLabel = this.add.text(x, ty - 30, rarity.label, textStyle({
+    const rarityLabel = this.add.text(x, topY + padding, rarity.label, textStyle({
       fontSize: '15px', color: this._rarityHex(def),
-    })).setOrigin(0.5).setDepth(901);
-    const name = this.add.text(x, ty - 8, def.name, textStyle({
+    })).setOrigin(0.5, 0).setDepth(901);
+    const name = this.add.text(x, topY + padding + 22, def.name, textStyle({
       fontSize: '22px', color: '#ffe066',
-    })).setOrigin(0.5).setDepth(901);
-    const desc = this.add.text(x, ty + 22, def.desc, textStyle({
-      fontSize: '18px', color: '#9fd3ff',
-    })).setOrigin(0.5).setDepth(901);
+    })).setOrigin(0.5, 0).setDepth(901);
+    desc.setPosition(x, topY + padding + headerH);
+
     this._tooltip = [bg, rarityLabel, name, desc];
   }
 
