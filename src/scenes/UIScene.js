@@ -35,11 +35,15 @@ export default class UIScene extends Phaser.Scene {
     this.add.image(400, 158, 'ui_bar_bg').setScrollFactor(0).setDisplaySize(280, 22).setOrigin(0.5);
     this.xpFill = this.add.image(260, 158, 'ui_bar_fill_xp').setScrollFactor(0).setOrigin(0, 0.5).setDisplaySize(278, 19);
 
-    // ---- 右上：擊殺數 / FPS ----
+    // ---- 右上：擊殺數 / 存活時間 / FPS ----
+    // 關卡改成擊殺數/擊敗魔王推進之後，畫面上已經沒有任何地方顯示存活時間了
+    // （原本的「第 N 關」在時間制底下等於間接顯示時間，現在兩者已經脫鉤）——
+    // 補回一個獨立的存活時間顯示，跟 GameOverScene 結算畫面的 mm:ss 格式一致。
     this.killText = this.add.text(w - 32, 26, '', textStyle({ fontSize: '28px', color: '#ffd93d' })).setOrigin(1, 0).setScrollFactor(0);
-    this.fpsText = this.add.text(w - 32, 64, '', textStyle({ fontSize: '20px', color: '#ffffff' })).setOrigin(1, 0).setScrollFactor(0);
+    this.timeText = this.add.text(w - 32, 64, '', textStyle({ fontSize: '22px', color: '#9fd3ff' })).setOrigin(1, 0).setScrollFactor(0);
+    this.fpsText = this.add.text(w - 32, 98, '', textStyle({ fontSize: '20px', color: '#ffffff' })).setOrigin(1, 0).setScrollFactor(0);
 
-    // ---- 正上方置中：目前關卡（1 分鐘 = 1 關，取代原本的時間顯示）----
+    // ---- 正上方置中：目前關卡（擊殺數/擊敗魔王推進，見 GameScene.getStage()）----
     // 白色粗體；魔王關（每 5 關）改成紅色，並在文字前加骷髏圖案提醒玩家小心
     this.stageText = this.add.text(w / 2, 26, '', textStyle({
       fontSize: '40px', color: '#ffffff', fontStyle: 'bold',
@@ -285,6 +289,10 @@ export default class UIScene extends Phaser.Scene {
       : `第 ${stage} 關（${this.gs.stageKillCount}/300）`);
     this.stageText.setColor(isBossStage ? '#ff4d4d' : '#ffffff');
     this.killText.setText(`💀 擊殺 ${this.gs.killCount}`);
+    const elapsed = this.gs.getElapsedSeconds();
+    const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const ss = String(elapsed % 60).padStart(2, '0');
+    this.timeText.setText(`⏱ ${mm}:${ss}`);
     this.fpsText.setText(`FPS ${Math.round(this.game.loop.actualFps)}`);
 
     STAT_DEFS.forEach((def) => {
