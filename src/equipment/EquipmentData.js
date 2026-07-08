@@ -172,3 +172,54 @@ export const GACHA_RING_IDS = ['ring_heal', 'ring_auto'];
 
 // 商店排版順序：以部位分欄、階級由低到高分排
 export const SHOP_ITEM_IDS = EQUIP_SLOTS.flatMap((slot) => EQUIP_LINES[slot]);
+
+// 扭蛋機專用裝備：5 部位 x 20 款正式美術圖（assets/equip_<slot>_g01~g20.png），
+// 只能扭蛋抽到、不會出現在商店（不列在 EQUIP_LINES / SHOP_ITEM_IDS 裡）。
+// 1~7 普通／8~12 優秀／13~17 稀有／18~20 史詩，數值依 RARITY_STAT_RANGES 的
+// [下限,上限] 在同一稀有度區間內平均遞增分佈，越後面的編號數值越高。
+const GACHA_STAT_KEY = { weapon: 'attack', helmet: 'defense', clothes: 'maxHp', pants: 'defense', shoes: 'moveSpeed' };
+const GACHA_STAT_LABEL = { attack: '攻擊力', defense: '防禦力', maxHp: '生命上限', moveSpeed: '移動速度' };
+const GACHA_NAME_BASE = {
+  weapon: { common: '訓練劍', uncommon: '精鋼劍', rare: '秘銀劍', epic: '龍紋劍' },
+  helmet: { common: '皮革帽', uncommon: '精鋼盔', rare: '秘銀盔', epic: '龍紋盔' },
+  clothes: { common: '布甲', uncommon: '精鋼鎧', rare: '秘銀鎧', epic: '龍紋鎧' },
+  pants: { common: '布褲', uncommon: '精鋼護腿', rare: '秘銀護腿', epic: '龍紋護腿' },
+  shoes: { common: '布鞋', uncommon: '精鋼靴', rare: '秘銀靴', epic: '龍紋靴' },
+};
+const GACHA_BANDS = [
+  { rarity: 'common', count: 7 },
+  { rarity: 'uncommon', count: 5 },
+  { rarity: 'rare', count: 5 },
+  { rarity: 'epic', count: 3 },
+];
+
+// 把 [min,max] 依 n 等份算出遞增數值（n=1 時直接回傳上限）
+function _spreadRange(min, max, n) {
+  if (n <= 1) return [max];
+  const out = [];
+  for (let k = 0; k < n; k++) out.push(Math.round(min + (max - min) * (k / (n - 1))));
+  return out;
+}
+
+export const GACHA_EQUIPMENT_IDS = [];
+
+EQUIP_SLOTS.forEach((slot) => {
+  const statKey = GACHA_STAT_KEY[slot];
+  let idx = 0;
+  GACHA_BANDS.forEach((band) => {
+    const [lo, hi] = RARITY_STAT_RANGES[statKey][band.rarity];
+    const values = _spreadRange(lo, hi, band.count);
+    values.forEach((val, i) => {
+      idx++;
+      const g = String(idx).padStart(2, '0');
+      const id = `${slot}_g${g}`;
+      EQUIPMENT_DATA[id] = {
+        id, slot, tier: null, tierIndex: 0, prevId: null, rarity: band.rarity,
+        name: `${GACHA_NAME_BASE[slot][band.rarity]}·${i + 1}`,
+        desc: `${GACHA_STAT_LABEL[statKey]} +${val}（僅扭蛋機取得）`,
+        icon: id, bonus: { [statKey]: val },
+      };
+      GACHA_EQUIPMENT_IDS.push(id);
+    });
+  });
+});

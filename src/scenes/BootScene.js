@@ -29,6 +29,16 @@ export default class BootScene extends Phaser.Scene {
         this.load.image(key, `assets/${key}.png`);
       });
     });
+
+    // 扭蛋機專用裝備圖示：5 部位 x 20 款正式美術圖（不在商店販售，只能扭蛋抽到，
+    // 見 EquipmentData.js 的 GACHA_EQUIPMENT_IDS）。
+    for (let i = 1; i <= 20; i++) {
+      const g = String(i).padStart(2, '0');
+      equipSlots.forEach((slot) => {
+        const key = `equip_${slot}_g${g}`;
+        this.load.image(key, `assets/${key}.png`);
+      });
+    }
   }
 
   create() {
