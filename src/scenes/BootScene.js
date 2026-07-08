@@ -20,6 +20,12 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('fx_ice_pillar_evo', 'assets/fx_ice_pillar_evo.png');
     // 玩家角色改用正式美術圖（藍色史萊姆），取代原本程式產生的簡易貼圖
     this.load.image('player_balanced', 'assets/player_slime.png');
+    // 四種戒指改用正式美術圖，取代原本 TextureFactory.generateRingIcons() 畫的
+    // 簡易戒環圖示（已裁切去背、置中塞進 128x128 透明畫布，跟其他裝備圖示同規格）。
+    this.load.image('ring_heal', 'assets/ring_heal.png');
+    this.load.image('ring_auto', 'assets/ring_auto.png');
+    this.load.image('ring_gravity', 'assets/ring_gravity.png');
+    this.load.image('ring_clone', 'assets/ring_clone.png');
 
     const equipSlots = ['weapon', 'helmet', 'clothes', 'pants', 'shoes'];
     const equipTiers = ['beginner', 'mid', 'high'];
