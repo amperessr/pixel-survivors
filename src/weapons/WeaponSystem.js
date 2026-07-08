@@ -1,5 +1,5 @@
 import ObjectPool from '../managers/ObjectPool.js';
-import { getWeaponLevelData, WEAPON_EVOLUTIONS, WEAPON_KNOCKBACK } from './WeaponData.js';
+import { getWeaponLevelData, WEAPON_EVOLUTIONS, WEAPON_KNOCKBACK, WEAPON_FUSIONS, findFusionFor } from './WeaponData.js';
 import { angleTo } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 
@@ -36,7 +36,18 @@ export default class WeaponSystem {
   ownedWeaponIds() { return Object.keys(this.owned); }
   isMaxed(id) { return this.owned[id] >= 5; }
   isEvolved(id) { return !!this.evolved[id]; }
-  canEvolve(id) { return this.owned[id] >= 5 && !this.evolved[id]; }
+  isFusion(id) { return !!WEAPON_FUSIONS[id]; }
+  // 融合武器暫時不開放再進化（之後有需要再開放），所以這裡額外排除掉它
+  canEvolve(id) { return this.owned[id] >= 5 && !this.evolved[id] && !WEAPON_FUSIONS[id]; }
+
+  // 兩把武器都滿 5 級、都還沒進化、也都還不是融合武器本身，且剛好有對應配方
+  // （見 WeaponData.findFusionFor）才能融合。
+  canFuse(idA, idB) {
+    if (!this.isMaxed(idA) || !this.isMaxed(idB)) return false;
+    if (this.evolved[idA] || this.evolved[idB]) return false;
+    if (WEAPON_FUSIONS[idA] || WEAPON_FUSIONS[idB]) return false;
+    return !!findFusionFor(idA, idB);
+  }
 
   addOrUpgrade(id) {
     const newLevel = Math.min((this.owned[id] || 0) + 1, 5);
@@ -55,8 +66,28 @@ export default class WeaponSystem {
     this.scene.spawnEvolveFx(this.player.sprite.x, this.player.sprite.y);
   }
 
-  // 取得「目前實際生效」的武器數值：五級數值 + (若已進化) 進化倍率加成
+  // 融合：把兩把滿級武器「吃掉」，換成一把全新的融合武器（見 WeaponData.WEAPON_FUSIONS）。
+  // 騰出的武器欄位讓玩家後續還能選到沒拿過的其他武器。
+  fuseWeapons(idA, idB) {
+    if (!this.canFuse(idA, idB)) return;
+    const fusion = findFusionFor(idA, idB);
+    delete this.owned[idA];
+    delete this.owned[idB];
+    delete this.nextFireAt[idA];
+    delete this.nextFireAt[idB];
+    this.owned[fusion.id] = 5;
+    this.nextFireAt[fusion.id] = this.scene.time.now;
+    if (idA === 'sawblade' || idB === 'sawblade') this._rebuildSawblades();
+    // 複用進化特效表示「融合完成」，不用另外做一套視覺
+    this.scene.spawnEvolveFx(this.player.sprite.x, this.player.sprite.y);
+  }
+
+  // 取得「目前實際生效」的武器數值：融合武器直接回傳固定數值（沒有等級曲線／
+  // 進化倍率）；一般武器則是五級數值 + (若已進化) 進化倍率加成。
   _getEffectiveData(id) {
+    const fusion = WEAPON_FUSIONS[id];
+    if (fusion) return { ...fusion.stats, isFusion: true };
+
     const base = getWeaponLevelData(id, this.owned[id]);
     if (!this.evolved[id]) return base;
 
@@ -85,6 +116,8 @@ export default class WeaponSystem {
     frost: 0.25,
     knife: 1.0,
     sawblade: 1.0,
+    lightning_knife: 0.6, // 電擊飛刃：飛刀+雷電混血，攻速權重介於兩者之間
+    fireball_frost: 0.2,  // 極端冰火：爆發系融合武器，維持火球/冰霜那種慢而重的手感
   };
 
   _scaledCooldown(id, base) {
@@ -100,7 +133,8 @@ export default class WeaponSystem {
     // 不會因為這 3 秒而額外多等一段冷卻。
     if (!this.scene.attacksLocked) {
       for (const id of Object.keys(this.owned)) {
-        if (id === 'sawblade') continue; // 鋸片為持續環繞傷害，非計時開火
+        // 鋸片／血肉風暴（鋸片融合）都是持續環繞傷害，非計時開火，交給下面的環繞更新處理
+        if (id === 'sawblade' || id === 'knife_sawblade') continue;
         const nextAt = this.nextFireAt[id] || 0;
         if (time >= nextAt) {
           const fired = this._fire(id, time);
@@ -112,26 +146,40 @@ export default class WeaponSystem {
       }
     }
 
-    // 鋸片環繞更新
-    if (this.owned.sawblade) {
-      const data = this._getEffectiveData('sawblade');
+    // 鋸片／血肉風暴環繞更新：血肉風暴是內圈鋸片＋外圈飛刀的雙層環，外圈反向旋轉
+    // （見 _rebuildSawblades() 怎麼幫每個 sprite 標記 ring 0/1），一般鋸片只有一圈。
+    if (this.owned.sawblade || this.owned['knife_sawblade']) {
+      const isDualRing = !!this.owned['knife_sawblade'];
+      const fusionStats = isDualRing ? WEAPON_FUSIONS['knife_sawblade'].stats : null;
+      const data = isDualRing ? null : this._getEffectiveData('sawblade');
+      const baseRot = isDualRing ? fusionStats.rotSpeed : data.rotSpeed;
       // 轉速只受「疾風之刃（攻速）卡片」張數影響（每張 +8%），
       // 不受角色永久能力值或裝備影響。
       const spinCards = this.player.passiveLevels.atkSpeed || 0;
-      const rot = data.rotSpeed * (1 + spinCards * 0.08); // 公轉角速度（繞著玩家轉的速度）
+      const rot = baseRot * (1 + spinCards * 0.08); // 公轉角速度（繞著玩家轉的速度）
       this.sawbladeAngle += rot * (delta / 1000);
-      const n = this.sawbladeSprites.length;
+      const px = this.player.sprite.x, py = this.player.sprite.y;
       // 鋸片「自轉」（貼圖本身的旋轉，純視覺效果，不影響命中判定）改成固定速度、
       // 不再跟攻速倍率掛鉤——之前公轉和自轉共用同一個倍率，攻速一高兩個一起衝，
       // 看起來像失控的電風扇。固定在跟 1 級公轉差不多的速度，任何build下都穩定。
       const selfSpinSpeed = 2.6; // 弧度/秒，約每秒轉 0.41 圈
       const selfSpinDelta = selfSpinSpeed * (delta / 1000);
-      for (let i = 0; i < n; i++) {
-        const ang = this.sawbladeAngle + (i / n) * Math.PI * 2;
-        const sp = this.sawbladeSprites[i];
-        sp.x = this.player.sprite.x + Math.cos(ang) * data.radius;
-        sp.y = this.player.sprite.y + Math.sin(ang) * data.radius;
-        sp.rotation += selfSpinDelta;
+      const inner = this.sawbladeSprites.filter((sp) => (sp.getData('ring') || 0) === 0);
+      const outer = this.sawbladeSprites.filter((sp) => sp.getData('ring') === 1);
+      const placeRing = (sprites, radius, dirMult) => {
+        const n = sprites.length;
+        sprites.forEach((sp, i) => {
+          const ang = this.sawbladeAngle * dirMult + (i / n) * Math.PI * 2;
+          sp.x = px + Math.cos(ang) * radius;
+          sp.y = py + Math.sin(ang) * radius;
+          sp.rotation += selfSpinDelta;
+        });
+      };
+      if (isDualRing) {
+        placeRing(inner, fusionStats.innerRadius, 1);
+        placeRing(outer, fusionStats.outerRadius, -0.8); // 外圈反向、慢一點旋轉，做出雙層絞殺的視覺
+      } else {
+        placeRing(inner, data.radius, 1);
       }
     }
 
@@ -171,6 +219,8 @@ export default class WeaponSystem {
       case 'lightning': this._fireLightning(data, stats, enemy, ox, oy, dmgMult); break;
       case 'knife': this._fireKnife(data, stats, enemy, ox, oy, dmgMult); break;
       case 'frost': this._fireFrost(data, stats, ox, oy, dmgMult); break;
+      case 'lightning_knife': this._fireElectroKnife(data, stats, enemy, ox, oy, dmgMult); break;
+      case 'fireball_frost': this._fireIceFire(data, stats, enemy, ox, oy, dmgMult); break;
     }
   }
 
@@ -300,9 +350,76 @@ export default class WeaponSystem {
     }
   }
 
+  // 帶電飛刀（電擊飛刃）：跟一般飛刀一樣連續投擲，只是命中後會在 GameScene 那邊
+  // 額外對附近一名敵人補一道連鎖閃電（見 GameScene._handleElectroKnifeHit）。
+  _fireElectroKnife(data, stats, enemy, px, py, dmgMult = 1) {
+    const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult;
+    const baseAng = angleTo(px, py, enemy.x, enemy.y);
+    const spread = 0.18;
+    this.scene.spawnCastFx(px, py, 'knife', baseAng, 0, true);
+    for (let i = 0; i < data.count; i++) {
+      const off = (i - (data.count - 1) / 2) * spread;
+      const proj = this.projectilePool.spawn();
+      proj.setTexture('proj_knife');
+      proj.setPosition(px, py);
+      proj.setRotation(baseAng + off);
+      proj.setTint(0x7ef7ff);
+      proj.setData('dmg', dmg);
+      proj.setData('pierce', data.pierce);
+      proj.setData('chainRange', data.chainRange);
+      proj.setData('kind', 'electroKnife');
+      proj.setData('evolved', false);
+      proj.setData('hitSet', new Set());
+      proj.setData('expireAt', this.scene.time.now + 1500);
+      proj.body.setVelocity(Math.cos(baseAng + off) * data.speed, Math.sin(baseAng + off) * data.speed);
+    }
+  }
+
+  // 灼熱冰彈（極端冰火）：飛行方式跟火球一樣，命中爆炸時同時造成範圍傷害＋減速
+  // （見 GameScene._handleIceFireHit）。
+  _fireIceFire(data, stats, enemy, px, py, dmgMult = 1) {
+    const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult;
+    const ang = angleTo(px, py, enemy.x, enemy.y);
+    const proj = this.projectilePool.spawn();
+    proj.setTexture('proj_frost');
+    proj.setPosition(px, py);
+    proj.setScale(1.15);
+    proj.clearTint();
+    proj.setData('dmg', dmg);
+    proj.setData('aoe', data.aoe);
+    proj.setData('slow', data.slow);
+    proj.setData('slowDuration', data.slowDuration);
+    proj.setData('exploded', false);
+    proj.setData('kind', 'iceFire');
+    proj.setData('evolved', false);
+    proj.setData('expireAt', this.scene.time.now + 2500);
+    proj.body.setVelocity(Math.cos(ang) * data.speed, Math.sin(ang) * data.speed);
+    this.scene.spawnCastFx(px, py, 'fireball', ang, 0, false);
+  }
+
+  // 建立鋸片（或血肉風暴的雙層刀陣）的環繞 sprite。每個 sprite 用 'ring' 資料標記
+  // 屬於內圈（0，鋸片）還是外圈（1，飛刀，只有血肉風暴才有），見 update() 怎麼
+  // 分開兩圈各自的半徑跟旋轉方向。
   _rebuildSawblades() {
     for (const sp of this.sawbladeSprites) sp.destroy();
     this.sawbladeSprites = [];
+
+    if (this.owned['knife_sawblade']) {
+      const s = WEAPON_FUSIONS['knife_sawblade'].stats;
+      for (let i = 0; i < s.innerCount; i++) {
+        const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'proj_sawblade');
+        sp.setDepth(6000).setData('kind', 'sawblade').setData('lastHit', new Map()).setData('ring', 0);
+        this.sawbladeSprites.push(sp);
+      }
+      for (let i = 0; i < s.outerCount; i++) {
+        const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'proj_knife');
+        sp.setTint(0xff8f8f);
+        sp.setDepth(6000).setData('kind', 'sawblade').setData('lastHit', new Map()).setData('ring', 1);
+        this.sawbladeSprites.push(sp);
+      }
+      return;
+    }
+
     const data = this._getEffectiveData('sawblade');
     for (let i = 0; i < data.count; i++) {
       const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'proj_sawblade');
@@ -310,11 +427,16 @@ export default class WeaponSystem {
       if (data.evolved) sp.setTint(0xffe066);
       sp.setData('kind', 'sawblade');
       sp.setData('lastHit', new Map());
+      sp.setData('ring', 0);
       this.sawbladeSprites.push(sp);
     }
   }
 
   getSawbladeDamage() {
+    if (this.owned['knife_sawblade']) {
+      const s = WEAPON_FUSIONS['knife_sawblade'].stats;
+      return s.dmg * (1 + this.player.stats.attack * 0.02);
+    }
     if (!this.owned.sawblade) return 0;
     // 攻擊力比照其他武器的公式，同步反映到鋸片傷害上
     const data = this._getEffectiveData('sawblade');

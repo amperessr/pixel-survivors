@@ -313,6 +313,8 @@ export default class GameScene extends Phaser.Scene {
       if (kind === 'fireball') this._handleFireballHit(p, stats);
       else if (kind === 'lightning') this._handleLightningHit(p, stats);
       else if (kind === 'knife') this._handleKnifeHit(p, stats);
+      else if (kind === 'electroKnife') this._handleElectroKnifeHit(p, stats);
+      else if (kind === 'iceFire') this._handleIceFireHit(p, stats);
     });
 
     this._handleSawbladeHits(time, stats);
@@ -391,6 +393,87 @@ export default class GameScene extends Phaser.Scene {
     } else {
       this.weaponSystem.projectilePool.free(p);
     }
+  }
+
+  // 電擊飛刃（融合武器）：命中判定跟一般飛刀完全一樣，差別是命中後會額外對
+  // 附近一名「這把刀還沒命中過」的敵人補一道連鎖閃電（傷害為本體 50%，不吃穿透）。
+  // 連鎖只找小怪（見 _findNearestExcluding 本來就只查 enemySystem），不會打到 Boss。
+  _handleElectroKnifeHit(p, stats) {
+    const hitSet = p.getData('hitSet');
+    let target = null;
+    this.enemySystem.queryNear(p.x, p.y, 14, (e) => {
+      if (target || hitSet.has(e)) return;
+      if (dist(p.x, p.y, e.x, e.y) <= 14) target = e;
+    });
+    let hitBoss = false;
+    if (!target && this.boss && this.boss.alive && !hitSet.has(this.boss) &&
+        dist(p.x, p.y, this.boss.sprite.x, this.boss.sprite.y) <= BOSS_HIT_RADIUS) {
+      hitBoss = true;
+    }
+    if (!target && !hitBoss) return;
+
+    const kb = WEAPON_KNOCKBACK.knife;
+    const dmg = p.getData('dmg');
+    let hitX, hitY;
+    if (hitBoss) {
+      hitSet.add(this.boss);
+      this.boss.takeDamage(dmg, stats.critRate, stats.critDmg);
+      hitX = this.boss.sprite.x; hitY = this.boss.sprite.y;
+    } else {
+      hitSet.add(target);
+      this.enemySystem.damageEnemy(target, dmg, stats.critRate, stats.critDmg, {
+        fromX: p.x, fromY: p.y, force: kb.force, duration: kb.duration,
+      });
+      hitX = target.x; hitY = target.y;
+    }
+    this.spawnImpactFx(hitX, hitY, 'knife', 0, true);
+
+    const chainRange = p.getData('chainRange');
+    const next = this._findNearestExcluding(hitX, hitY, hitSet, chainRange);
+    if (next) {
+      this.enemySystem.damageEnemy(next, dmg * 0.5, stats.critRate, stats.critDmg, null);
+      this.spawnChainLightningFx(hitX, hitY, next.x, next.y, false);
+    }
+
+    const pierce = p.getData('pierce') || 0;
+    if (pierce > 0) {
+      p.setData('pierce', pierce - 1);
+    } else {
+      this.weaponSystem.projectilePool.free(p);
+    }
+  }
+
+  // 灼熱冰彈（融合武器）：命中判定跟火球一樣一撞就炸，範圍內敵人除了照常吃傷害，
+  // 還會被套用跟冰霜一樣的減速效果（見 spawnIcePillar 用的同一套 slowUntil/slowFactor）。
+  _handleIceFireHit(p, stats) {
+    if (p.getData('exploded')) return;
+    const aoe = p.getData('aoe');
+    let triggered = false;
+    this.enemySystem.queryNear(p.x, p.y, 14, (e) => {
+      if (!triggered && dist(p.x, p.y, e.x, e.y) <= 14) triggered = true;
+    });
+    if (!triggered && this.boss && this.boss.alive && dist(p.x, p.y, this.boss.sprite.x, this.boss.sprite.y) <= BOSS_HIT_RADIUS) {
+      triggered = true;
+    }
+    if (!triggered) return;
+
+    p.setData('exploded', true);
+    const kb = WEAPON_KNOCKBACK.frost;
+    const slow = p.getData('slow'), slowDuration = p.getData('slowDuration');
+    this.enemySystem.queryNear(p.x, p.y, aoe, (e) => {
+      if (dist(p.x, p.y, e.x, e.y) > aoe) return;
+      this.enemySystem.damageEnemy(e, p.getData('dmg'), stats.critRate, stats.critDmg, {
+        fromX: p.x, fromY: p.y, force: kb.force, duration: kb.duration,
+      });
+      e.setData('slowUntil', this.time.now + slowDuration);
+      e.setData('slowFactor', 1 - slow);
+    });
+    if (this.boss && this.boss.alive && dist(p.x, p.y, this.boss.sprite.x, this.boss.sprite.y) <= aoe) {
+      this.boss.takeDamage(p.getData('dmg'), stats.critRate, stats.critDmg);
+    }
+    this.spawnImpactFx(p.x, p.y, 'fireball', aoe, false);
+    this.spawnImpactFx(p.x, p.y, 'frost', 0, false);
+    this.weaponSystem.projectilePool.free(p);
   }
 
   // 雷電：用 hitSet 記錄已命中對象，命中後嘗試往附近尚未命中的目標跳躍

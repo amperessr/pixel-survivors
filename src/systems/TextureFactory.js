@@ -45,6 +45,7 @@ export default class TextureFactory {
       ['generateEnemies', () => this.generateEnemies()],
       ['generateBoss', () => this.generateBoss()],
       ['generateWeaponIcons', () => this.generateWeaponIcons()],
+      ['generateFusionWeaponIcons', () => this.generateFusionWeaponIcons()],
       ['generateProjectiles', () => this.generateProjectiles()],
       ['generatePassiveIcons', () => this.generatePassiveIcons()],
       ['generateTiles', () => this.generateTiles()],
@@ -375,6 +376,97 @@ export default class TextureFactory {
         ctx.stroke();
         this._finish(tex);
       }
+    }
+  }
+
+  // ---------- 融合武器圖示（三組：電擊飛刃／血肉風暴／極端冰火）----------
+  // 沿用武器圖示同一套「Canvas 動態繪製」手法，把兩個親代武器的造型/配色疊在
+  // 同一張圖上，讓玩家一眼看出這是「這兩把融合出來的」，不用另外準備美術素材。
+  generateFusionWeaponIcons() {
+    const size = 36;
+
+    // 電擊飛刃：飛刀造型（冰藍色底）疊一道鋸齒閃電（黃色）
+    {
+      const { tex, ctx } = this._canvas('weapon_lightning_knife_lv5', size, size);
+      const cx = size / 2, cy = size / 2, r = size / 2 - 2;
+      const grad = ctx.createRadialGradient(cx, cy, 1, cx, cy, r);
+      grad.addColorStop(0, '#eafcff');
+      grad.addColorStop(1, '#7ef7ff');
+      ctx.fillStyle = grad;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-2.4, -r, 4.8, r * 2);
+      ctx.restore();
+      ctx.strokeStyle = '#ffe94d';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.5, cy - r * 0.7);
+      ctx.lineTo(cx + r * 0.1, cy - r * 0.1);
+      ctx.lineTo(cx - r * 0.15, cy);
+      ctx.lineTo(cx + r * 0.5, cy + r * 0.7);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      this._finish(tex);
+    }
+
+    // 血肉風暴：鋸齒圓（血紅）＋交叉的兩把飛刀（銀色），呼應「內圈鋸片外圈飛刀」
+    {
+      const { tex, ctx } = this._canvas('weapon_knife_sawblade_lv5', size, size);
+      const cx = size / 2, cy = size / 2, r = size / 2 - 2;
+      ctx.fillStyle = '#8a1f1f';
+      ctx.beginPath();
+      const teeth = 8;
+      for (let i = 0; i < teeth * 2; i++) {
+        const ang = (i / (teeth * 2)) * Math.PI * 2;
+        const rr = i % 2 === 0 ? r : r * 0.68;
+        const px = cx + Math.cos(ang) * rr, py = cy + Math.sin(ang) * rr;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#c9d6df';
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-2, -r * 0.85, 4, r * 1.7);
+      ctx.restore();
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(-Math.PI / 4);
+      ctx.fillRect(-2, -r * 0.85, 4, r * 1.7);
+      ctx.restore();
+      ctx.fillStyle = '#3a0f0f';
+      ctx.beginPath(); ctx.arc(cx, cy, r * 0.22, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      this._finish(tex);
+    }
+
+    // 極端冰火：左半火（橘黃）、右半冰（冰藍）對半分色，中線用白光強調交融感
+    {
+      const { tex, ctx } = this._canvas('weapon_fireball_frost_lv5', size, size);
+      const cx = size / 2, cy = size / 2, r = size / 2 - 2;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI / 2, -Math.PI / 2); ctx.closePath(); ctx.clip();
+      const gradFire = ctx.createRadialGradient(cx, cy, 1, cx, cy, r);
+      gradFire.addColorStop(0, '#ffdd55'); gradFire.addColorStop(1, '#ff8a3d');
+      ctx.fillStyle = gradFire;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      ctx.restore();
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, Math.PI / 2); ctx.closePath(); ctx.clip();
+      const gradIce = ctx.createRadialGradient(cx, cy, 1, cx, cy, r);
+      gradIce.addColorStop(0, '#e3faff'); gradIce.addColorStop(1, '#8fe3ff');
+      ctx.fillStyle = gradIce;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      this._finish(tex);
     }
   }
 

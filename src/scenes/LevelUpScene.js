@@ -1,4 +1,4 @@
-import { WEAPON_IDS, WEAPON_DATA, WEAPON_EVOLUTIONS } from '../weapons/WeaponData.js';
+import { WEAPON_IDS, WEAPON_DATA, WEAPON_EVOLUTIONS, findFusionFor } from '../weapons/WeaponData.js';
 import { PASSIVE_IDS, PASSIVE_DATA, MAX_PASSIVE_LEVEL, passiveLevelValue } from '../skills/PassiveData.js';
 import { textStyle } from '../utils/TextStyle.js';
 
@@ -29,11 +29,15 @@ export default class LevelUpScene extends Phaser.Scene {
       if (opt.type === 'evolveWeapon') {
         // 進化選項用金色外框強調，讓玩家一眼認出這是特殊選項
         card.setTint(0xfff3c4);
+      } else if (opt.type === 'fuseWeapon') {
+        // 融合選項用粉紫外框，跟進化的金色區分開，一樣是稀有的特殊選項
+        card.setTint(0xffd0f0);
       }
       const icon = this.add.image(cx, cy - 190, opt.icon).setScale((opt.iconScale || 1.6) * 2.2).setScrollFactor(0);
       if (opt.iconTint) icon.setTint(opt.iconTint);
+      const titleColor = opt.type === 'evolveWeapon' ? '#ffe066' : opt.type === 'fuseWeapon' ? '#ff8fe0' : '#fff';
       this.add.text(cx, cy - 70, opt.title, textStyle({
-        fontSize: '32px', color: opt.type === 'evolveWeapon' ? '#ffe066' : '#fff', align: 'center',
+        fontSize: '32px', color: titleColor, align: 'center',
         wordWrap: { width: cardW - 50, useAdvancedWrap: true },
       })).setOrigin(0.5).setScrollFactor(0);
       this.add.text(cx, cy + 100, opt.desc, textStyle({
@@ -41,8 +45,9 @@ export default class LevelUpScene extends Phaser.Scene {
         wordWrap: { width: cardW - 60, useAdvancedWrap: true },
       })).setOrigin(0.5).setScrollFactor(0);
 
-      card.on('pointerover', () => card.setTint(opt.type === 'evolveWeapon' ? 0xffffff : 0xbfe9ff));
-      card.on('pointerout', () => card.setTint(opt.type === 'evolveWeapon' ? 0xfff3c4 : 0xffffff));
+      const baseTint = opt.type === 'evolveWeapon' ? 0xfff3c4 : opt.type === 'fuseWeapon' ? 0xffd0f0 : 0xffffff;
+      card.on('pointerover', () => card.setTint(0xffffff));
+      card.on('pointerout', () => card.setTint(baseTint));
       card.on('pointerdown', () => this._select(opt));
     });
   }
@@ -82,6 +87,25 @@ export default class LevelUpScene extends Phaser.Scene {
         });
       }
     }
+    // 融合選項：任兩把「都滿級、都還沒進化、都不是融合武器本身」的武器，
+    // 如果剛好有對應配方（見 WeaponData.WEAPON_FUSIONS），就給融合選項——
+    // 融合跟單獨進化互斥（見 WeaponSystem.canEvolve 排除掉融合武器），
+    // 玩家要嘛選其中一把單獨進化、要嘛選融合，是刻意做出的取捨。
+    const fusableIds = Object.keys(owned).filter((id) => this.weaponSystem.isMaxed(id) && !this.weaponSystem.isEvolved(id) && !this.weaponSystem.isFusion(id));
+    for (let i = 0; i < fusableIds.length; i++) {
+      for (let j = i + 1; j < fusableIds.length; j++) {
+        const fusion = findFusionFor(fusableIds[i], fusableIds[j]);
+        if (!fusion) continue;
+        pool.push({
+          type: 'fuseWeapon', idA: fusableIds[i], idB: fusableIds[j],
+          title: `🔥 融合！${fusion.name}`,
+          desc: fusion.desc,
+          icon: fusion.icon,
+          iconTint: 0xff9de0,
+        });
+      }
+    }
+
     // 被動能力選項
     for (const id of PASSIVE_IDS) {
       const lvl = this.gs.player.passiveLevels[id] || 0;
@@ -96,13 +120,14 @@ export default class LevelUpScene extends Phaser.Scene {
       }
     }
 
-    // 隨機挑選 3 個不重複選項；進化選項優先出現（比較稀有、值得凸顯）；
+    // 隨機挑選 3 個不重複選項；進化／融合選項優先出現（比較稀有、值得凸顯，
+    // 兩者一起隨機排序，不會永遠融合蓋過進化或反過來）；
     // 若所有武器都已進化封頂、所有被動也都滿 10 級，選項會不足 3 個——
     // 這種「全部技能都點滿」的情況下，剩餘選項一律補上血包（立即回復生命），
     // 讓玩家不會卡在空白選項，也符合「全滿之後升級變成血包」的設計。
-    const evolveOpts = pool.filter((o) => o.type === 'evolveWeapon');
-    const otherOpts = pool.filter((o) => o.type !== 'evolveWeapon').sort(() => Math.random() - 0.5);
-    const shuffled = [...evolveOpts, ...otherOpts];
+    const specialOpts = pool.filter((o) => o.type === 'evolveWeapon' || o.type === 'fuseWeapon').sort(() => Math.random() - 0.5);
+    const otherOpts = pool.filter((o) => o.type !== 'evolveWeapon' && o.type !== 'fuseWeapon').sort(() => Math.random() - 0.5);
+    const shuffled = [...specialOpts, ...otherOpts];
 
     const picked = [];
     for (const opt of shuffled) {
@@ -126,6 +151,8 @@ export default class LevelUpScene extends Phaser.Scene {
       this.weaponSystem.addOrUpgrade(opt.id);
     } else if (opt.type === 'evolveWeapon') {
       this.weaponSystem.evolveWeapon(opt.id);
+    } else if (opt.type === 'fuseWeapon') {
+      this.weaponSystem.fuseWeapons(opt.idA, opt.idB);
     } else if (opt.type === 'passive') {
       const value = passiveLevelValue(opt.id, 1);
       this.gs.player.applyPassiveBonus(opt.id, value);

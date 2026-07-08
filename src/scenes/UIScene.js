@@ -1,4 +1,4 @@
-import { WEAPON_DATA, WEAPON_EVOLUTIONS } from '../weapons/WeaponData.js';
+import { WEAPON_DATA, WEAPON_EVOLUTIONS, WEAPON_FUSIONS } from '../weapons/WeaponData.js';
 import { EQUIP_SLOTS, RING_SLOTS, EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
 import { PASSIVE_IDS, PASSIVE_DATA } from '../skills/PassiveData.js';
 import { getEquipped } from '../managers/SaveManager.js';
@@ -386,11 +386,16 @@ export default class UIScene extends Phaser.Scene {
       // 疊到「技能」標題那一行去了。
       const y = i * rowH + rowH / 2;
       const evolved = ws.isEvolved(id);
-      const icon = this.add.image(-60, y, `weapon_${id}_lv${owned[id]}`).setDisplaySize(iconSize, iconSize);
+      const fusion = WEAPON_FUSIONS[id];
+      const iconKey = fusion ? fusion.icon : `weapon_${id}_lv${owned[id]}`;
+      const icon = this.add.image(-60, y, iconKey).setDisplaySize(iconSize, iconSize);
       if (evolved) icon.setTint(0xffe066);
-      const labelStr = evolved ? `⭐${WEAPON_EVOLUTIONS[id].name}` : `${WEAPON_DATA[id].name} Lv${owned[id]}`;
+      else if (fusion) icon.setTint(0xff9de0);
+      const labelStr = evolved ? `⭐${WEAPON_EVOLUTIONS[id].name}`
+        : fusion ? `🔥${fusion.name}`
+        : `${WEAPON_DATA[id].name} Lv${owned[id]}`;
       const label = this.add.text(-10, y, labelStr, textStyle({
-        fontSize: '24px', color: evolved ? '#ffe066' : '#fff',
+        fontSize: '24px', color: evolved ? '#ffe066' : fusion ? '#ff9de0' : '#fff',
       })).setOrigin(0, 0.5);
       this.weaponPanel.add([icon, label]);
     });

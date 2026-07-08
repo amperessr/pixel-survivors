@@ -76,6 +76,44 @@ export const WEAPON_DATA = {
   },
 };
 
+// 融合武器：兩把「都滿 5 級、都還沒進化」的武器可以融合成一把全新武器（見
+// WeaponSystem.fuseWeapons）。目前先做三組，數值公式統一是「兩把 5 級數值取平均
+// 再乘 0.75（避免直接相加爆炸性過強）／冷卻取兩者較短再乘 1.1」；範圍/數量類
+// 則是取較大值再放大，讓融合後的武器有明顯的體型/範圍升級感。
+// 暫時不開放融合武器再往上進化——之後有需要再加。
+export const WEAPON_FUSIONS = {
+  lightning_knife: {
+    id: 'lightning_knife',
+    name: '電擊飛刃',
+    parents: ['lightning', 'knife'],
+    desc: '飛刀融合雷電。連續投擲帶電飛刀，命中後會對附近一名敵人補上一道連鎖閃電（傷害為本體 50%）。',
+    icon: 'weapon_lightning_knife_lv5',
+    stats: { dmg: 35, cooldown: 374, count: 5, speed: 500, pierce: 3, chainRange: 130 },
+  },
+  knife_sawblade: {
+    id: 'knife_sawblade',
+    name: '血肉風暴',
+    parents: ['knife', 'sawblade'],
+    desc: '飛刀融合鋸片。環繞身邊形成內外雙層旋轉刀陣，內圈鋸片、外圈飛刀反向旋轉，持續絞碎接觸到的一切。',
+    icon: 'weapon_knife_sawblade_lv5',
+    stats: { dmg: 23, innerCount: 4, outerCount: 4, innerRadius: 54, outerRadius: 92, rotSpeed: 4.2 },
+  },
+  fireball_frost: {
+    id: 'fireball_frost',
+    name: '極端冰火',
+    parents: ['fireball', 'frost'],
+    desc: '火球融合冰霜。發射灼熱冰彈，命中後爆炸造成範圍傷害，並使爆炸範圍內敵人大幅減速。',
+    icon: 'weapon_fireball_frost_lv5',
+    stats: { dmg: 48, cooldown: 935, aoe: 64, speed: 320, slow: 0.44, slowDuration: 1680 },
+  },
+};
+
+// 依兩個武器 id（順序不拘）找出對應的融合配方，找不到回傳 undefined
+export function findFusionFor(idA, idB) {
+  return Object.values(WEAPON_FUSIONS).find((f) =>
+    (f.parents[0] === idA && f.parents[1] === idB) || (f.parents[0] === idB && f.parents[1] === idA));
+}
+
 export function getWeaponLevelData(id, level) {
   const w = WEAPON_DATA[id];
   return { ...w, ...w.levels[Math.min(level, w.levels.length) - 1], level };
