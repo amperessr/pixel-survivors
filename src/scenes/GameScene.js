@@ -637,7 +637,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _togglePause() {
-    if (this.gameEnded || this._awaitingStartSkill) return;
+    if (this.gameEnded || this._awaitingStartSkill || this._confirmingLeave) return;
     this.paused = !this.paused;
     this.escPaused = this.paused;
     if (this.paused) {

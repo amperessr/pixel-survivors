@@ -169,13 +169,7 @@ export default class UIScene extends Phaser.Scene {
     })).setOrigin(0.5).setScrollFactor(0);
     menuBtn.on('pointerover', () => menuBtn.setTint(0xfff3d0));
     menuBtn.on('pointerout', () => menuBtn.clearTint());
-    menuBtn.on('pointerdown', () => {
-      ['LevelUpScene', 'RelicChoiceScene', 'StartSkillScene'].forEach((key) => {
-        if (this.scene.isActive(key)) this.scene.stop(key);
-      });
-      this.scene.stop('GameScene');
-      this.scene.start('MainMenuScene');
-    });
+    menuBtn.on('pointerdown', () => this._showLeaveConfirm());
 
     // ---- 畫面邊緣指示箭頭：血包（紅）／磁鐵（藍紫）不在畫面內時，指出方向 ----
     this.healthArrow = this.add.image(0, 0, 'ui_arrow').setTint(0xff5a5a).setScale(1.1)
@@ -190,6 +184,62 @@ export default class UIScene extends Phaser.Scene {
       fontSize: '64px', color: '#fff', align: 'center',
     })).setOrigin(0.5);
     this.pauseOverlay.add([dim, txt]);
+
+    // ---- 離開確認彈窗：按「返回主選單」不會立刻離開，先跳出提示，
+    // 避免手滑誤按就白白丟掉這局的擊殺金幣/關卡進度 ----
+    this.confirmOverlay = this.add.container(0, 0).setScrollFactor(0).setDepth(50100).setVisible(false);
+    const confirmDim = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.7).setInteractive();
+    const confirmText = this.add.text(w / 2, h / 2 - 60, '確定要離開嗎？\n（會結算當前紀錄）', textStyle({
+      fontSize: '40px', color: '#fff', align: 'center',
+    })).setOrigin(0.5);
+    const yesBtn = this.add.image(w / 2 - 110, h / 2 + 60, 'ui_button_parchment')
+      .setDisplaySize(180, 60).setInteractive({ useHandCursor: true });
+    const yesText = this.add.text(w / 2 - 110, h / 2 + 60, '確定', textStyle({
+      fontSize: '26px', color: '#3a2413',
+    })).setOrigin(0.5);
+    const noBtn = this.add.image(w / 2 + 110, h / 2 + 60, 'ui_button_parchment')
+      .setDisplaySize(180, 60).setInteractive({ useHandCursor: true });
+    const noText = this.add.text(w / 2 + 110, h / 2 + 60, '取消', textStyle({
+      fontSize: '26px', color: '#3a2413',
+    })).setOrigin(0.5);
+    yesBtn.on('pointerover', () => yesBtn.setTint(0xfff3d0));
+    yesBtn.on('pointerout', () => yesBtn.clearTint());
+    noBtn.on('pointerover', () => noBtn.setTint(0xfff3d0));
+    noBtn.on('pointerout', () => noBtn.clearTint());
+    yesBtn.on('pointerdown', () => this._confirmLeave());
+    noBtn.on('pointerdown', () => this._cancelLeaveConfirm());
+    this.confirmOverlay.add([confirmDim, confirmText, yesBtn, yesText, noBtn, noText]);
+  }
+
+  // 按「返回主選單」先跳確認彈窗，暫停遊戲避免確認期間繼續受傷/死亡
+  _showLeaveConfirm() {
+    if (this.gs.gameEnded) return;
+    this._leaveConfirmResumeAfter = !this.gs.paused;
+    this.gs._confirmingLeave = true;
+    this.gs.paused = true;
+    this.gs.physics.world.pause();
+    this.confirmOverlay.setVisible(true);
+  }
+
+  _cancelLeaveConfirm() {
+    this.confirmOverlay.setVisible(false);
+    this.gs._confirmingLeave = false;
+    if (this._leaveConfirmResumeAfter) {
+      this.gs.paused = false;
+      this.gs.physics.world.resume();
+      this.gs.player.clearBankedInput();
+    }
+  }
+
+  // 確定離開：跟關掉分頁/正常死亡一樣，先把這局的擊殺金幣、關卡進度存起來，
+  // 不讓玩家白打——重用 GameScene 掛在 beforeunload/pagehide 上的同一套存檔邏輯。
+  _confirmLeave() {
+    this.gs._saveOnExit();
+    ['LevelUpScene', 'RelicChoiceScene', 'StartSkillScene'].forEach((key) => {
+      if (this.scene.isActive(key)) this.scene.stop(key);
+    });
+    this.scene.stop('GameScene');
+    this.scene.start('MainMenuScene');
   }
 
   update() {
