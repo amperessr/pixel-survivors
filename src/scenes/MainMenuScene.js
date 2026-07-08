@@ -98,23 +98,35 @@ export default class MainMenuScene extends Phaser.Scene {
     logoutBtn.on('pointerdown', () => logout());
 
     // ---- 右側：排行榜 + 更新日誌，各自用面板框起來 ----
+    // 面板高度原本是寫死的數字，內容一多（例如排行榜真的湊滿 10 筆、更新日誌又加了
+    // 新項目）就會超出面板框。改成先把內文文字排好量出實際高度，面板框跟著內容大小
+    // 自動撐開，兩塊面板再依序往下疊，之後不管內容再怎麼增減都不會再超框。
     const rightX = w - 260;
     const panelW = 480;
+    const HEADER_H = 68; // 標題文字＋分隔線，到內文開始畫的距離
+    const BOTTOM_PAD = 24; // 內文結束到面板下緣的留白
 
-    const lbPanelY = h * 0.24;
-    const lbPanelH = 340;
+    // 排行榜固定用 10 行的高度來量（TOP10 上限），不管當下實際筆數多少，
+    // 面板大小都是一致的，不會因為排行榜資料還沒載入完就忽大忽小。
+    const lbBodyStyle = { fontSize: '21px', color: '#cfe9ff', align: 'center', lineSpacing: 7 };
+    const lbMeasure = this.add.text(0, 0, Array(10).fill('讀取排行榜中...').join('\n'), textStyle(lbBodyStyle)).setVisible(false);
+    const lbBodyH = lbMeasure.height;
+    lbMeasure.destroy();
+    const lbPanelH = HEADER_H + lbBodyH + BOTTOM_PAD;
+    const lbPanelTop = 170; // 面板頂端固定位置，不隨內容高度變動
+    const lbPanelY = lbPanelTop + lbPanelH / 2;
+
     this.add.image(rightX, lbPanelY, 'ui_panel').setDisplaySize(panelW, lbPanelH);
     this.add.rectangle(rightX, lbPanelY, panelW - 6, lbPanelH - 6).setStrokeStyle(3, 0x6fd3ff, 0.7).setFillStyle(0, 0);
     this.add.text(rightX, lbPanelY - lbPanelH / 2 + 28, '🏆 排行榜 TOP10', textStyle({
       fontSize: '26px', color: '#ffd93d',
     })).setOrigin(0.5);
     this.add.rectangle(rightX, lbPanelY - lbPanelH / 2 + 52, panelW - 60, 2, 0x6fd3ff, 0.4);
-    this.lbText = this.add.text(rightX, lbPanelY - lbPanelH / 2 + 68, '讀取排行榜中...', textStyle({
-      fontSize: '21px', color: '#cfe9ff', align: 'center', lineSpacing: 7,
-    })).setOrigin(0.5, 0);
+    this.lbText = this.add.text(rightX, lbPanelY - lbPanelH / 2 + HEADER_H, '讀取排行榜中...', textStyle(lbBodyStyle)).setOrigin(0.5, 0);
 
     // 更新日誌：簡單列出近期幾項重點更新，方便玩家知道遊戲還在持續開發（新的排在上面）
     const CHANGELOG = [
+      '🆕 關卡改成擊殺數推進，魔王關要打贏魔王才能過關',
       '🆕 新增永久等級系統，升級可投資爆擊率',
       '🆕 新增帳號密碼系統，跨裝置同步存檔進度',
       '🆕 五魔王輪流登場，各有專屬技能與外觀',
@@ -123,18 +135,23 @@ export default class MainMenuScene extends Phaser.Scene {
       '🆕 新增背包與商店，擊殺數可換金幣購買裝備',
       '🆕 新增遺物系統：擊敗魔王可獲得永久強化',
     ];
-    const logPanelH = 320;
+    const logBodyStyle = {
+      fontSize: '19px', color: '#e6e6e6', align: 'left', lineSpacing: 12,
+      wordWrap: { width: panelW - 60, useAdvancedWrap: true },
+    };
+    const logMeasure = this.add.text(0, 0, CHANGELOG.join('\n'), textStyle(logBodyStyle)).setVisible(false);
+    const logBodyH = logMeasure.height;
+    logMeasure.destroy();
+    const logPanelH = HEADER_H + logBodyH + BOTTOM_PAD;
     const logPanelY = lbPanelY + lbPanelH / 2 + 30 + logPanelH / 2;
+
     this.add.image(rightX, logPanelY, 'ui_panel').setDisplaySize(panelW, logPanelH);
     this.add.rectangle(rightX, logPanelY, panelW - 6, logPanelH - 6).setStrokeStyle(3, 0xffe066, 0.7).setFillStyle(0, 0);
     this.add.text(rightX, logPanelY - logPanelH / 2 + 28, '📜 更新日誌', textStyle({
       fontSize: '26px', color: '#ffe066',
     })).setOrigin(0.5);
     this.add.rectangle(rightX, logPanelY - logPanelH / 2 + 52, panelW - 60, 2, 0xffe066, 0.4);
-    this.add.text(rightX, logPanelY - logPanelH / 2 + 68, CHANGELOG.join('\n'), textStyle({
-      fontSize: '19px', color: '#e6e6e6', align: 'left', lineSpacing: 12,
-      wordWrap: { width: panelW - 60, useAdvancedWrap: true },
-    })).setOrigin(0.5, 0);
+    this.add.text(rightX, logPanelY - logPanelH / 2 + HEADER_H, CHANGELOG.join('\n'), textStyle(logBodyStyle)).setOrigin(0.5, 0);
 
     this._unsubLeaderboard = subscribeLeaderboard((rows) => {
       if (!this.lbText || !this.lbText.active) return;

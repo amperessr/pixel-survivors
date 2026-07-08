@@ -14,10 +14,10 @@ import { dist } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 
-// Boss 固定在第 5、10、15...關「一開始」就出現，用關卡數（不是存活分鐘數）反推
-// 觸發時間點——直接拿「每 5 分鐘」換算會因為關卡從第 1 關（而不是第 0 關）開始算，
-// 跟關卡顯示差了一整關，變成王在第 6、11、16...關才出現，慢了一拍。
+// 關卡推進規則：一般關（非 5 的倍數）擊殺滿 KILLS_PER_STAGE 隻小怪就進到下一關；
+// 魔王關（第 5、10、15...關）改成打死魔王才會進到下一關，見 registerKill()/onBossDefeated()。
 const BOSS_STAGE_INTERVAL = 5;
+const KILLS_PER_STAGE = 300;
 // Boss 現在體型大幅放大，命中/接觸判定半徑也要跟著放大，這裡統一定義方便调整
 const BOSS_HIT_RADIUS = 46;   // 子彈命中 Boss 的判定半徑
 const BOSS_TOUCH_RADIUS = 76; // Boss 對玩家造成接觸傷害的判定半徑
@@ -28,9 +28,8 @@ export default class GameScene extends Phaser.Scene {
 
   init(data) {
     this.characterId = data.characterId || 'balanced';
-    // 存檔點：從主選單選擇「當前關卡」或「往前十關」時會帶入 startStage，
-    // 讓這場遊戲一開局就等同於「已經存活到第 N 關」的難度（怪物強度／Boss 生成
-    // 時間都是照存活分鐘數算的，見下面 create() 怎麼往回推 startTime）。
+    // 存檔點：從主選單選擇「當前關卡」時會帶入 startStage，讓這場遊戲一開局就等同於
+    // 「已經抵達第 N 關」的難度（怪物強度曲線見 create() 怎麼設定 this.stage）。
     // 沒有帶值就是預設從第 1 關開始（一般模式）。
     this.startStage = Math.max(1, Math.floor(data.startStage || 1));
     // 除錯用：暫時印出主選單實際傳進來的 startStage，方便排查「點第一關卻從別的關卡開始」的問題，
@@ -57,15 +56,16 @@ export default class GameScene extends Phaser.Scene {
     this.bossBoltGroup = this.physics.add.group();
     this.boss = null;
 
-    // 存檔點：把 startTime 往回推，讓「存活分鐘數」（怪物強度／Boss 生成都是照這個算的）
-    // 從一開局就等於 startStage 對應的關卡數，而不用真的重新玩過前面的關卡。
-    const elapsedAtStartMs = (this.startStage - 1) * 60000;
-    this.startTime = this.time.now - elapsedAtStartMs;
-    // 補上「理論上應該已經打過幾隻王」的計數，讓黑藍/血色紅龍的輪替從這關開始算才對；
-    // 下一隻王訂在下一個「第 5 的倍數」關卡一開始的時間點，不會因為往回推了 startTime
-    // 就讓好幾隻王在一開局同一瞬間排隊出現。
+    // getElapsedSeconds() 純粹用來算分數的存活時間加成，跟關卡推進無關（關卡推進改成
+    // 擊殺數／擊敗魔王驅動，見下面 this.stage）。
+    this.startTime = this.time.now;
+    // 關卡系統：this.stage 是目前關卡數，一般關擊殺滿 KILLS_PER_STAGE 隻小怪
+    // （this.stageKillCount）就進下一關；魔王關要打死魔王才會進下一關（見 onBossDefeated）。
+    this.stage = this.startStage;
+    this.stageKillCount = 0;
+    // 補上「理論上應該已經打過幾隻王」的計數，讓黑藍/血色紅龍…五種型態的輪替
+    // 從存檔點那一關開始算才對，不會每次都從黑龍王重新輪起。
     this.bossSpawnCount = Math.floor((this.startStage - 1) / BOSS_STAGE_INTERVAL);
-    this.nextBossAt = ((this.bossSpawnCount + 1) * BOSS_STAGE_INTERVAL - 1) * 60000;
 
     this.killCount = 0;
     this.bossKillCount = 0; // 擊殺魔王數：結算時每隻額外加分
@@ -82,7 +82,6 @@ export default class GameScene extends Phaser.Scene {
     // 上一場死亡時已經把它設成 true，沒重設的話下一場一開局就已經是「遊戲已結束」的狀態。
     this.gameEnded = false;
     this._wentToGameOver = false;
-    this._lastCheckpointStage = 0;
 
     // 滑鼠瞄準方向（用於飛刀等以滑鼠為準的武器，此處以世界座標更新提供 UI 之用）
     this.input.on('pointermove', () => {});
@@ -266,15 +265,10 @@ export default class GameScene extends Phaser.Scene {
     this._updateClone(time, delta);
     this.map.update(this.player.sprite.x, this.player.sprite.y);
 
-    // 每滿 5 關就記錄一次存檔點（只會往前推進，見 SaveManager.setCheckpointStage）
-    const stage = this.getStage();
-    if (stage % 5 === 0 && stage !== this._lastCheckpointStage) {
-      this._lastCheckpointStage = stage;
-      setCheckpointStage(stage);
-    }
-
-    const elapsedMin = (time - this.startTime) / 60000;
-    this.enemySystem.setDifficultyMinutes(elapsedMin);
+    // 怪物強度／菁英稀有機率曲線沿用原本依「難度數值」計算的公式（EnemyData.js），
+    // 只是現在難度數值改成「目前關卡數 - 1」，不再是存活分鐘數——關卡本身已經改成
+    // 擊殺數／擊敗魔王驅動，用關卡數當難度指標剛好跟推進速度掛鉤，不用另外重寫曲線。
+    this.enemySystem.setDifficultyMinutes(this.stage - 1);
     this.enemySystem.update(time, delta);
     this.healthPackSystem.update(time, delta);
     this.magnetSystem.update(time);
@@ -284,14 +278,13 @@ export default class GameScene extends Phaser.Scene {
 
     if (this.boss) {
       this.boss.update(time, delta);
-    } else if (time - this.startTime > this.nextBossAt) {
-      // 每 5 關（第 5、10、15...關）出現一隻 Boss，五種型態輪流出現：
-      // 黑藍巨龍 → 血色紅龍 → 惡魔王 → 樹王 → 獅鷲王 → 黑藍巨龍……依序循環
+    } else if (this.isBossStage(this.stage)) {
+      // 進到魔王關（第 5、10、15...關）立刻生成王，五種型態輪流出現：
+      // 黑龍王 → 血色紅龍 → 惡魔王 → 樹王 → 獅鷲王 → 黑龍王……依序循環
       const BOSS_ROTATION = ['blue', 'red', 'demon', 'treant', 'griffin'];
       const bossType = BOSS_ROTATION[this.bossSpawnCount % BOSS_ROTATION.length];
       this.bossSpawnCount++;
-      this.nextBossAt = ((this.bossSpawnCount + 1) * BOSS_STAGE_INTERVAL - 1) * 60000;
-      this.boss = new Boss(this, this.player, elapsedMin, bossType, this.bossSpawnCount);
+      this.boss = new Boss(this, this.player, this.stage - 1, bossType, this.bossSpawnCount);
     }
 
     this.bossBoltGroup.children.iterate((bolt) => {
@@ -486,7 +479,22 @@ export default class GameScene extends Phaser.Scene {
     return best;
   }
 
-  registerKill() { this.killCount++; }
+  registerKill() {
+    this.killCount++;
+    // 魔王關不靠擊殺小怪數推進（要打死魔王才會進下一關，見 onBossDefeated），
+    // 這裡只負責一般關卡的小怪擊殺數累計。
+    if (this.isBossStage(this.stage)) return;
+    this.stageKillCount++;
+    if (this.stageKillCount >= KILLS_PER_STAGE) this._advanceStage();
+  }
+
+  // 關卡推進：一般關擊殺數達標，或魔王關打死魔王時呼叫。存檔點跟著更新到「玩家目前
+  // 抵達的關卡」（只會往前推進，見 SaveManager.setCheckpointStage 的實作）。
+  _advanceStage() {
+    this.stage++;
+    this.stageKillCount = 0;
+    setCheckpointStage(this.stage);
+  }
 
   onGainExp(amount) {
     if (this.gameEnded) return false; // 遊戲已經結束就不要再處理升級（避免死後還跳升級選單）
@@ -539,6 +547,7 @@ export default class GameScene extends Phaser.Scene {
     this.boss = null;
     this.registerKill();
     this.bossKillCount++; // 結算時每隻魔王額外加 1000 分
+    this._advanceStage(); // 魔王關要打死魔王才會進下一關
     // 魔王 100% 掉落血包（一般小怪是 10% 機率，見 EnemySystem._killEnemy）
     if (this.healthPackSystem && bossX != null) {
       this.healthPackSystem.forceSpawn(bossX, bossY, true);
@@ -692,15 +701,14 @@ export default class GameScene extends Phaser.Scene {
     return Math.floor((this.time.now - this.startTime) / 1000);
   }
 
-  // 關卡系統：1 分鐘 = 1 關（從第 1 關開始），每 5 關（5、10、15...）是魔王關。
-  // 這只是「顯示層」的換算，底層難度曲線／Boss 生成計時器都還是照原本的存活分鐘數走，
-  // 兩者剛好對得上（每 5 分鐘一隻王 = 每 5 關一隻王），不用另外重寫一套邏輯。
+  // 關卡系統：一般關擊殺滿 KILLS_PER_STAGE 隻小怪、魔王關打死魔王才會推進（見
+  // registerKill()/onBossDefeated()/_advanceStage()），this.stage 就是目前關卡數本身。
   getStage() {
-    return Math.floor(this.getElapsedSeconds() / 60) + 1;
+    return this.stage;
   }
 
-  isBossStage(stage = this.getStage()) {
-    return stage % 5 === 0;
+  isBossStage(stage = this.stage) {
+    return stage % BOSS_STAGE_INTERVAL === 0;
   }
 
   // ================= 特效輔助 =================

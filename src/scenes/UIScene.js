@@ -278,7 +278,11 @@ export default class UIScene extends Phaser.Scene {
 
     const stage = this.gs.getStage();
     const isBossStage = this.gs.isBossStage(stage);
-    this.stageText.setText(isBossStage ? `💀 第 ${stage} 關` : `第 ${stage} 關`);
+    // 魔王關顯示「打死魔王才能過關」的提示；一般關顯示擊殺進度（目前/300），
+    // 讓玩家看得出關卡是靠擊殺數推進的，不用自己去猜門檻在哪
+    this.stageText.setText(isBossStage
+      ? `💀 第 ${stage} 關（擊敗魔王）`
+      : `第 ${stage} 關（${this.gs.stageKillCount}/300）`);
     this.stageText.setColor(isBossStage ? '#ff4d4d' : '#ffffff');
     this.killText.setText(`💀 擊殺 ${this.gs.killCount}`);
     this.fpsText.setText(`FPS ${Math.round(this.game.loop.actualFps)}`);

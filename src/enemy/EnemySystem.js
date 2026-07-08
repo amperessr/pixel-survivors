@@ -325,4 +325,14 @@ export default class EnemySystem {
     this.pool.freeAll();
     this.expGemPool.freeAll();
   }
+
+  // 魔王登場開場用：把場上所有小怪照正常擊殺流程一次清空（掉經驗寶石、播特效、
+  // 計入總擊殺數），跟 clearAll() 的差別是這裡是「殺死」而不是單純消失不見。
+  // 先拍一份快照再逐一擊殺，避免在遍歷 Set 的同時又被 _killEnemy() 內部的
+  // pool.free() 修改同一個 Set 造成漏殺。
+  killAllActive() {
+    for (const enemy of Array.from(this.pool.active)) {
+      this._killEnemy(enemy);
+    }
+  }
 }

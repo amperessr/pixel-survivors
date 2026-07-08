@@ -4,7 +4,7 @@ export const RELICS = {
   dragonAura: {
     id: 'dragonAura',
     name: '龍之光環',
-    subtitle: '擊敗黑藍巨龍的獎賞',
+    subtitle: '擊敗黑龍王的獎賞',
     desc: '生命上限與攻擊力\n永久提升 2 倍！\n身上會持續纏繞金色龍息氣場',
     // 用真正的黑龍美術圖（574x320，橫向構圖），iconScale 另外調過比例，
     // 不能沿用舊的方形貼圖縮放倍率，不然會爆版蓋住整張卡片。

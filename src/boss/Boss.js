@@ -21,7 +21,8 @@ const BOSS_TOUCH_RADIUS = 100;   // Boss 對玩家造成接觸傷害的判定半
 // onBossDefeated() 已經會對 falsy relicId 直接跳過遺物選擇，不影響擊殺獎勵。
 const BOSS_TYPES = {
   blue: {
-    label: '⚠ 黑藍巨龍降臨！ ⚠',
+    name: '黑龍王',
+    label: '⚠ 黑龍王降臨！ ⚠',
     labelColor: '#6fd3ff',
     texture: 'boss_black',
     aoeColor: 0x3355ff,
@@ -36,6 +37,7 @@ const BOSS_TYPES = {
     skillLabels: { charge: '⚠ 衝刺！', claw: '⚠ 龍爪！', breath: '⚠ 龍息！' },
   },
   red: {
+    name: '血色紅龍',
     label: '⚠ 血色紅龍降臨！ ⚠',
     labelColor: '#ff6a3d',
     texture: 'boss_red',
@@ -51,6 +53,7 @@ const BOSS_TYPES = {
     skillLabels: { charge: '⚠ 衝刺！', claw: '⚠ 龍爪！', breath: '⚠ 龍息！' },
   },
   demon: {
+    name: '惡魔王',
     label: '⚠ 惡魔王降臨！ ⚠',
     labelColor: '#d18aff',
     texture: 'boss_demon',
@@ -69,6 +72,7 @@ const BOSS_TYPES = {
     scale: 0.62, // 原始圖接近正方形（不像龍那麼寬扁），縮小一點避免體型看起來比龍誇張
   },
   treant: {
+    name: '樹王',
     label: '⚠ 樹王降臨！ ⚠',
     labelColor: '#8fe36a',
     texture: 'boss_treant',
@@ -87,6 +91,7 @@ const BOSS_TYPES = {
     scale: 0.61, // 原始圖接近正方形，縮小一點避免體型看起來比龍誇張
   },
   griffin: {
+    name: '獅鷲王',
     label: '⚠ 獅鷲王降臨！ ⚠',
     labelColor: '#ffd24d',
     texture: 'boss_griffin',
@@ -127,7 +132,7 @@ function bossStrengthMultiplier(bossIndex) {
   return b;
 }
 
-// Boss 系統：目前有四種型態（黑藍巨龍／血色紅龍／惡魔王／樹王），各自三招技能、
+// Boss 系統：目前有五種型態（黑龍王／血色紅龍／惡魔王／樹王／獅鷲王），各自三招技能、
 // 血條與死亡動畫共用同一套邏輯。bossType 決定外觀、技能組合（見 BOSS_TYPES.skills）
 // 以及死亡後提供的遺物種類；bossIndex 決定強度倍率（見上方 bossStrengthMultiplier）。
 export default class Boss {
@@ -189,6 +194,35 @@ export default class Boss {
     scene.tweens.add({ targets: shadow, scale: 3.2, alpha: 0, duration: 500, onComplete: () => shadow.destroy() });
 
     audioManager.bossRoar();
+
+    this._playIntroCinematic(x, y);
+  }
+
+  // 魔王登場開場：鏡頭在 1 秒內轉去對準魔王（脫離跟隨玩家），畫面中央跳出紅色警告字
+  // 「XX已出現」，同時把場上所有小怪一次清空（照正常擊殺流程走，一樣掉經驗寶石／
+  // 特效，只是不算進本關擊殺數——見 GameScene.registerKill() 對魔王關的判斷），
+  // 讓玩家可以乾淨地面對魔王。整段開場（含警告字停留時間）共 3 秒，結束後鏡頭
+  // 才恢復跟隨玩家。
+  _playIntroCinematic(bx, by) {
+    const scene = this.scene;
+    const cam = scene.cameras.main;
+
+    cam.stopFollow();
+    cam.pan(bx, by, 1000, 'Sine.easeInOut');
+
+    const warnText = scene.add.text(cam.width / 2, cam.height / 2 - 220, `⚠ ${this.typeDef.name}已出現 ⚠`, textStyle({
+      fontSize: '56px', color: '#ff2020', fontStyle: 'bold', stroke: '#000000', strokeThickness: 8,
+    })).setOrigin(0.5).setScrollFactor(0).setDepth(40000);
+    scene.tweens.add({ targets: warnText, scale: 1.12, duration: 280, yoyo: true, repeat: 5 });
+    scene.time.delayedCall(3000, () => warnText.destroy());
+
+    if (scene.enemySystem) scene.enemySystem.killAllActive();
+
+    scene.time.delayedCall(3000, () => {
+      if (scene.player && scene.player.sprite && scene.player.sprite.active) {
+        cam.startFollow(scene.player.sprite, true, 0.12, 0.12);
+      }
+    });
   }
 
   update(time, delta) {
