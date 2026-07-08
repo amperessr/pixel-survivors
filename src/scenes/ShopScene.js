@@ -3,6 +3,7 @@ import {
 } from '../equipment/EquipmentData.js';
 import { getGold, spendGold, addGold, isItemOwned, upgradeEquipment } from '../managers/SaveManager.js';
 import { textStyle } from '../utils/TextStyle.js';
+import { createRarityFrame } from '../utils/RarityFrame.js';
 
 const GACHA_SINGLE_PRICE = 1000;
 const GACHA_TEN_PRICE = 9000;
@@ -130,11 +131,10 @@ export default class ShopScene extends Phaser.Scene {
 
     this.gridContainer.add(this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH));
 
-    // 稀有度外框：貼著卡片邊緣描一圈對應顏色的框線，一眼就能分辨階級
-    // （普通/優秀/稀有/史詩/傳說/神話，見 EquipmentData.js 的 RARITY_DATA）。
+    // 稀有度外框：每個階級有各自的視覺樣式（見 RarityFrame.js），一眼就能分辨階級。
     const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
-    const frame = this.add.rectangle(cx, cy, cardW - 6, cardH - 6)
-      .setStrokeStyle(3, rarity.color, owned ? 0.35 : 0.9).setFillStyle(0, 0);
+    const frame = createRarityFrame(this, cx, cy, cardW - 6, cardH - 6, def.rarity);
+    if (owned) frame.setAlpha(0.35);
     this.gridContainer.add(frame);
 
     const iconY = cy - 65;

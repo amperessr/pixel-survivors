@@ -1,4 +1,5 @@
 import { EQUIPMENT_DATA, EQUIP_SLOTS, RING_SLOTS, SLOT_LABELS, RARITY_DATA } from '../equipment/EquipmentData.js';
+import { createRarityFrame } from '../utils/RarityFrame.js';
 import {
   getInventory, setInventory, getEquipped, setEquipped, getGold,
   getStatLevel, getStatExp, getStatExpToNext, getStatPoints, getStatInvest,
@@ -293,9 +294,7 @@ export default class InventoryScene extends Phaser.Scene {
       const bg = this.equipSlotImgs[slot];
       if (itemId && EQUIPMENT_DATA[itemId]) {
         const def = EQUIPMENT_DATA[itemId];
-        const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
-        const frame = this.add.rectangle(bg.x, bg.y, SLOT_SIZE + 6, SLOT_SIZE + 6)
-          .setStrokeStyle(3, rarity.color, 0.95).setFillStyle(0, 0).setDepth(11);
+        const frame = createRarityFrame(this, bg.x, bg.y, SLOT_SIZE + 6, SLOT_SIZE + 6, def.rarity).setDepth(11);
         this.equipRarityFrames[slot] = frame;
         // 圖示是 128x128 的正式美術圖，縮放倍率調大讓圖示確實填滿欄位方框，
         // 不再看起來小小一顆飄在方框中間。
@@ -315,9 +314,7 @@ export default class InventoryScene extends Phaser.Scene {
       if (itemId && EQUIPMENT_DATA[itemId]) {
         const def = EQUIPMENT_DATA[itemId];
         const bg = this.slotBgs[idx];
-        const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
-        this.slotRarityFrames[idx] = this.add.rectangle(bg.x, bg.y, bg.displayWidth - 2, bg.displayHeight - 2)
-          .setStrokeStyle(3, rarity.color, 0.95).setFillStyle(0, 0);
+        this.slotRarityFrames[idx] = createRarityFrame(this, bg.x, bg.y, bg.displayWidth - 2, bg.displayHeight - 2, def.rarity);
         // 背包格圖示縮放倍率調大，讓圖示填滿格子（原本 0.34 太小，格子裡空太多）。
         const icon = this.add.image(bg.x, bg.y, def.icon).setScale(0.47);
         icon.setInteractive({ useHandCursor: true, draggable: true });
