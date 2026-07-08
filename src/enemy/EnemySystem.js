@@ -3,7 +3,7 @@ import { ENEMY_TYPES, ENEMY_IDS, ENEMY_TIERS, rollEnemyTier, enemyScalingMultipl
 import { dist, choice, randRange } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 
-const MAX_ENEMIES = 500;
+const MAX_ENEMIES = 800; // 原本 500 隻上限打起來太稀疏，拉高讓畫面塞得下更多小怪
 const GRID_SIZE = 96; // 空間網格邊長：把場上怪物依座標分桶，碰撞判定只需查附近幾個格子
 
 export default class EnemySystem {
@@ -11,7 +11,7 @@ export default class EnemySystem {
     this.scene = scene;
     this.player = player;
     this.difficultyMinutes = 0;
-    this.spawnInterval = 600; // 出怪節奏加快（原 900ms 一波，玩家反應太慢熱）
+    this.spawnInterval = 420; // 出怪節奏再加快（原 600ms 一波，小怪密度太低、爽感不夠）
     this.lastSpawn = 0;
     this.grid = new Map(); // "gx,gy" -> [enemy, ...]，每幀重建一次
 
@@ -212,8 +212,9 @@ export default class EnemySystem {
 
   _spawnWave() {
     const px = this.player.sprite.x, py = this.player.sprite.y;
-    // 每波數量也加快成長（原 3 + 分鐘*1.3、上限 14），配合縮短的出怪間隔
-    const count = Math.min(4 + Math.floor(this.difficultyMinutes * 1.6), 18);
+    // 每波數量再往上拉（原 4 + 難度*1.6、上限 18），配合更短的出怪間隔，
+    // 讓場面從一開始就有足夠的小怪密度，打起來才有爽感
+    const count = Math.min(9 + Math.floor(this.difficultyMinutes * 2.2), 30);
     const { min, max } = this._computeSpawnRadius();
     for (let i = 0; i < count; i++) {
       if (this.pool.activeCount >= MAX_ENEMIES) break;

@@ -94,16 +94,21 @@ export default class WeaponSystem {
   }
 
   update(time, delta) {
-    // 依照擁有的武器，逐一檢查是否可以開火（取代舊版基於 Timer 的作法）
-    for (const id of Object.keys(this.owned)) {
-      if (id === 'sawblade') continue; // 鋸片為持續環繞傷害，非計時開火
-      const nextAt = this.nextFireAt[id] || 0;
-      if (time >= nextAt) {
-        const fired = this._fire(id, time);
-        const data = this._getEffectiveData(id);
-        const cooldown = this._scaledCooldown(id, data.cooldown);
-        // 若因找不到敵人而沒有實際開火（frost 以外的武器），縮短重試間隔避免卡頓
-        this.nextFireAt[id] = time + (fired ? cooldown : Math.min(150, cooldown));
+    // 依照擁有的武器，逐一檢查是否可以開火（取代舊版基於 Timer 的作法）；
+    // 魔王登場開場的 3 秒內（見 GameScene.attacksLocked）玩家無法攻擊，直接跳過整個
+    // 開火迴圈——冷卻時間戳記維持原樣不往前推進，開場結束後就能立刻正常開火，
+    // 不會因為這 3 秒而額外多等一段冷卻。
+    if (!this.scene.attacksLocked) {
+      for (const id of Object.keys(this.owned)) {
+        if (id === 'sawblade') continue; // 鋸片為持續環繞傷害，非計時開火
+        const nextAt = this.nextFireAt[id] || 0;
+        if (time >= nextAt) {
+          const fired = this._fire(id, time);
+          const data = this._getEffectiveData(id);
+          const cooldown = this._scaledCooldown(id, data.cooldown);
+          // 若因找不到敵人而沒有實際開火（frost 以外的武器），縮短重試間隔避免卡頓
+          this.nextFireAt[id] = time + (fired ? cooldown : Math.min(150, cooldown));
+        }
       }
     }
 

@@ -213,7 +213,7 @@ export default class Boss {
     cam.stopFollow();
     cam.pan(bx, by, 1000, 'Sine.easeInOut');
 
-    const warnText = scene.add.text(cam.width / 2, cam.height / 2 - 220, `⚠ ${this.typeDef.name}已出現 ⚠`, textStyle({
+    const warnText = scene.add.text(cam.width / 2, cam.height / 2, `⚠ ${this.typeDef.name}已出現 ⚠`, textStyle({
       fontSize: '56px', color: '#ff2020', fontStyle: 'bold', stroke: '#000000', strokeThickness: 8,
     })).setOrigin(0.5).setScrollFactor(0).setDepth(40000);
     scene.tweens.add({ targets: warnText, scale: 1.12, duration: 280, yoyo: true, repeat: 5 });
@@ -221,7 +221,11 @@ export default class Boss {
 
     if (scene.enemySystem) scene.enemySystem.killAllActive();
 
+    // 開場這 3 秒玩家無法攻擊（見 WeaponSystem.update()／GameScene._handleSawbladeHits()
+    // 對這面旗標的判斷），逼玩家先看完警示、站穩位置，而不是一開場就無腦輸出。
+    scene.attacksLocked = true;
     scene.time.delayedCall(3000, () => {
+      scene.attacksLocked = false;
       if (scene.player && scene.player.sprite && scene.player.sprite.active) {
         cam.startFollow(scene.player.sprite, true, 0.12, 0.12);
       }

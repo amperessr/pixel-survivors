@@ -82,6 +82,7 @@ export default class GameScene extends Phaser.Scene {
     // 上一場死亡時已經把它設成 true，沒重設的話下一場一開局就已經是「遊戲已結束」的狀態。
     this.gameEnded = false;
     this._wentToGameOver = false;
+    this.attacksLocked = false; // 魔王登場開場的 3 秒內設為 true，見 Boss._playIntroCinematic()
 
     // 滑鼠瞄準方向（用於飛刀等以滑鼠為準的武器，此處以世界座標更新提供 UI 之用）
     this.input.on('pointermove', () => {});
@@ -442,6 +443,7 @@ export default class GameScene extends Phaser.Scene {
 
   // 鋸片：持續環繞傷害，各自用 lastHit 記錄每個目標的命中冷卻
   _handleSawbladeHits(time, stats) {
+    if (this.attacksLocked) return; // 魔王登場開場 3 秒內鋸片不造成傷害（見 attacksLocked 的說明）
     const kb = WEAPON_KNOCKBACK.sawblade;
     for (const saw of this.weaponSystem.sawbladeSprites) {
       const dmg = this.weaponSystem.getSawbladeDamage();

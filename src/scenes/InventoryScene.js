@@ -71,10 +71,19 @@ export default class InventoryScene extends Phaser.Scene {
     const portraitY = 340;
     this.add.text(leftX, 90, '目前裝備', textStyle({ fontSize: '28px', color: '#9fd3ff' })).setOrigin(0.5);
     this.add.image(leftX, portraitY, 'player_balanced').setScale(PORTRAIT_SCALE);
-    // 永久等級放大，擺在「目前裝備」標題下方、角色圖示上方的空白處
-    // （跟進遊戲後那場戰鬥的等級是兩回事）
-    this.levelText = this.add.text(leftX, 145, '', textStyle({
-      fontSize: '34px', color: '#6fd3ff',
+    // 永久等級（跟進遊戲後那場戰鬥的等級是兩回事）原本擺在戒指欄跟角色圖示中間，
+    // 但那段空隙其實只有戒指欄底邊到角色圖示頂端之間約 50px，兩行字的面板塞不下、
+    // 還是會跟戒指圖示或角色圖示疊到——改放到最上排，跟右上角「金幣」同一列，
+    // 用自己的小面板獨立框起來，就不會再跟任何欄位重疊。
+    const levelBoxY = 46, levelBoxW = 260, levelBoxH = 46;
+    this.add.image(leftX, levelBoxY, 'ui_panel').setDisplaySize(levelBoxW, levelBoxH);
+    this.add.rectangle(leftX, levelBoxY, levelBoxW - 6, levelBoxH - 6)
+      .setStrokeStyle(2, 0x6fd3ff, 0.6).setFillStyle(0, 0);
+    this.levelText = this.add.text(leftX, levelBoxY - 10, '', textStyle({
+      fontSize: '20px', color: '#6fd3ff', fontStyle: 'bold',
+    })).setOrigin(0.5);
+    this.levelExpText = this.add.text(leftX, levelBoxY + 11, '', textStyle({
+      fontSize: '13px', color: '#9fd3ff',
     })).setOrigin(0.5);
 
     this.equipSlotImgs = {};
@@ -147,7 +156,8 @@ export default class InventoryScene extends Phaser.Scene {
     // ---------- 一鍵出售／整理背包：放在背包格正下方一排 ----------
     // 依稀有度一鍵賣掉背包內全部該階裝備（只賣背包，身上穿著的不動；六階都能賣，含戒指）。
     const sellRowY = startY + gridH + 55;
-    const sellDefs = RARITY_IDS; // common/uncommon/rare/epic/legendary/mythic
+    // 傳說／神話太稀有也太值錢，一鍵出售容易誤按賣掉重要裝備，只留一般～史詩四階
+    const sellDefs = RARITY_IDS.filter((id) => id !== 'legendary' && id !== 'mythic');
     const sellBtnW = 148, sellGap = 8;
     const sortBtnW = 130;
     const rowTotalW = sellDefs.length * sellBtnW + sellDefs.length * sellGap + sortBtnW;
@@ -392,7 +402,8 @@ export default class InventoryScene extends Phaser.Scene {
     });
 
     this.goldText.setText(`金幣：${getGold()}`);
-    this.levelText.setText(`Lv.${getStatLevel()}　${getStatExp()}/${getStatExpToNext()} EXP`);
+    this.levelText.setText(`Lv.${getStatLevel()}`);
+    this.levelExpText.setText(`${getStatExp()}/${getStatExpToNext()} EXP`);
     this._refreshStatsPanel();
   }
 
