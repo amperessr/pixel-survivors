@@ -5,6 +5,11 @@ import { getEquipped } from '../managers/SaveManager.js';
 const PLAYER_BASE_SCALE = 0.5;
 const AUTO_PILOT_AVOID_RADIUS = 160; // 自動戒指：怪物進入這個範圍就會被當成威脅開始閃避
 const AUTO_PILOT_DANGER_RADIUS = 90; // 自動戒指：怪物貼近到這個範圍內才會無條件優先逃命（範圍外優先去吃拾取物）
+// 魔王體型大、接觸傷害判定半徑也大（見 Boss.js 的 BOSS_TOUCH_RADIUS=100），
+// 一般小怪的閃避半徑貼著魔王走還是會被碰到——魔王的閃避/危險半徑要抓更大，
+// 且威脅權重加倍，確保自動駕駛寧可繞遠路也不會一路衝去撞魔王。
+const AUTO_PILOT_BOSS_AVOID_RADIUS = 260;
+const AUTO_PILOT_BOSS_DANGER_RADIUS = 150;
 
 // 四種初始角色設定 (依規格百分比修正基礎數值)
 export const CHARACTERS = {
@@ -180,7 +185,20 @@ export default class Player {
         }
       });
     }
-    // 怪物貼身到危險距離內，無條件優先逃命，不管旁邊有沒有拾取物
+    // 魔王：閃避半徑比一般小怪大很多、威脅權重也加倍，避免自動駕駛只顧著閃小怪
+    // 卻一路把玩家帶去撞魔王（魔王接觸傷害的判定半徑本來就比小怪大上不少）。
+    if (this.scene.boss && this.scene.boss.alive) {
+      const b = this.scene.boss.sprite;
+      const d = dist(px, py, b.x, b.y);
+      if (d > 0 && d < AUTO_PILOT_BOSS_AVOID_RADIUS) {
+        const w = (AUTO_PILOT_BOSS_AVOID_RADIUS - d) / AUTO_PILOT_BOSS_AVOID_RADIUS;
+        avoidX += ((px - b.x) / d) * w * 2;
+        avoidY += ((py - b.y) / d) * w * 2;
+        threatCount++;
+        if (d < AUTO_PILOT_BOSS_DANGER_RADIUS) dangerCount++;
+      }
+    }
+    // 怪物（含魔王）貼身到危險距離內，無條件優先逃命，不管旁邊有沒有拾取物
     if (dangerCount > 0) return { vx: avoidX, vy: avoidY };
 
     // 危險距離外時，拾取物優先於一般閃避——怪物幾乎隨時都會在閃避範圍內徘徊，

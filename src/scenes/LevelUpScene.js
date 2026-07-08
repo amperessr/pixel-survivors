@@ -91,11 +91,13 @@ export default class LevelUpScene extends Phaser.Scene {
     // 如果剛好有對應配方（見 WeaponData.WEAPON_FUSIONS），就給融合選項——
     // 融合跟單獨進化互斥（見 WeaponSystem.canEvolve 排除掉融合武器），
     // 玩家要嘛選其中一把單獨進化、要嘛選融合，是刻意做出的取捨。
+    // 用 canFuse() 判斷（而不是自己重複寫一次規則），順便擋掉「已經融合過一次、
+    // 重新練起雷電+飛刀想再融合出第二份一樣的武器」這種重複融合的狀況。
     const fusableIds = Object.keys(owned).filter((id) => this.weaponSystem.isMaxed(id) && !this.weaponSystem.isEvolved(id) && !this.weaponSystem.isFusion(id));
     for (let i = 0; i < fusableIds.length; i++) {
       for (let j = i + 1; j < fusableIds.length; j++) {
+        if (!this.weaponSystem.canFuse(fusableIds[i], fusableIds[j])) continue;
         const fusion = findFusionFor(fusableIds[i], fusableIds[j]);
-        if (!fusion) continue;
         pool.push({
           type: 'fuseWeapon', idA: fusableIds[i], idB: fusableIds[j],
           title: `🔥 融合！${fusion.name}`,

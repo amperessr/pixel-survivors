@@ -41,12 +41,18 @@ export default class WeaponSystem {
   canEvolve(id) { return this.owned[id] >= 5 && !this.evolved[id] && !WEAPON_FUSIONS[id]; }
 
   // 兩把武器都滿 5 級、都還沒進化、也都還不是融合武器本身，且剛好有對應配方
-  // （見 WeaponData.findFusionFor）才能融合。
+  // （見 WeaponData.findFusionFor）才能融合。融合會清掉原本兩把武器（見
+  // fuseWeapons），所以玩家之後還能重新拿到雷電/飛刀這些「融合前」的武器去
+  // 單獨升級/進化——但如果那把融合武器已經拿過一次，不能再融合出第二份重複的，
+  // 這裡額外擋掉。
   canFuse(idA, idB) {
     if (!this.isMaxed(idA) || !this.isMaxed(idB)) return false;
     if (this.evolved[idA] || this.evolved[idB]) return false;
     if (WEAPON_FUSIONS[idA] || WEAPON_FUSIONS[idB]) return false;
-    return !!findFusionFor(idA, idB);
+    const fusion = findFusionFor(idA, idB);
+    if (!fusion) return false;
+    if (this.owned[fusion.id]) return false; // 已經有這把融合武器了，不能重複融合
+    return true;
   }
 
   addOrUpgrade(id) {

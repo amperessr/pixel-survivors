@@ -30,7 +30,8 @@ export const RARITY_STAT_RANGES = {
   attack: { common: [1, 10], uncommon: [8, 20], rare: [18, 35], epic: [30, 55], legendary: [50, 90], mythic: [85, 150] },
   defense: { common: [1, 5], uncommon: [4, 10], rare: [8, 18], epic: [15, 30], legendary: [28, 50], mythic: [45, 80] },
   maxHp: { common: [10, 30], uncommon: [25, 60], rare: [55, 120], epic: [100, 200], legendary: [180, 320], mythic: [300, 500] },
-  moveSpeed: { common: [5, 15], uncommon: [12, 28], rare: [25, 50], epic: [45, 75], legendary: [70, 110], mythic: [105, 160] },
+  // moveSpeed 只有鞋子在用（見 GACHA_STAT_KEY），玩家反應鞋子跑速加成太多，全部砍半
+  moveSpeed: { common: [3, 8], uncommon: [6, 14], rare: [13, 25], epic: [23, 38], legendary: [35, 55], mythic: [53, 80] },
 };
 
 export const SLOT_LABELS = {
@@ -126,20 +127,21 @@ export const EQUIPMENT_DATA = {
     bonus: { defense: 10 },
   },
 
+  // 鞋子的移動速度加成原本 10/22/40，玩家反應太多，全部砍半
   shoes_basic: {
     id: 'shoes_basic', slot: 'shoes', tier: 'beginner', tierIndex: 0, prevId: null, rarity: 'common',
-    name: '初心者鞋子', desc: '移動速度 +10', price: TIER_PRICES.beginner, icon: 'equip_shoes_beginner',
-    bonus: { moveSpeed: 10 },
+    name: '初心者鞋子', desc: '移動速度 +5', price: TIER_PRICES.beginner, icon: 'equip_shoes_beginner',
+    bonus: { moveSpeed: 5 },
   },
   shoes_mid: {
     id: 'shoes_mid', slot: 'shoes', tier: 'mid', tierIndex: 1, prevId: 'shoes_basic', rarity: 'uncommon',
-    name: '中階鞋子', desc: '移動速度 +22', price: TIER_PRICES.mid, icon: 'equip_shoes_mid',
-    bonus: { moveSpeed: 22 },
+    name: '中階鞋子', desc: '移動速度 +11', price: TIER_PRICES.mid, icon: 'equip_shoes_mid',
+    bonus: { moveSpeed: 11 },
   },
   shoes_high: {
     id: 'shoes_high', slot: 'shoes', tier: 'high', tierIndex: 2, prevId: 'shoes_mid', rarity: 'rare',
-    name: '高階鞋子', desc: '移動速度 +40', price: TIER_PRICES.high, icon: 'equip_shoes_high',
-    bonus: { moveSpeed: 40 },
+    name: '高階鞋子', desc: '移動速度 +20', price: TIER_PRICES.high, icon: 'equip_shoes_high',
+    bonus: { moveSpeed: 20 },
   },
 
   // 戒指：僅能從扭蛋機抽到，商店不販售（不會出現在 SHOP_ITEM_IDS），沒有階級/升級。

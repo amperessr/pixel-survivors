@@ -426,13 +426,14 @@ export default class GameScene extends Phaser.Scene {
       });
       hitX = target.x; hitY = target.y;
     }
-    this.spawnImpactFx(hitX, hitY, 'knife', 0, true);
+    this.spawnImpactFx(hitX, hitY, 'electroKnife', 0, false);
 
     const chainRange = p.getData('chainRange');
     const next = this._findNearestExcluding(hitX, hitY, hitSet, chainRange);
     if (next) {
       this.enemySystem.damageEnemy(next, dmg * 0.5, stats.critRate, stats.critDmg, null);
-      this.spawnChainLightningFx(hitX, hitY, next.x, next.y, false);
+      // 連鎖用「進化版」規格的電弧（更粗更亮），凸顯這是融合武器的額外加成
+      this.spawnChainLightningFx(hitX, hitY, next.x, next.y, true);
     }
 
     const pierce = p.getData('pierce') || 0;
@@ -471,8 +472,10 @@ export default class GameScene extends Phaser.Scene {
     if (this.boss && this.boss.alive && dist(p.x, p.y, this.boss.sprite.x, this.boss.sprite.y) <= aoe) {
       this.boss.takeDamage(p.getData('dmg'), stats.critRate, stats.critDmg);
     }
-    this.spawnImpactFx(p.x, p.y, 'fireball', aoe, false);
-    this.spawnImpactFx(p.x, p.y, 'frost', 0, false);
+    // 冰火雙色爆炸疊在一起，再加畫面閃光＋打擊停頓，份量感比單純的進化版火球/冰霜更重
+    this.cameras.main.flash(160, 255, 170, 90);
+    this.hitStop(80);
+    this.spawnImpactFx(p.x, p.y, 'iceFire', aoe, false);
     this.weaponSystem.projectilePool.free(p);
   }
 
@@ -525,10 +528,14 @@ export default class GameScene extends Phaser.Scene {
     this.weaponSystem.projectilePool.free(p);
   }
 
-  // 鋸片：持續環繞傷害，各自用 lastHit 記錄每個目標的命中冷卻
+  // 鋸片／血肉風暴（鋸片融合）：持續環繞傷害，各自用 lastHit 記錄每個目標的命中冷卻。
+  // 血肉風暴命中特效改用專屬的 'bloodStorm' 規格（見 spawnImpactFx），比一般鋸片
+  // 進化版更誇張，凸顯融合武器的稀有感。
   _handleSawbladeHits(time, stats) {
     if (this.attacksLocked) return; // 魔王登場開場 3 秒內鋸片不造成傷害（見 attacksLocked 的說明）
     const kb = WEAPON_KNOCKBACK.sawblade;
+    const isBloodStorm = !!this.weaponSystem.owned['knife_sawblade'];
+    const impactKind = isBloodStorm ? 'bloodStorm' : 'sawblade';
     for (const saw of this.weaponSystem.sawbladeSprites) {
       const dmg = this.weaponSystem.getSawbladeDamage();
       const evolved = this.weaponSystem.isEvolved('sawblade');
@@ -542,14 +549,14 @@ export default class GameScene extends Phaser.Scene {
         this.enemySystem.damageEnemy(e, dmg, stats.critRate, stats.critDmg, {
           fromX: saw.x, fromY: saw.y, force: kb.force, duration: kb.duration,
         });
-        this.spawnImpactFx(e.x, e.y, 'sawblade', 0, evolved);
+        this.spawnImpactFx(e.x, e.y, impactKind, 0, evolved);
       });
       if (this.boss && this.boss.alive && dist(saw.x, saw.y, this.boss.sprite.x, this.boss.sprite.y) < BOSS_SAW_RADIUS) {
         const last = lastHit.get(this.boss) || 0;
         if (time - last >= 300) {
           lastHit.set(this.boss, time);
           this.boss.takeDamage(dmg, stats.critRate, stats.critDmg);
-          this.spawnImpactFx(this.boss.sprite.x, this.boss.sprite.y, 'sawblade', 0, evolved);
+          this.spawnImpactFx(this.boss.sprite.x, this.boss.sprite.y, impactKind, 0, evolved);
         }
       }
     }
@@ -1133,6 +1140,33 @@ export default class GameScene extends Phaser.Scene {
         this.tweens.add({ targets: fx, scale: (evolved ? 1.5 : 0.85) * 1.9, alpha: 0, duration: 240, onComplete: () => fx.destroy() });
         this.spawnGlowRing(x, y, 'fx_frost', evolved ? frostEvoTint : 0x8fe3ff, 0.3, evolved ? 2.6 : 1.5, 300);
         this.spawnBurstFx(x, y, evolved ? frostEvoTint : 0x8fe3ff, evolved ? 12 : 5, 'fx_frost', evolved ? 110 : 90);
+        break;
+      }
+      // 以下三種是融合武器專屬命中特效，刻意比同系武器的「進化版」規格再往上加一截
+      // （更大的縮放/更多碎片/多疊一層光環），呼應融合武器本來就比單一進化更稀有。
+      case 'electroKnife': {
+        const fx = this.add.image(x, y, 'fx_crit').setDepth(29999).setScale(1.7).setTint(0x7ef7ff);
+        this.tweens.add({ targets: fx, scale: 1.7 * 1.9, alpha: 0, duration: 180, onComplete: () => fx.destroy() });
+        this.spawnGlowRing(x, y, 'fx_bolt', 0x7ef7ff, 0.35, 2.3, 260);
+        this.spawnBurstFx(x, y, 0xffe94d, 9, 'fx_bolt', 130); // 黃色電花混在藍白碎片裡，呼應圖示配色
+        this.spawnBurstFx(x, y, 0xdfefff, 6, 'fx_crit', 100);
+        break;
+      }
+      case 'bloodStorm': {
+        const fx = this.add.image(x, y, 'fx_crit').setDepth(29999).setScale(1.6).setTint(0xff5050);
+        this.tweens.add({ targets: fx, scale: 1.6 * 2, alpha: 0, duration: 160, onComplete: () => fx.destroy() });
+        this.spawnGlowRing(x, y, 'fx_crit', 0xff5050, 0.3, 2, 200);
+        this.spawnBurstFx(x, y, 0xff8f8f, 9, 'fx_crit', 120);
+        break;
+      }
+      case 'iceFire': {
+        const fx = this.add.image(x, y, 'fx_flame').setDepth(29999).setScale(2.9 * 0.55);
+        this.tweens.add({ targets: fx, scale: 2.9, alpha: 0, duration: 300, onComplete: () => fx.destroy() });
+        this.spawnGlowRing(x, y, 'fx_flame', 0xff8a3d, 0.4, 3.6, 360);
+        this.spawnGlowRing(x, y, 'fx_frost', 0x8fe3ff, 0.3, 3.0, 420);
+        this.spawnBurstFx(x, y, 0xffdd55, 14, 'fx_flame', 170);
+        this.spawnBurstFx(x, y, 0x8fe3ff, 14, 'fx_frost', 190);
+        this.spawnEmbersFx(x, y, 10, 0xffb066);
         break;
       }
       default: {
