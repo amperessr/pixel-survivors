@@ -230,7 +230,7 @@ export default class GameScene extends Phaser.Scene {
     const elapsedMin = (time - this.startTime) / 60000;
     this.enemySystem.setDifficultyMinutes(elapsedMin);
     this.enemySystem.update(time, delta);
-    this.healthPackSystem.update(time);
+    this.healthPackSystem.update(time, delta);
     this.magnetSystem.update(time);
     this.weaponSystem.update(time, delta);
 

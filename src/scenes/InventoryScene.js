@@ -1,19 +1,21 @@
-import { EQUIPMENT_DATA, EQUIP_SLOTS, SLOT_LABELS } from '../equipment/EquipmentData.js';
+import { EQUIPMENT_DATA, EQUIP_SLOTS, RING_SLOTS, SLOT_LABELS } from '../equipment/EquipmentData.js';
 import { getInventory, setInventory, getEquipped, setEquipped, getGold } from '../managers/SaveManager.js';
 import { CHARACTERS, BASE_STATS } from '../player/Player.js';
 import { textStyle } from '../utils/TextStyle.js';
 
 const COLS = 10, ROWS = 5; // 5x10 背包格子，跟楓之谷倉庫版面一樣
 
-// 裝備欄改成分兩排「掛」在角色左右兩側（各三格），不再疊在身體部位上——
-// 左邊由上到下：頭盔／衣服／褲子；右邊由上到下：武器／鞋子／戒指（戒指格
-// 另外在下面單獨處理，但位置沿用同一組「右側」欄位，湊成左右各三個）。
+// 裝備欄分兩排「掛」在角色左右兩側，不再疊在身體部位上——
+// 左邊由上到下：武器／衣服／褲子；右邊由上到下：頭盔／鞋子。
+// 兩個戒指欄位移到角色正上方並排，跟左右兩排欄位保持距離。
 const SLOT_SIDE_OFFSET = {
-  helmet: { x: -155, y: -85 },
+  weapon: { x: -155, y: -85 },
   clothes: { x: -155, y: 0 },
   pants: { x: -155, y: 85 },
-  weapon: { x: 155, y: -85 },
+  helmet: { x: 155, y: -85 },
   shoes: { x: 155, y: 0 },
+  ring1: { x: -38, y: -170 },
+  ring2: { x: 38, y: -170 },
 };
 
 const PORTRAIT_SCALE = 3.4;
@@ -59,7 +61,10 @@ export default class InventoryScene extends Phaser.Scene {
     this.equipIconImgs = {};
     this.equipEmptyLabels = {};
 
-    EQUIP_SLOTS.forEach((slot) => {
+    // 五個一般裝備欄 + 兩個戒指欄，共用同一套渲染/互動邏輯（戒指目前只能從扭蛋機
+    // 取得，扭蛋機制還沒實作，所以這兩格暫時一定是空的，但介面/互動都是完整的，
+    // 之後扭蛋一接上就能直接動）。
+    [...EQUIP_SLOTS, ...RING_SLOTS].forEach((slot) => {
       const off = SLOT_SIDE_OFFSET[slot];
       const sx = leftX + off.x, sy = portraitY + off.y;
       const bg = this.add.image(sx, sy, 'ui_equip_slot').setDisplaySize(SLOT_SIZE, SLOT_SIZE)
@@ -77,16 +82,6 @@ export default class InventoryScene extends Phaser.Scene {
       });
       bg.on('pointerout', () => { bg.clearTint(); this._hideTooltip(); });
     });
-
-    // 第六格：戒指，跟右側武器/鞋子排成同一欄，湊成左右各三格。目前遊戲裡還沒有
-    // 戒指裝備資料，先放一個佔位格並標註用途，點下去提示「尚未開放」，不做任何實際效果。
-    const ringX = leftX + 155, ringY = portraitY + 85;
-    const ringBg = this.add.image(ringX, ringY, 'ui_equip_slot').setDisplaySize(SLOT_SIZE, SLOT_SIZE)
-      .setInteractive({ useHandCursor: true }).setAlpha(0.6);
-    this.add.text(ringX, ringY, '戒指', textStyle({ fontSize: '15px', color: '#cfcfcf' })).setOrigin(0.5).setAlpha(0.7);
-    ringBg.on('pointerover', () => ringBg.setTint(0x9fd3ff));
-    ringBg.on('pointerout', () => ringBg.clearTint());
-    ringBg.on('pointerdown', () => this._showToast('戒指裝備尚未開放，敬請期待！'));
 
     // ---------- 左側下方：能力值面板 ----------
     this._buildStatsPanel(leftX, 480);
@@ -186,8 +181,9 @@ export default class InventoryScene extends Phaser.Scene {
   }
 
   _refresh() {
-    // 重新畫出五個裝備欄的圖示：有裝備時顯示圖示、隱藏空格標籤；沒有裝備時反過來
-    EQUIP_SLOTS.forEach((slot) => {
+    // 重新畫出裝備欄（五個一般欄 + 兩個戒指欄）的圖示：有裝備時顯示圖示、隱藏空格
+    // 標籤；沒有裝備時反過來
+    [...EQUIP_SLOTS, ...RING_SLOTS].forEach((slot) => {
       if (this.equipIconImgs[slot]) { this.equipIconImgs[slot].destroy(); this.equipIconImgs[slot] = null; }
       const itemId = this.equipped[slot];
       const bg = this.equipSlotImgs[slot];

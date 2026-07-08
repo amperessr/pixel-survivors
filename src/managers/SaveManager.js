@@ -89,7 +89,7 @@ export function addItemToInventory(itemId) {
   return true;
 }
 
-// ---------- 已裝備物品（weapon / helmet / clothes / pants / shoes）----------
+// ---------- 已裝備物品（weapon / helmet / clothes / pants / shoes / ring1 / ring2）----------
 export function getEquipped() {
   try {
     const raw = JSON.parse(localStorage.getItem(EQUIPPED_KEY) || '{}');
@@ -99,9 +99,11 @@ export function getEquipped() {
       clothes: raw.clothes || null,
       pants: raw.pants || null,
       shoes: raw.shoes || null,
+      ring1: raw.ring1 || null,
+      ring2: raw.ring2 || null,
     };
   } catch {
-    return { weapon: null, helmet: null, clothes: null, pants: null, shoes: null };
+    return { weapon: null, helmet: null, clothes: null, pants: null, shoes: null, ring1: null, ring2: null };
   }
 }
 

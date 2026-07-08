@@ -52,6 +52,7 @@ export default class TextureFactory {
       ['generatePickups', () => this.generatePickups()],
       ['generateUI', () => this.generateUI()],
       ['generateGachaMachine', () => this.generateGachaMachine()],
+      ['generateRingIcons', () => this.generateRingIcons()],
     ];
     for (const [name, fn] of steps) {
       try {
@@ -422,6 +423,66 @@ export default class TextureFactory {
       ctx.fillStyle = 'rgba(255,255,255,0.85)';
       ctx.beginPath();
       ctx.moveTo(11, 5); ctx.lineTo(14, 11); ctx.lineTo(11, 17); ctx.lineTo(8, 11);
+      ctx.closePath();
+      ctx.fill();
+      this._finish(tex);
+    }
+  }
+
+  // ---------- 戒指圖示（僅扭蛋機取得，效果尚未開放，見 EquipmentData.js 的 GACHA_RING_IDS）----------
+  // 跟裝備圖示一樣用 128x128 繪製，縮放倍率才能跟 InventoryScene/UIScene 裡其他
+  // 裝備圖示（真人美術圖）維持一致的清晰度，不會因為程式產生的圖只有小尺寸而變模糊。
+  generateRingIcons() {
+    const drawRingBase = (ctx) => {
+      ctx.strokeStyle = '#ffd93d';
+      ctx.lineWidth = 16;
+      ctx.beginPath();
+      ctx.arc(64, 74, 42, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = '#c79a1e';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.fillStyle = '#3d8bff';
+      ctx.beginPath();
+      ctx.arc(64, 32, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#1a4a99';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    };
+    // 回血戒指：金色戒環 + 中央紅色愛心
+    {
+      const { tex, ctx } = this._canvas('ring_heal', 128, 128);
+      drawRingBase(ctx);
+      const hx = 64, hy = 68;
+      ctx.fillStyle = '#ff5b6b';
+      ctx.beginPath();
+      ctx.moveTo(hx, hy + 16);
+      ctx.bezierCurveTo(hx - 28, hy - 10, hx - 15, hy - 34, hx, hy - 10);
+      ctx.bezierCurveTo(hx + 15, hy - 34, hx + 28, hy - 10, hx, hy + 16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#8a1f2b';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      this._finish(tex);
+    }
+    // 自動戒指：金色戒環 + 中央循環箭頭（示意「自動」）
+    {
+      const { tex, ctx } = this._canvas('ring_auto', 128, 128);
+      drawRingBase(ctx);
+      ctx.strokeStyle = '#5bd4ff';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.arc(64, 68, 22, 0.35 * Math.PI, 1.85 * Math.PI);
+      ctx.stroke();
+      const ang = 1.85 * Math.PI;
+      const ax = 64 + Math.cos(ang) * 22, ay = 68 + Math.sin(ang) * 22;
+      ctx.fillStyle = '#5bd4ff';
+      ctx.beginPath();
+      ctx.moveTo(ax + 10, ay - 4);
+      ctx.lineTo(ax - 6, ay - 9);
+      ctx.lineTo(ax - 2, ay + 8);
       ctx.closePath();
       ctx.fill();
       this._finish(tex);

@@ -4,12 +4,20 @@
 // 補上對應的圖示材質即可，InventoryScene / ShopScene 都是讀這份資料表動態產生內容。
 export const EQUIP_SLOTS = ['weapon', 'helmet', 'clothes', 'pants', 'shoes'];
 
+// 戒指欄位：跟上面五個裝備欄不同，不是「初心者/中階/高階」可升級購買的裝備，
+// 而是各自獨立、僅能從扭蛋機抽到的稀有戒指。目前只有兩種戒指、剛好對應兩個欄位，
+// 所以先簡化成每個欄位固定對應一種戒指（見 RING_DATA 的 slot 欄位），
+// 之後戒指種類變多的話再改成跟一般裝備一樣「同類型任選欄位」。
+export const RING_SLOTS = ['ring1', 'ring2'];
+
 export const SLOT_LABELS = {
   weapon: '武器',
   helmet: '頭盔',
   clothes: '衣服',
   pants: '褲子',
   shoes: '鞋子',
+  ring1: '戒指',
+  ring2: '戒指',
 };
 
 export const TIERS = ['beginner', 'mid', 'high'];
@@ -110,6 +118,20 @@ export const EQUIPMENT_DATA = {
     name: '高階鞋子', desc: '移動速度 +40', price: TIER_PRICES.high, icon: 'equip_shoes_high',
     bonus: { moveSpeed: 40 },
   },
+
+  // 戒指：僅能從扭蛋機抽到，商店不販售（不會出現在 SHOP_ITEM_IDS），沒有階級/升級。
+  // 效果本身是真的有作用的（見 HealthPackSystem._rollHoming() / Player._computeAutoPilotDirection()），
+  // 只是扭蛋機制還沒實作，玩家目前還沒有辦法真的抽到、穿上這兩個戒指。
+  ring_heal: {
+    id: 'ring_heal', slot: 'ring1', tier: null, tierIndex: 0, prevId: null,
+    name: '回血戒指', desc: '掉落的血包有 30% 機率自動飛向玩家。（僅扭蛋機取得）',
+    icon: 'ring_heal', bonus: {},
+  },
+  ring_auto: {
+    id: 'ring_auto', slot: 'ring2', tier: null, tierIndex: 0, prevId: null,
+    name: '自動戒指', desc: '自動幫玩家移動、閃避怪物、拾取血包與磁鐵。（僅扭蛋機取得）',
+    icon: 'ring_auto', bonus: {},
+  },
 };
 
 // 每個部位依「初心者→中階→高階」排序的 id 清單，購買限制／背包升級都靠這份表查詢
@@ -120,6 +142,10 @@ export const EQUIP_LINES = {
   pants: ['pants_basic', 'pants_mid', 'pants_high'],
   shoes: ['shoes_basic', 'shoes_mid', 'shoes_high'],
 };
+
+// 兩種戒指目前只能從扭蛋機取得（扭蛋機制本身還沒實作，見 ShopScene._gachaPull()），
+// 這份清單先列出來供未來扭蛋獎勵表使用，不會出現在商店購買清單裡。
+export const GACHA_RING_IDS = ['ring_heal', 'ring_auto'];
 
 // 商店排版順序：以部位分欄、階級由低到高分排
 export const SHOP_ITEM_IDS = EQUIP_SLOTS.flatMap((slot) => EQUIP_LINES[slot]);

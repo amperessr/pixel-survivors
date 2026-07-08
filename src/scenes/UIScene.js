@@ -1,5 +1,5 @@
 import { WEAPON_DATA, WEAPON_EVOLUTIONS } from '../weapons/WeaponData.js';
-import { EQUIP_SLOTS, EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
+import { EQUIP_SLOTS, RING_SLOTS, EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
 import { PASSIVE_IDS, PASSIVE_DATA } from '../skills/PassiveData.js';
 import { getEquipped } from '../managers/SaveManager.js';
 import { textStyle } from '../utils/TextStyle.js';
@@ -109,7 +109,7 @@ export default class UIScene extends Phaser.Scene {
       this.statChips[def.key] = valueText;
     });
 
-    // ---------- 中：裝備（5 個裝備欄 + 1 個保留給未來飾品欄的空格）----------
+    // ---------- 中：裝備（5 個裝備欄 + 第 6 格擠進兩個戒指小欄位）----------
     const equipPos = cellPositions(col2CenterX);
     const equipped = getEquipped();
     EQUIP_SLOTS.forEach((slot, i) => {
@@ -125,10 +125,19 @@ export default class UIScene extends Phaser.Scene {
       }
     });
     {
-      // 第 6 格先保留給未來的飾品欄位，用問號淡淡標示「尚未開放」
+      // 第 6 格改成兩個戒指小欄位並排（戒指目前只能從扭蛋機取得，扭蛋機制還沒
+      // 實作，所以這兩格暫時一定是空的，但一旦拿到戒指就會直接顯示圖示）。
       const { x, y } = equipPos[5];
-      this.add.image(x, y, 'ui_equip_slot').setDisplaySize(66, 66).setAlpha(0.2).setScrollFactor(0);
-      this.add.text(x, y, '?', textStyle({ fontSize: '28px', color: '#666666' })).setOrigin(0.5).setScrollFactor(0);
+      RING_SLOTS.forEach((slot, i) => {
+        const rx = x + (i === 0 ? -18 : 18);
+        const itemId = equipped[slot];
+        const ringBg = this.add.image(rx, y, 'ui_equip_slot').setDisplaySize(30, 30).setScrollFactor(0);
+        if (itemId && EQUIPMENT_DATA[itemId]) {
+          this.add.image(rx, y, EQUIPMENT_DATA[itemId].icon).setScale(0.18).setScrollFactor(0);
+        } else {
+          ringBg.setAlpha(0.3);
+        }
+      });
     }
 
     // ---------- 右：技能（5 個被動 + 1 個保留格；武器已經在右上角的技能面板顯示過，

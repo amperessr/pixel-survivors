@@ -1,7 +1,9 @@
-import { clamp } from '../utils/MathUtils.js';
+import { clamp, dist } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
+import { getEquipped } from '../managers/SaveManager.js';
 
 const PLAYER_BASE_SCALE = 0.5;
+const AUTO_PILOT_AVOID_RADIUS = 160; // 自動戒指：怪物進入這個範圍就會被當成威脅開始閃避
 
 // 四種初始角色設定 (依規格百分比修正基礎數值)
 export const CHARACTERS = {
@@ -118,10 +120,14 @@ export default class Player {
     if (this.hp <= 0) return;
     const speed = this.stats.moveSpeed * (this.isDashing ? 2.6 : 1);
     let vx = 0, vy = 0;
-    if (this.keys.up.isDown) vy -= 1;
-    if (this.keys.down.isDown) vy += 1;
-    if (this.keys.left.isDown) vx -= 1;
-    if (this.keys.right.isDown) vx += 1;
+    if (this._hasRing('ring_auto')) {
+      ({ vx, vy } = this._computeAutoPilotDirection());
+    } else {
+      if (this.keys.up.isDown) vy -= 1;
+      if (this.keys.down.isDown) vy += 1;
+      if (this.keys.left.isDown) vx -= 1;
+      if (this.keys.right.isDown) vx += 1;
+    }
     const len = Math.hypot(vx, vy) || 1;
     this.sprite.body.setVelocity((vx / len) * speed, (vy / len) * speed);
 
@@ -134,6 +140,58 @@ export default class Player {
     this._updateSquishAnim(time, vx !== 0 || vy !== 0);
     this._updateHeadBar();
     this.sprite.setDepth(this.sprite.y);
+  }
+
+  // 兩個戒指欄任一格裝著指定戒指就算「有裝備」（目前只有回血/自動兩種戒指，
+  // 分別固定佔用 ring1/ring2，但這裡用值去比對，不寫死欄位，未來戒指種類變多
+  // 也不用改這裡）。
+  _hasRing(ringId) {
+    const equipped = getEquipped();
+    return equipped.ring1 === ringId || equipped.ring2 === ringId;
+  }
+
+  // 自動戒指：代替玩家自動移動。優先閃避範圍內的怪物（多隻怪物會把「遠離每一隻」
+  // 的方向向量加總，越近的怪物權重越高），範圍內沒有怪物時才會去撿最近的血包/磁鐵，
+  // 兩者都沒有就停在原地不動（不亂跑，避免看起來像失控）。
+  _computeAutoPilotDirection() {
+    const px = this.sprite.x, py = this.sprite.y;
+    let avoidX = 0, avoidY = 0, threatCount = 0;
+
+    if (this.scene.enemySystem && this.scene.enemySystem.pool) {
+      this.scene.enemySystem.pool.forEachActive((e) => {
+        const d = dist(px, py, e.x, e.y);
+        if (d > 0 && d < AUTO_PILOT_AVOID_RADIUS) {
+          const w = (AUTO_PILOT_AVOID_RADIUS - d) / AUTO_PILOT_AVOID_RADIUS;
+          avoidX += ((px - e.x) / d) * w;
+          avoidY += ((py - e.y) / d) * w;
+          threatCount++;
+        }
+      });
+    }
+    if (threatCount > 0) return { vx: avoidX, vy: avoidY };
+
+    const target = this._findNearestPickup();
+    if (target) {
+      const d = dist(px, py, target.x, target.y) || 1;
+      return { vx: (target.x - px) / d, vy: (target.y - py) / d };
+    }
+    return { vx: 0, vy: 0 };
+  }
+
+  // 找最近的血包／磁鐵（兩個系統各自的物件池都掃過，取距離最近的那一個）
+  _findNearestPickup() {
+    const px = this.sprite.x, py = this.sprite.y;
+    let best = null, bestDist = Infinity;
+    const scan = (pool) => {
+      if (!pool) return;
+      pool.forEachActive((img) => {
+        const d = dist(px, py, img.x, img.y);
+        if (d < bestDist) { bestDist = d; best = img; }
+      });
+    };
+    scan(this.scene.healthPackSystem && this.scene.healthPackSystem.pool);
+    scan(this.scene.magnetSystem && this.scene.magnetSystem.pool);
+    return best;
   }
 
   // 史萊姆的 Q 彈動畫：只有一張靜態圖，沒有影格可以切換，改用「擠壓/拉伸」
