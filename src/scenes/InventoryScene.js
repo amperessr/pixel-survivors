@@ -1,9 +1,9 @@
 import { EQUIPMENT_DATA, EQUIP_SLOTS, RING_SLOTS, SLOT_LABELS } from '../equipment/EquipmentData.js';
 import {
   getInventory, setInventory, getEquipped, setEquipped, getGold,
-  getStatLevel, getStatExp, getStatExpToNext, getStatPoints, getCritRatePoints,
-  getCritRateBonus, investCritRatePoint, resetStatPoints,
-  RESET_STAT_POINTS_GOLD_COST, CRIT_RATE_POINT_CAP_VALUE, CRIT_RATE_PER_POINT_VALUE,
+  getStatLevel, getStatExp, getStatExpToNext, getStatPoints, getStatInvest,
+  getStatBonus, investStatPoint, resetStatPoints,
+  RESET_STAT_POINTS_GOLD_COST, STAT_INVEST_DEFS,
 } from '../managers/SaveManager.js';
 import { CHARACTERS, BASE_STATS } from '../player/Player.js';
 import { textStyle } from '../utils/TextStyle.js';
@@ -27,14 +27,17 @@ const PORTRAIT_SCALE = 3.4;
 const SLOT_SIZE = 66;
 
 // 能力值面板顯示的項目：跟 UIScene 底部狀態列同一套圖示/顏色，額外多了生命上限。
+// investKey 對應 SaveManager.STAT_INVEST_DEFS 的 key，七項都能用升級點數投資
+// （爆擊率上限 40%，其餘沒有上限）。攻速/爆擊率每點是零點幾 %，顯示改成留一位
+// 小數，不然投資 1、2 點時數字看起來完全沒變化。
 const STATS_PANEL_DEFS = [
-  { icon: 'pickup_heart', label: '生命上限', color: '#5bff8f', get: (s) => `${s.maxHp}` },
-  { icon: 'icon_attack', label: '攻擊', color: '#ff5b5b', get: (s) => `${s.attack}` },
-  { icon: 'icon_defense', label: '防禦', color: '#8fa3b8', get: (s) => `${s.defense}` },
-  { icon: 'icon_moveSpeed', label: '移速', color: '#5bff8f', get: (s) => `${s.moveSpeed}` },
-  { icon: 'icon_atkSpeed', label: '攻速', color: '#5bd4ff', get: (s) => `+${s.atkSpeed.toFixed(0)}%` },
-  { icon: 'icon_critRate', label: '爆擊率', color: '#ffd93d', get: (s) => `${s.critRate.toFixed(0)}%` },
-  { icon: 'icon_critDmg', label: '爆傷', color: '#ff9d3d', get: (s) => `${s.critDmg.toFixed(0)}%` },
+  { icon: 'pickup_heart', label: '生命上限', color: '#5bff8f', investKey: 'maxHp', get: (s) => `${s.maxHp}` },
+  { icon: 'icon_attack', label: '攻擊', color: '#ff5b5b', investKey: 'attack', get: (s) => `${s.attack}` },
+  { icon: 'icon_defense', label: '防禦', color: '#8fa3b8', investKey: 'defense', get: (s) => `${s.defense}` },
+  { icon: 'icon_moveSpeed', label: '移速', color: '#5bff8f', investKey: 'moveSpeed', get: (s) => `${s.moveSpeed}` },
+  { icon: 'icon_atkSpeed', label: '攻速', color: '#5bd4ff', investKey: 'atkSpeed', get: (s) => `+${s.atkSpeed.toFixed(1)}%` },
+  { icon: 'icon_critRate', label: '爆擊率', color: '#ffd93d', investKey: 'critRate', get: (s) => `${s.critRate.toFixed(1)}%` },
+  { icon: 'icon_critDmg', label: '爆傷', color: '#ff9d3d', investKey: 'critDmg', get: (s) => `${s.critDmg.toFixed(0)}%` },
 ];
 
 // 背包場景：左邊是角色（裝備疊在對應身體部位上）+ 能力值面板，右邊是 5x10 的物品格子。
@@ -51,7 +54,10 @@ export default class InventoryScene extends Phaser.Scene {
     this.inventory = getInventory();
     this.equipped = getEquipped();
     this._tooltip = null;
-    this._pendingCritPoints = 0; // 「+1」按了但還沒按確認的爆擊率點數，確認後才會真的扣點寫入存檔
+    // 「+1」按了但還沒按確認的待加點數，key 對應 STAT_INVEST_DEFS，確認後才會
+    // 真的扣點寫入存檔（離開背包畫面不按確認，待加點數就直接作廢）。
+    this._pendingInvest = {};
+    for (const key of Object.keys(STAT_INVEST_DEFS)) this._pendingInvest[key] = 0;
 
     this.goldText = this.add.text(w - 40, 50, `金幣：${getGold()}`, textStyle({
       fontSize: '30px', color: '#ffd93d',
@@ -93,9 +99,8 @@ export default class InventoryScene extends Phaser.Scene {
       bg.on('pointerout', () => { bg.clearTint(); this._hideTooltip(); });
     });
 
-    // ---------- 左側下方：能力值面板 + 右側緊接著的升級點數面板 ----------
+    // ---------- 左側下方：能力值面板（每項能力值旁邊都能直接加點）----------
     this._buildStatsPanel(leftX, 480);
-    this._buildStatPointsPanel(leftX + 290, 480);
 
     // ---------- 右側：5x10 背包格 ----------
     const gridW = 720, gridH = 380;
@@ -140,11 +145,13 @@ export default class InventoryScene extends Phaser.Scene {
     this._refresh();
   }
 
-  // 能力值面板：以「平衡型」角色的基礎數值＋目前身上裝備的加成算出來的預覽數值
-  // （跟 GameScene._applyEquipmentBonuses() 用同一套算法），讓玩家不用真的進遊戲
-  // 也能看到「現在這身裝備大概會有多強」。
+  // 能力值面板：以「平衡型」角色的基礎數值＋目前身上裝備的加成＋已投資的升級點數
+  // 算出來的預覽數值（跟 GameScene._applyEquipmentBonuses() 用同一套算法），
+  // 每一項旁邊都有「+1」可以加點；下方統一放「剩餘點數／確認／重置」。
+  // 「+1」只是先累積待確認的點數，按「確認」才會真的扣點數寫入存檔——這樣
+  // 點錯了在確認前都還能反悔（離開背包畫面不按確認，待加點數就直接作廢）。
   _buildStatsPanel(cx, panelTop) {
-    const panelW = 340, panelH = 300;
+    const panelW = 420, panelH = 480;
     const cy = panelTop + panelH / 2;
     this.add.image(cx, cy, 'ui_panel').setDisplaySize(panelW, panelH);
     this.add.rectangle(cx, cy, panelW - 6, panelH - 6).setStrokeStyle(3, 0x6fd3ff, 0.6).setFillStyle(0, 0);
@@ -154,64 +161,42 @@ export default class InventoryScene extends Phaser.Scene {
     this.add.rectangle(cx, panelTop + 50, panelW - 50, 2, 0x6fd3ff, 0.4);
 
     this.statsValueTexts = {};
-    const rowStartY = panelTop + 72, rowGap = 32;
+    this.plusBtns = {};
+    const rowStartY = panelTop + 72, rowGap = 34;
     STATS_PANEL_DEFS.forEach((def, i) => {
       const ry = rowStartY + i * rowGap;
-      this.add.image(cx - panelW / 2 + 34, ry, def.icon).setScale(0.8);
-      this.add.text(cx - panelW / 2 + 58, ry, def.label, textStyle({
-        fontSize: '20px', color: '#cfe9ff',
+      this.add.image(cx - panelW / 2 + 32, ry, def.icon).setScale(0.8);
+      this.add.text(cx - panelW / 2 + 56, ry, def.label, textStyle({
+        fontSize: '19px', color: '#cfe9ff',
       })).setOrigin(0, 0.5);
-      this.statsValueTexts[def.label] = this.add.text(cx + panelW / 2 - 30, ry, '', textStyle({
-        fontSize: '20px', color: def.color,
+      this.statsValueTexts[def.label] = this.add.text(cx + panelW / 2 - 78, ry, '', textStyle({
+        fontSize: '19px', color: def.color,
       })).setOrigin(1, 0.5);
+
+      const plusBtn = this.add.image(cx + panelW / 2 - 30, ry, 'ui_button_parchment').setDisplaySize(48, 30).setInteractive({ useHandCursor: true });
+      this.add.text(cx + panelW / 2 - 30, ry, '+1', textStyle({ fontSize: '16px', color: '#3a2413' })).setOrigin(0.5);
+      plusBtn.on('pointerover', () => plusBtn.setTint(0xfff3d0));
+      plusBtn.on('pointerout', () => plusBtn.clearTint());
+      plusBtn.on('pointerdown', () => this._addPendingStat(def.investKey));
+      this.plusBtns[def.investKey] = plusBtn;
     });
-  }
 
-  // 升級點數面板：緊接在能力值面板右邊。升級每級發 3 點技能點，目前只能拿來加
-  // 爆擊率（上限 40%），其餘能力值一律只能靠裝備或其他方式提升。「+1」只是先
-  // 累積待確認的點數，按「確認」才會真的扣點數寫入存檔——這樣點錯了在確認前
-  // 都還能反悔（離開背包畫面不按確認，待加點數就直接作廢，不會被存下來）。
-  _buildStatPointsPanel(cx, panelTop) {
-    const panelW = 240, panelH = 300;
-    const cy = panelTop + panelH / 2;
-    this.add.image(cx, cy, 'ui_panel').setDisplaySize(panelW, panelH);
-    this.add.rectangle(cx, cy, panelW - 6, panelH - 6).setStrokeStyle(3, 0xffd93d, 0.6).setFillStyle(0, 0);
-    this.add.text(cx, panelTop + 24, '⭐ 升級點數', textStyle({
-      fontSize: '23px', color: '#ffd93d',
-    })).setOrigin(0.5);
-    this.add.rectangle(cx, panelTop + 46, panelW - 40, 2, 0xffd93d, 0.4);
+    const footerTop = rowStartY + STATS_PANEL_DEFS.length * rowGap + 10;
+    this.add.rectangle(cx, footerTop, panelW - 40, 2, 0xffd93d, 0.3);
 
-    this.statPointsText = this.add.text(cx, panelTop + 72, '', textStyle({
-      fontSize: '18px', color: '#cfe9ff',
-    })).setOrigin(0.5);
-    this.critBonusText = this.add.text(cx, panelTop + 100, '', textStyle({
+    this.statPointsText = this.add.text(cx, footerTop + 24, '', textStyle({
       fontSize: '18px', color: '#ffd93d',
     })).setOrigin(0.5);
-    this.add.text(cx, panelTop + 126, '爆擊率', textStyle({
-      fontSize: '15px', color: '#9fd3ff',
-    })).setOrigin(0.5);
 
-    const plusBtn = this.add.image(cx - 42, panelTop + 162, 'ui_button_parchment').setDisplaySize(66, 44).setInteractive({ useHandCursor: true });
-    this.add.text(cx - 42, panelTop + 162, '+1', textStyle({ fontSize: '20px', color: '#3a2413' })).setOrigin(0.5);
-    plusBtn.on('pointerover', () => plusBtn.setTint(0xfff3d0));
-    plusBtn.on('pointerout', () => plusBtn.clearTint());
-    plusBtn.on('pointerdown', () => this._addPendingCritPoint());
-
-    const confirmBtn = this.add.image(cx + 42, panelTop + 162, 'ui_button_parchment').setDisplaySize(66, 44).setInteractive({ useHandCursor: true });
-    this.add.text(cx + 42, panelTop + 162, '確認', textStyle({ fontSize: '18px', color: '#3a2413' })).setOrigin(0.5);
+    const confirmBtn = this.add.image(cx, footerTop + 60, 'ui_button_parchment').setDisplaySize(160, 42).setInteractive({ useHandCursor: true });
+    this.add.text(cx, footerTop + 60, '確認加點', textStyle({ fontSize: '19px', color: '#3a2413' })).setOrigin(0.5);
     confirmBtn.on('pointerover', () => confirmBtn.setTint(0xfff3d0));
     confirmBtn.on('pointerout', () => confirmBtn.clearTint());
-    confirmBtn.on('pointerdown', () => this._confirmCritPoints());
+    confirmBtn.on('pointerdown', () => this._confirmStatPoints());
 
-    this.pendingCritText = this.add.text(cx, panelTop + 198, '', textStyle({
-      fontSize: '15px', color: '#9fd3ff',
-    })).setOrigin(0.5);
-
-    this.add.rectangle(cx, panelTop + 222, panelW - 40, 2, 0xffd93d, 0.25);
-
-    const resetBtn = this.add.image(cx, panelTop + 254, 'ui_button_parchment').setDisplaySize(200, 46).setInteractive({ useHandCursor: true });
-    this.add.text(cx, panelTop + 254, '重置所有能力值', textStyle({ fontSize: '17px', color: '#3a2413' })).setOrigin(0.5);
-    this.add.text(cx, panelTop + 282, `消耗 ${RESET_STAT_POINTS_GOLD_COST.toLocaleString()} 金幣`, textStyle({
+    const resetBtn = this.add.image(cx, footerTop + 108, 'ui_button_parchment').setDisplaySize(220, 42).setInteractive({ useHandCursor: true });
+    this.add.text(cx, footerTop + 108, '重置所有能力值', textStyle({ fontSize: '17px', color: '#3a2413' })).setOrigin(0.5);
+    this.add.text(cx, footerTop + 136, `消耗 ${RESET_STAT_POINTS_GOLD_COST.toLocaleString()} 金幣`, textStyle({
       fontSize: '13px', color: '#ff9a9a',
     })).setOrigin(0.5);
     resetBtn.on('pointerover', () => resetBtn.setTint(0xfff3d0));
@@ -219,30 +204,38 @@ export default class InventoryScene extends Phaser.Scene {
     resetBtn.on('pointerdown', () => this._onResetStatPoints());
   }
 
-  _addPendingCritPoint() {
-    const available = getStatPoints() - this._pendingCritPoints;
-    const previewInvested = getCritRatePoints() + this._pendingCritPoints;
+  _addPendingStat(key) {
+    const def = STAT_INVEST_DEFS[key];
+    const available = getStatPoints() - this._pendingTotal();
     if (available <= 0) { this._showToast('沒有剩餘技能點了'); return; }
-    if (previewInvested >= CRIT_RATE_POINT_CAP_VALUE) { this._showToast('爆擊率已經到上限 40% 了'); return; }
-    this._pendingCritPoints++;
-    this._refreshStatPointsPanel();
+    if (def.cap != null) {
+      const invested = getStatInvest()[key] + this._pendingInvest[key];
+      if (invested >= def.cap) { this._showToast('爆擊率已經到上限 40% 了'); return; }
+    }
+    this._pendingInvest[key]++;
     this._refreshStatsPanel();
   }
 
-  _confirmCritPoints() {
-    if (this._pendingCritPoints <= 0) return;
+  _pendingTotal() {
+    return Object.values(this._pendingInvest).reduce((a, b) => a + b, 0);
+  }
+
+  _confirmStatPoints() {
+    const total = this._pendingTotal();
+    if (total <= 0) return;
     let confirmed = 0;
-    for (let i = 0; i < this._pendingCritPoints; i++) {
-      if (investCritRatePoint()) confirmed++;
+    for (const key of Object.keys(this._pendingInvest)) {
+      for (let i = 0; i < this._pendingInvest[key]; i++) {
+        if (investStatPoint(key)) confirmed++;
+      }
+      this._pendingInvest[key] = 0;
     }
-    this._pendingCritPoints = 0;
-    this._refreshStatPointsPanel();
     this._refreshStatsPanel();
-    this._showToast(`已投資 ${confirmed} 點到爆擊率`);
+    this._showToast(`已投資 ${confirmed} 點能力值`);
   }
 
   _onResetStatPoints() {
-    if (this._pendingCritPoints > 0) {
+    if (this._pendingTotal() > 0) {
       this._showToast('請先確認或不要點「+1」，再重置');
       return;
     }
@@ -251,30 +244,22 @@ export default class InventoryScene extends Phaser.Scene {
       return;
     }
     this.goldText.setText(`金幣：${getGold()}`);
-    this._refreshStatPointsPanel();
     this._refreshStatsPanel();
     this._showToast('已重置所有升級能力值');
   }
 
-  _refreshStatPointsPanel() {
-    const invested = getCritRatePoints();
-    const available = getStatPoints() - this._pendingCritPoints;
-    const previewBonus = (invested + this._pendingCritPoints) * CRIT_RATE_PER_POINT_VALUE;
-    this.statPointsText.setText(`剩餘點數：${available}`);
-    this.critBonusText.setText(`+${previewBonus.toFixed(1)}% / 40%`);
-    this.pendingCritText.setText(this._pendingCritPoints > 0 ? `待確認：+${this._pendingCritPoints} 點` : '');
-  }
-
   _refreshStatsPanel() {
     const mods = CHARACTERS.balanced.mods;
+    const invest = getStatInvest();
+    const bonusFor = (key) => (invest[key] + this._pendingInvest[key]) * STAT_INVEST_DEFS[key].perPoint;
     const stats = {
-      maxHp: Math.round(BASE_STATS.hp * mods.hp),
-      attack: Math.round(BASE_STATS.attack * mods.attack),
-      defense: Math.round(BASE_STATS.defense * mods.defense),
-      moveSpeed: Math.round(BASE_STATS.moveSpeed * mods.moveSpeed),
-      atkSpeed: BASE_STATS.atkSpeed,
-      critRate: BASE_STATS.critRate + getCritRateBonus() + this._pendingCritPoints * CRIT_RATE_PER_POINT_VALUE,
-      critDmg: BASE_STATS.critDmg,
+      maxHp: Math.round(BASE_STATS.hp * mods.hp) + bonusFor('maxHp'),
+      attack: Math.round(BASE_STATS.attack * mods.attack) + bonusFor('attack'),
+      defense: Math.round(BASE_STATS.defense * mods.defense) + bonusFor('defense'),
+      moveSpeed: Math.round(BASE_STATS.moveSpeed * mods.moveSpeed) + bonusFor('moveSpeed'),
+      atkSpeed: BASE_STATS.atkSpeed + bonusFor('atkSpeed'),
+      critRate: BASE_STATS.critRate + bonusFor('critRate'),
+      critDmg: BASE_STATS.critDmg + bonusFor('critDmg'),
     };
     Object.values(this.equipped).forEach((itemId) => {
       if (!itemId || !EQUIPMENT_DATA[itemId]) return;
@@ -284,6 +269,7 @@ export default class InventoryScene extends Phaser.Scene {
       if (bonus.moveSpeed) stats.moveSpeed += bonus.moveSpeed;
       if (bonus.maxHp) stats.maxHp += bonus.maxHp;
     });
+    this.statPointsText.setText(`剩餘點數：${getStatPoints() - this._pendingTotal()}`);
     STATS_PANEL_DEFS.forEach((def) => {
       this.statsValueTexts[def.label].setText(def.get(stats));
     });
@@ -349,7 +335,6 @@ export default class InventoryScene extends Phaser.Scene {
     this.goldText.setText(`金幣：${getGold()}`);
     this.levelText.setText(`Lv.${getStatLevel()}　${getStatExp()}/${getStatExpToNext()} EXP`);
     this._refreshStatsPanel();
-    this._refreshStatPointsPanel();
   }
 
   // 滑鼠移到裝備上顯示的名稱／數值提示框，固定畫在裝備正上方
