@@ -10,6 +10,29 @@ export const EQUIP_SLOTS = ['weapon', 'helmet', 'clothes', 'pants', 'shoes'];
 // 之後戒指種類變多的話再改成跟一般裝備一樣「同類型任選欄位」。
 export const RING_SLOTS = ['ring1', 'ring2'];
 
+// 裝備稀有度：純視覺分級（名稱＋顏色），目前商店三階固定對應
+// 初心者=普通／中階=優秀／高階=稀有，兩種戒指對應史詩（回血）／神話（自動）；
+// 傳說目前沒有裝備使用，先保留給未來擴充新裝備。
+export const RARITY_IDS = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+export const RARITY_DATA = {
+  common: { id: 'common', label: '普通', color: 0xe8e8e8 },
+  uncommon: { id: 'uncommon', label: '優秀', color: 0x2ecc71 },
+  rare: { id: 'rare', label: '稀有', color: 0x3d9dff },
+  epic: { id: 'epic', label: '史詩', color: 0xb14dff },
+  legendary: { id: 'legendary', label: '傳說', color: 0xff9d2e },
+  mythic: { id: 'mythic', label: '神話', color: 0xff3b3b },
+};
+
+// 每項能力值在各稀有度下「合理」的數值範圍，作為之後新增/調整裝備數值時的平衡依據。
+// 現有裝備都是固定數值（不是抽獎隨機取得），下面 EQUIPMENT_DATA 裡填的數字都落在
+// 對應稀有度的範圍內；之後要加新裝備，直接對照這份表決定數值即可。
+export const RARITY_STAT_RANGES = {
+  attack: { common: [1, 10], uncommon: [8, 20], rare: [18, 35], epic: [30, 55], legendary: [50, 90], mythic: [85, 150] },
+  defense: { common: [1, 5], uncommon: [4, 10], rare: [8, 18], epic: [15, 30], legendary: [28, 50], mythic: [45, 80] },
+  maxHp: { common: [10, 30], uncommon: [25, 60], rare: [55, 120], epic: [100, 200], legendary: [180, 320], mythic: [300, 500] },
+  moveSpeed: { common: [5, 15], uncommon: [12, 28], rare: [25, 50], epic: [45, 75], legendary: [70, 110], mythic: [105, 160] },
+};
+
 export const SLOT_LABELS = {
   weapon: '武器',
   helmet: '頭盔',
@@ -40,81 +63,81 @@ export const TIER_PRICES = {
 // 獨立的圖案與配色，不用再靠 TIER_TINTS 染色區分階級。
 export const EQUIPMENT_DATA = {
   weapon_basic: {
-    id: 'weapon_basic', slot: 'weapon', tier: 'beginner', tierIndex: 0, prevId: null,
+    id: 'weapon_basic', slot: 'weapon', tier: 'beginner', tierIndex: 0, prevId: null, rarity: 'common',
     name: '初心者劍', desc: '攻擊力 +5', price: TIER_PRICES.beginner, icon: 'equip_weapon_beginner',
     bonus: { attack: 5 },
   },
   weapon_mid: {
-    id: 'weapon_mid', slot: 'weapon', tier: 'mid', tierIndex: 1, prevId: 'weapon_basic',
+    id: 'weapon_mid', slot: 'weapon', tier: 'mid', tierIndex: 1, prevId: 'weapon_basic', rarity: 'uncommon',
     name: '中階劍', desc: '攻擊力 +12', price: TIER_PRICES.mid, icon: 'equip_weapon_mid',
     bonus: { attack: 12 },
   },
   weapon_high: {
-    id: 'weapon_high', slot: 'weapon', tier: 'high', tierIndex: 2, prevId: 'weapon_mid',
+    id: 'weapon_high', slot: 'weapon', tier: 'high', tierIndex: 2, prevId: 'weapon_mid', rarity: 'rare',
     name: '高階劍', desc: '攻擊力 +25', price: TIER_PRICES.high, icon: 'equip_weapon_high',
     bonus: { attack: 25 },
   },
 
   helmet_basic: {
-    id: 'helmet_basic', slot: 'helmet', tier: 'beginner', tierIndex: 0, prevId: null,
+    id: 'helmet_basic', slot: 'helmet', tier: 'beginner', tierIndex: 0, prevId: null, rarity: 'common',
     name: '初心者頭盔', desc: '防禦力 +3', price: TIER_PRICES.beginner, icon: 'equip_helmet_beginner',
     bonus: { defense: 3 },
   },
   helmet_mid: {
-    id: 'helmet_mid', slot: 'helmet', tier: 'mid', tierIndex: 1, prevId: 'helmet_basic',
+    id: 'helmet_mid', slot: 'helmet', tier: 'mid', tierIndex: 1, prevId: 'helmet_basic', rarity: 'uncommon',
     name: '中階頭盔', desc: '防禦力 +7', price: TIER_PRICES.mid, icon: 'equip_helmet_mid',
     bonus: { defense: 7 },
   },
   helmet_high: {
-    id: 'helmet_high', slot: 'helmet', tier: 'high', tierIndex: 2, prevId: 'helmet_mid',
+    id: 'helmet_high', slot: 'helmet', tier: 'high', tierIndex: 2, prevId: 'helmet_mid', rarity: 'rare',
     name: '高階頭盔', desc: '防禦力 +15', price: TIER_PRICES.high, icon: 'equip_helmet_high',
     bonus: { defense: 15 },
   },
 
   clothes_basic: {
-    id: 'clothes_basic', slot: 'clothes', tier: 'beginner', tierIndex: 0, prevId: null,
+    id: 'clothes_basic', slot: 'clothes', tier: 'beginner', tierIndex: 0, prevId: null, rarity: 'common',
     name: '初心者上衣', desc: '生命上限 +20', price: TIER_PRICES.beginner, icon: 'equip_clothes_beginner',
     bonus: { maxHp: 20 },
   },
   clothes_mid: {
-    id: 'clothes_mid', slot: 'clothes', tier: 'mid', tierIndex: 1, prevId: 'clothes_basic',
+    id: 'clothes_mid', slot: 'clothes', tier: 'mid', tierIndex: 1, prevId: 'clothes_basic', rarity: 'uncommon',
     name: '中階上衣', desc: '生命上限 +45', price: TIER_PRICES.mid, icon: 'equip_clothes_mid',
     bonus: { maxHp: 45 },
   },
   clothes_high: {
-    id: 'clothes_high', slot: 'clothes', tier: 'high', tierIndex: 2, prevId: 'clothes_mid',
+    id: 'clothes_high', slot: 'clothes', tier: 'high', tierIndex: 2, prevId: 'clothes_mid', rarity: 'rare',
     name: '高階上衣', desc: '生命上限 +90', price: TIER_PRICES.high, icon: 'equip_clothes_high',
     bonus: { maxHp: 90 },
   },
 
   pants_basic: {
-    id: 'pants_basic', slot: 'pants', tier: 'beginner', tierIndex: 0, prevId: null,
+    id: 'pants_basic', slot: 'pants', tier: 'beginner', tierIndex: 0, prevId: null, rarity: 'common',
     name: '初心者褲子', desc: '防禦力 +2', price: TIER_PRICES.beginner, icon: 'equip_pants_beginner',
     bonus: { defense: 2 },
   },
   pants_mid: {
-    id: 'pants_mid', slot: 'pants', tier: 'mid', tierIndex: 1, prevId: 'pants_basic',
+    id: 'pants_mid', slot: 'pants', tier: 'mid', tierIndex: 1, prevId: 'pants_basic', rarity: 'uncommon',
     name: '中階褲子', desc: '防禦力 +5', price: TIER_PRICES.mid, icon: 'equip_pants_mid',
     bonus: { defense: 5 },
   },
   pants_high: {
-    id: 'pants_high', slot: 'pants', tier: 'high', tierIndex: 2, prevId: 'pants_mid',
+    id: 'pants_high', slot: 'pants', tier: 'high', tierIndex: 2, prevId: 'pants_mid', rarity: 'rare',
     name: '高階褲子', desc: '防禦力 +10', price: TIER_PRICES.high, icon: 'equip_pants_high',
     bonus: { defense: 10 },
   },
 
   shoes_basic: {
-    id: 'shoes_basic', slot: 'shoes', tier: 'beginner', tierIndex: 0, prevId: null,
+    id: 'shoes_basic', slot: 'shoes', tier: 'beginner', tierIndex: 0, prevId: null, rarity: 'common',
     name: '初心者鞋子', desc: '移動速度 +10', price: TIER_PRICES.beginner, icon: 'equip_shoes_beginner',
     bonus: { moveSpeed: 10 },
   },
   shoes_mid: {
-    id: 'shoes_mid', slot: 'shoes', tier: 'mid', tierIndex: 1, prevId: 'shoes_basic',
+    id: 'shoes_mid', slot: 'shoes', tier: 'mid', tierIndex: 1, prevId: 'shoes_basic', rarity: 'uncommon',
     name: '中階鞋子', desc: '移動速度 +22', price: TIER_PRICES.mid, icon: 'equip_shoes_mid',
     bonus: { moveSpeed: 22 },
   },
   shoes_high: {
-    id: 'shoes_high', slot: 'shoes', tier: 'high', tierIndex: 2, prevId: 'shoes_mid',
+    id: 'shoes_high', slot: 'shoes', tier: 'high', tierIndex: 2, prevId: 'shoes_mid', rarity: 'rare',
     name: '高階鞋子', desc: '移動速度 +40', price: TIER_PRICES.high, icon: 'equip_shoes_high',
     bonus: { moveSpeed: 40 },
   },
@@ -123,12 +146,12 @@ export const EQUIPMENT_DATA = {
   // 效果本身是真的有作用的（見 HealthPackSystem._rollHoming() / Player._computeAutoPilotDirection()），
   // 只是扭蛋機制還沒實作，玩家目前還沒有辦法真的抽到、穿上這兩個戒指。
   ring_heal: {
-    id: 'ring_heal', slot: 'ring1', tier: null, tierIndex: 0, prevId: null,
+    id: 'ring_heal', slot: 'ring1', tier: null, tierIndex: 0, prevId: null, rarity: 'epic',
     name: '回血戒指', desc: '掉落的血包有 30% 機率自動飛向玩家。（僅扭蛋機取得）',
     icon: 'ring_heal', bonus: {},
   },
   ring_auto: {
-    id: 'ring_auto', slot: 'ring2', tier: null, tierIndex: 0, prevId: null,
+    id: 'ring_auto', slot: 'ring2', tier: null, tierIndex: 0, prevId: null, rarity: 'mythic',
     name: '自動戒指', desc: '自動幫玩家移動、閃避怪物、拾取血包與磁鐵。（僅扭蛋機取得）',
     icon: 'ring_auto', bonus: {},
   },

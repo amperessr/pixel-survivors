@@ -1,5 +1,5 @@
 import {
-  EQUIPMENT_DATA, EQUIP_SLOTS, SLOT_LABELS, EQUIP_LINES,
+  EQUIPMENT_DATA, EQUIP_SLOTS, SLOT_LABELS, EQUIP_LINES, RARITY_DATA,
 } from '../equipment/EquipmentData.js';
 import { getGold, spendGold, addGold, isItemOwned, upgradeEquipment } from '../managers/SaveManager.js';
 import { textStyle } from '../utils/TextStyle.js';
@@ -130,6 +130,13 @@ export default class ShopScene extends Phaser.Scene {
 
     this.gridContainer.add(this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH));
 
+    // 稀有度外框：貼著卡片邊緣描一圈對應顏色的框線，一眼就能分辨階級
+    // （普通/優秀/稀有/史詩/傳說/神話，見 EquipmentData.js 的 RARITY_DATA）。
+    const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
+    const frame = this.add.rectangle(cx, cy, cardW - 6, cardH - 6)
+      .setStrokeStyle(3, rarity.color, owned ? 0.35 : 0.9).setFillStyle(0, 0);
+    this.gridContainer.add(frame);
+
     const iconY = cy - 65;
     // 圖示現在是玩家提供的正式美術圖（128x128，取代舊的 48x48 程式產生貼圖），
     // 每階已經是各自獨立的圖案配色，不用再額外染色區分階級。
@@ -137,8 +144,12 @@ export default class ShopScene extends Phaser.Scene {
     if (owned) icon.setAlpha(0.3);
     this.gridContainer.add(icon);
 
+    const rarityHex = '#' + rarity.color.toString(16).padStart(6, '0');
     this.gridContainer.add(this.add.text(cx, cy - 8, def.name, textStyle({
-      fontSize: '24px', color: owned ? '#7a7a7a' : '#fff',
+      fontSize: '24px', color: owned ? '#7a7a7a' : rarityHex,
+    })).setOrigin(0.5));
+    this.gridContainer.add(this.add.text(cx, cy - 92, rarity.label, textStyle({
+      fontSize: '15px', color: owned ? '#7a7a7a' : rarityHex,
     })).setOrigin(0.5));
     this.gridContainer.add(this.add.text(cx, cy + 28, def.desc, textStyle({
       fontSize: '19px', color: owned ? '#6a6a6a' : '#9fd3ff',

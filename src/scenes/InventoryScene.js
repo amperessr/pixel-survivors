@@ -1,4 +1,4 @@
-import { EQUIPMENT_DATA, EQUIP_SLOTS, RING_SLOTS, SLOT_LABELS } from '../equipment/EquipmentData.js';
+import { EQUIPMENT_DATA, EQUIP_SLOTS, RING_SLOTS, SLOT_LABELS, RARITY_DATA } from '../equipment/EquipmentData.js';
 import {
   getInventory, setInventory, getEquipped, setEquipped, getGold,
   getStatLevel, getStatExp, getStatExpToNext, getStatPoints, getStatInvest,
@@ -76,6 +76,7 @@ export default class InventoryScene extends Phaser.Scene {
     this.equipSlotImgs = {};
     this.equipIconImgs = {};
     this.equipEmptyLabels = {};
+    this.equipRarityFrames = {};
 
     // 五個一般裝備欄 + 兩個戒指欄，共用同一套渲染/互動邏輯（戒指目前只能從扭蛋機
     // 取得，扭蛋機制還沒實作，所以這兩格暫時一定是空的，但介面/互動都是完整的，
@@ -112,6 +113,7 @@ export default class InventoryScene extends Phaser.Scene {
 
     this.slotBgs = [];
     this.slotIcons = [];
+    this.slotRarityFrames = [];
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const idx = r * COLS + c;
@@ -275,17 +277,29 @@ export default class InventoryScene extends Phaser.Scene {
     });
   }
 
+  // 稀有度外框顏色（十六進位色碼字串），見 EquipmentData.js 的 RARITY_DATA
+  _rarityHex(def) {
+    const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
+    return '#' + rarity.color.toString(16).padStart(6, '0');
+  }
+
   _refresh() {
     // 重新畫出裝備欄（五個一般欄 + 兩個戒指欄）的圖示：有裝備時顯示圖示、隱藏空格
-    // 標籤；沒有裝備時反過來
+    // 標籤；沒有裝備時反過來。裝備旁邊加一圈對應稀有度顏色的外框，一眼分辨階級。
     [...EQUIP_SLOTS, ...RING_SLOTS].forEach((slot) => {
       if (this.equipIconImgs[slot]) { this.equipIconImgs[slot].destroy(); this.equipIconImgs[slot] = null; }
+      if (this.equipRarityFrames[slot]) { this.equipRarityFrames[slot].destroy(); this.equipRarityFrames[slot] = null; }
       const itemId = this.equipped[slot];
       const bg = this.equipSlotImgs[slot];
       if (itemId && EQUIPMENT_DATA[itemId]) {
+        const def = EQUIPMENT_DATA[itemId];
+        const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
+        const frame = this.add.rectangle(bg.x, bg.y, SLOT_SIZE + 6, SLOT_SIZE + 6)
+          .setStrokeStyle(3, rarity.color, 0.95).setFillStyle(0, 0).setDepth(11);
+        this.equipRarityFrames[slot] = frame;
         // 圖示是 128x128 的正式美術圖，縮放倍率調大讓圖示確實填滿欄位方框，
         // 不再看起來小小一顆飄在方框中間。
-        const icon = this.add.image(bg.x, bg.y, EQUIPMENT_DATA[itemId].icon).setScale(0.55).setDepth(12);
+        const icon = this.add.image(bg.x, bg.y, def.icon).setScale(0.55).setDepth(12);
         this.equipIconImgs[slot] = icon;
         this.equipEmptyLabels[slot].setVisible(false);
       } else {
@@ -296,10 +310,14 @@ export default class InventoryScene extends Phaser.Scene {
     // 重新畫出背包格的圖示：可拖曳，拖到垃圾桶上放開就丟棄；滑鼠移上去顯示名稱/數值提示；
     // 沒有拖動、單純點一下的話維持原本「點擊裝備」的行為。
     this.slotIcons.forEach((icon) => { if (icon) icon.destroy(); });
+    this.slotRarityFrames.forEach((frame) => { if (frame) frame.destroy(); });
     this.inventory.forEach((itemId, idx) => {
       if (itemId && EQUIPMENT_DATA[itemId]) {
         const def = EQUIPMENT_DATA[itemId];
         const bg = this.slotBgs[idx];
+        const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
+        this.slotRarityFrames[idx] = this.add.rectangle(bg.x, bg.y, bg.displayWidth - 2, bg.displayHeight - 2)
+          .setStrokeStyle(3, rarity.color, 0.95).setFillStyle(0, 0);
         // 背包格圖示縮放倍率調大，讓圖示填滿格子（原本 0.34 太小，格子裡空太多）。
         const icon = this.add.image(bg.x, bg.y, def.icon).setScale(0.47);
         icon.setInteractive({ useHandCursor: true, draggable: true });
@@ -329,6 +347,7 @@ export default class InventoryScene extends Phaser.Scene {
         this.slotIcons[idx] = icon;
       } else {
         this.slotIcons[idx] = null;
+        this.slotRarityFrames[idx] = null;
       }
     });
 
@@ -340,17 +359,21 @@ export default class InventoryScene extends Phaser.Scene {
   // 滑鼠移到裝備上顯示的名稱／數值提示框，固定畫在裝備正上方
   _showTooltip(x, y, def) {
     this._hideTooltip();
-    const boxW = 260, boxH = 74;
-    const ty = y - 70;
+    const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
+    const boxW = 260, boxH = 92;
+    const ty = y - 80;
     const bg = this.add.rectangle(x, ty, boxW, boxH, 0x0a0e16, 0.92)
-      .setStrokeStyle(2, 0xffe066, 0.85).setDepth(900);
-    const name = this.add.text(x, ty - 16, def.name, textStyle({
+      .setStrokeStyle(2, rarity.color, 0.9).setDepth(900);
+    const rarityLabel = this.add.text(x, ty - 30, rarity.label, textStyle({
+      fontSize: '15px', color: this._rarityHex(def),
+    })).setOrigin(0.5).setDepth(901);
+    const name = this.add.text(x, ty - 8, def.name, textStyle({
       fontSize: '22px', color: '#ffe066',
     })).setOrigin(0.5).setDepth(901);
-    const desc = this.add.text(x, ty + 14, def.desc, textStyle({
+    const desc = this.add.text(x, ty + 22, def.desc, textStyle({
       fontSize: '18px', color: '#9fd3ff',
     })).setOrigin(0.5).setDepth(901);
-    this._tooltip = [bg, name, desc];
+    this._tooltip = [bg, rarityLabel, name, desc];
   }
 
   _hideTooltip() {
