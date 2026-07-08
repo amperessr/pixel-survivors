@@ -124,12 +124,19 @@ export default class GameScene extends Phaser.Scene {
     };
     document.addEventListener('visibilitychange', this._onVisibilityChange);
 
-    this.events.on('shutdown', () => {
-      audioManager.stopBgm();
-      window.removeEventListener('beforeunload', this._saveOnExit);
-      window.removeEventListener('pagehide', this._saveOnExit);
-      document.removeEventListener('visibilitychange', this._onVisibilityChange);
-    });
+    // 這個 GameScene 物件會在好幾場遊戲之間重複使用，create() 每次重開都會執行到
+    // 這裡——如果沒有這個旗標擋著，'shutdown' 監聽器會一場一場疊加下去（開好幾場
+    // 遊戲後同一個 shutdown 事件會觸發好幾次同樣的清理邏輯），所以只在第一次掛上，
+    // 之後每次 create() 就不再重複註冊。
+    if (!this._shutdownHandlerBound) {
+      this._shutdownHandlerBound = true;
+      this.events.on('shutdown', () => {
+        audioManager.stopBgm();
+        window.removeEventListener('beforeunload', this._saveOnExit);
+        window.removeEventListener('pagehide', this._saveOnExit);
+        document.removeEventListener('visibilitychange', this._onVisibilityChange);
+      });
+    }
 
     audioManager.startBgm();
 
@@ -588,10 +595,10 @@ export default class GameScene extends Phaser.Scene {
     const kills = this.killCount;
     const level = this.player ? this.player.level : 1;
     const elapsed = Math.floor((this.time.now - this.startTime) / 1000);
-    // 死亡當下如果升級選單／遺物選擇視窗剛好開著（例如跟 Boss 同歸於盡），
-    // 這兩個視窗不會自己關掉，會一直蓋在畫面最上層，看起來像是「遊戲卡住沒結束」，
-    // 所以這裡強制把它們也一併關掉，確保一定會看到結算畫面。
-    ['UIScene', 'LevelUpScene', 'RelicChoiceScene'].forEach((key) => {
+    // 死亡當下如果升級選單／遺物選擇視窗／開局選技能視窗剛好開著（例如跟 Boss
+    // 同歸於盡），這些視窗不會自己關掉，會一直蓋在畫面最上層，看起來像是
+    // 「遊戲卡住沒結束」，所以這裡強制把它們也一併關掉，確保一定會看到結算畫面。
+    ['UIScene', 'LevelUpScene', 'RelicChoiceScene', 'StartSkillScene'].forEach((key) => {
       try { this.scene.stop(key); } catch (err) { console.error(`[GameScene] 關閉 ${key} 失敗：`, err); }
     });
     this.scene.start('GameOverScene', { kills, level, time: elapsed });
@@ -1044,7 +1051,10 @@ export default class GameScene extends Phaser.Scene {
     // 進化版改用兩張不同的正式美術圖（小冰柱／大冰柱），各自調過縮放倍率，
     // 讓兩張圖在遊戲裡的視覺大小跟舊版數值手感差不多。
     const pillarTexture = evolved ? 'fx_ice_pillar_evo' : 'fx_ice_pillar_normal';
-    const pillarScale = evolved ? 0.42 : 0.55;
+    // 進化版原圖是 420x338 的寬幅爆裂特效（含左側漂浮的光環），跟一般版 160x190
+    // 的瘦長冰柱比起來寬非常多，原本 0.42 縮放讓它看起來比一般版大上快兩倍，
+    // 縮小到 0.3 讓體型跟命中半徑（evolved 50 / 一般 36，約 1.4 倍）比較搭。
+    const pillarScale = evolved ? 0.3 : 0.55;
     const pillar = this.add.image(x, y, pillarTexture).setOrigin(0.5, 1).setDepth(y + 1).setScale(pillarScale, pillarScale * 0.05).setAlpha(0.95);
 
     this.tweens.add({
