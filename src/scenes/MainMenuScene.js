@@ -1,4 +1,4 @@
-import { promptPlayerName, getCheckpointStage, getPlayerName, logout } from '../managers/SaveManager.js';
+import { promptPlayerName, getCheckpointStage, getPlayerName, logout, getStatLevel } from '../managers/SaveManager.js';
 import { subscribeLeaderboard } from '../firebase/firebase.js';
 import { textStyle } from '../utils/TextStyle.js';
 
@@ -86,7 +86,9 @@ export default class MainMenuScene extends Phaser.Scene {
     // 同一台裝置登入過一次之後，往後開遊戲都會直接沿用（見 SaveManager.promptPlayerName()
     // 的「靜默背景同步」邏輯），不會每次都跳密碼輸入視窗；要換帳號的話按這顆登出鍵，
     // 才會清掉本機快取的登入狀態，下次開遊戲重新跳出名字/密碼視窗。
-    this.add.text(120, h - 76, `已登入：${getPlayerName() || '???'}`, textStyle({
+    // 永久等級（跟進遊戲後那場戰鬥的等級是兩回事）跟著登入名稱一起顯示，
+    // 不用另外占一整行版面。
+    this.add.text(120, h - 76, `已登入：${getPlayerName() || '???'}　Lv.${getStatLevel()}`, textStyle({
       fontSize: '18px', color: '#9fd3ff',
     })).setOrigin(0.5);
     const logoutBtn = this.add.image(120, h - 40, 'ui_button_parchment').setDisplaySize(170, 46).setInteractive({ useHandCursor: true });
@@ -113,13 +115,13 @@ export default class MainMenuScene extends Phaser.Scene {
 
     // 更新日誌：簡單列出近期幾項重點更新，方便玩家知道遊戲還在持續開發（新的排在上面）
     const CHANGELOG = [
+      '🆕 新增永久等級系統，升級可投資爆擊率',
       '🆕 新增帳號密碼系統，跨裝置同步存檔進度',
-      '🆕 新增惡魔王／樹王，四魔王輪流登場',
+      '🆕 五魔王輪流登場，各有專屬技能與外觀',
       '🎨 玩家角色、冰霜技能換成正式美術圖',
-      '🆕 新增裝備系統：武器/頭盔/衣服/褲子/鞋子',
+      '🆕 新增裝備系統：武器/頭盔/衣服/褲子/鞋子/戒指',
       '🆕 新增背包與商店，擊殺數可換金幣購買裝備',
       '🆕 新增遺物系統：擊敗魔王可獲得永久強化',
-      '🆕 關卡制取代倒數計時，魔王關卡特別標示',
     ];
     const logPanelH = 320;
     const logPanelY = lbPanelY + lbPanelH / 2 + 30 + logPanelH / 2;

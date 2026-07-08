@@ -9,7 +9,7 @@ import { WEAPON_KNOCKBACK } from '../weapons/WeaponData.js';
 import { PASSIVE_IDS } from '../skills/PassiveData.js';
 import { RELICS } from '../relics/RelicData.js';
 import { EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
-import { getEquipped, addGold, setBestScore, setCheckpointStage } from '../managers/SaveManager.js';
+import { getEquipped, addGold, setBestScore, setCheckpointStage, getCritRateBonus } from '../managers/SaveManager.js';
 import { dist } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { textStyle } from '../utils/TextStyle.js';
@@ -175,6 +175,9 @@ export default class GameScene extends Phaser.Scene {
         this.player.hp += bonus.maxHp; // 生命上限提升的部分直接補滿，不用讓玩家「掉血」
       }
     });
+    // 永久等級投資的爆擊率技能點（最高 40%）跟裝備加成疊加，這是唯一能用升級點數
+    // 直接加的能力值，其餘數值一律只能靠裝備／其他方式提升。
+    stats.critRate += getCritRateBonus();
   }
 
   update(time, delta) {

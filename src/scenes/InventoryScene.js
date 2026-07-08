@@ -1,5 +1,10 @@
 import { EQUIPMENT_DATA, EQUIP_SLOTS, RING_SLOTS, SLOT_LABELS } from '../equipment/EquipmentData.js';
-import { getInventory, setInventory, getEquipped, setEquipped, getGold } from '../managers/SaveManager.js';
+import {
+  getInventory, setInventory, getEquipped, setEquipped, getGold,
+  getStatLevel, getStatExp, getStatExpToNext, getStatPoints, getCritRatePoints,
+  getCritRateBonus, investCritRatePoint, resetStatPoints,
+  RESET_STAT_POINTS_GOLD_COST, CRIT_RATE_POINT_CAP_VALUE, CRIT_RATE_PER_POINT_VALUE,
+} from '../managers/SaveManager.js';
 import { CHARACTERS, BASE_STATS } from '../player/Player.js';
 import { textStyle } from '../utils/TextStyle.js';
 
@@ -46,9 +51,14 @@ export default class InventoryScene extends Phaser.Scene {
     this.inventory = getInventory();
     this.equipped = getEquipped();
     this._tooltip = null;
+    this._pendingCritPoints = 0; // 「+1」按了但還沒按確認的爆擊率點數，確認後才會真的扣點寫入存檔
 
     this.goldText = this.add.text(w - 40, 50, `金幣：${getGold()}`, textStyle({
       fontSize: '30px', color: '#ffd93d',
+    })).setOrigin(1, 0.5);
+    // 永久等級（跟進遊戲後那場戰鬥的等級是兩回事，只在這裡跟主選單顯示）
+    this.levelText = this.add.text(w - 40, 88, '', textStyle({
+      fontSize: '22px', color: '#6fd3ff',
     })).setOrigin(1, 0.5);
 
     // ---------- 左側：角色（裝備疊在身體對應部位）----------
@@ -83,8 +93,9 @@ export default class InventoryScene extends Phaser.Scene {
       bg.on('pointerout', () => { bg.clearTint(); this._hideTooltip(); });
     });
 
-    // ---------- 左側下方：能力值面板 ----------
+    // ---------- 左側下方：能力值面板 + 右側緊接著的升級點數面板 ----------
     this._buildStatsPanel(leftX, 480);
+    this._buildStatPointsPanel(leftX + 290, 480);
 
     // ---------- 右側：5x10 背包格 ----------
     const gridW = 720, gridH = 380;
@@ -156,6 +167,104 @@ export default class InventoryScene extends Phaser.Scene {
     });
   }
 
+  // 升級點數面板：緊接在能力值面板右邊。升級每級發 3 點技能點，目前只能拿來加
+  // 爆擊率（上限 40%），其餘能力值一律只能靠裝備或其他方式提升。「+1」只是先
+  // 累積待確認的點數，按「確認」才會真的扣點數寫入存檔——這樣點錯了在確認前
+  // 都還能反悔（離開背包畫面不按確認，待加點數就直接作廢，不會被存下來）。
+  _buildStatPointsPanel(cx, panelTop) {
+    const panelW = 240, panelH = 300;
+    const cy = panelTop + panelH / 2;
+    this.add.image(cx, cy, 'ui_panel').setDisplaySize(panelW, panelH);
+    this.add.rectangle(cx, cy, panelW - 6, panelH - 6).setStrokeStyle(3, 0xffd93d, 0.6).setFillStyle(0, 0);
+    this.add.text(cx, panelTop + 24, '⭐ 升級點數', textStyle({
+      fontSize: '23px', color: '#ffd93d',
+    })).setOrigin(0.5);
+    this.add.rectangle(cx, panelTop + 46, panelW - 40, 2, 0xffd93d, 0.4);
+
+    this.statPointsText = this.add.text(cx, panelTop + 72, '', textStyle({
+      fontSize: '18px', color: '#cfe9ff',
+    })).setOrigin(0.5);
+    this.critBonusText = this.add.text(cx, panelTop + 100, '', textStyle({
+      fontSize: '18px', color: '#ffd93d',
+    })).setOrigin(0.5);
+    this.add.text(cx, panelTop + 126, '爆擊率', textStyle({
+      fontSize: '15px', color: '#9fd3ff',
+    })).setOrigin(0.5);
+
+    const plusBtn = this.add.image(cx - 42, panelTop + 162, 'ui_button_parchment').setDisplaySize(66, 44).setInteractive({ useHandCursor: true });
+    this.add.text(cx - 42, panelTop + 162, '+1', textStyle({ fontSize: '20px', color: '#3a2413' })).setOrigin(0.5);
+    plusBtn.on('pointerover', () => plusBtn.setTint(0xfff3d0));
+    plusBtn.on('pointerout', () => plusBtn.clearTint());
+    plusBtn.on('pointerdown', () => this._addPendingCritPoint());
+
+    const confirmBtn = this.add.image(cx + 42, panelTop + 162, 'ui_button_parchment').setDisplaySize(66, 44).setInteractive({ useHandCursor: true });
+    this.add.text(cx + 42, panelTop + 162, '確認', textStyle({ fontSize: '18px', color: '#3a2413' })).setOrigin(0.5);
+    confirmBtn.on('pointerover', () => confirmBtn.setTint(0xfff3d0));
+    confirmBtn.on('pointerout', () => confirmBtn.clearTint());
+    confirmBtn.on('pointerdown', () => this._confirmCritPoints());
+
+    this.pendingCritText = this.add.text(cx, panelTop + 198, '', textStyle({
+      fontSize: '15px', color: '#9fd3ff',
+    })).setOrigin(0.5);
+
+    this.add.rectangle(cx, panelTop + 222, panelW - 40, 2, 0xffd93d, 0.25);
+
+    const resetBtn = this.add.image(cx, panelTop + 254, 'ui_button_parchment').setDisplaySize(200, 46).setInteractive({ useHandCursor: true });
+    this.add.text(cx, panelTop + 254, '重置所有能力值', textStyle({ fontSize: '17px', color: '#3a2413' })).setOrigin(0.5);
+    this.add.text(cx, panelTop + 282, `消耗 ${RESET_STAT_POINTS_GOLD_COST.toLocaleString()} 金幣`, textStyle({
+      fontSize: '13px', color: '#ff9a9a',
+    })).setOrigin(0.5);
+    resetBtn.on('pointerover', () => resetBtn.setTint(0xfff3d0));
+    resetBtn.on('pointerout', () => resetBtn.clearTint());
+    resetBtn.on('pointerdown', () => this._onResetStatPoints());
+  }
+
+  _addPendingCritPoint() {
+    const available = getStatPoints() - this._pendingCritPoints;
+    const previewInvested = getCritRatePoints() + this._pendingCritPoints;
+    if (available <= 0) { this._showToast('沒有剩餘技能點了'); return; }
+    if (previewInvested >= CRIT_RATE_POINT_CAP_VALUE) { this._showToast('爆擊率已經到上限 40% 了'); return; }
+    this._pendingCritPoints++;
+    this._refreshStatPointsPanel();
+    this._refreshStatsPanel();
+  }
+
+  _confirmCritPoints() {
+    if (this._pendingCritPoints <= 0) return;
+    let confirmed = 0;
+    for (let i = 0; i < this._pendingCritPoints; i++) {
+      if (investCritRatePoint()) confirmed++;
+    }
+    this._pendingCritPoints = 0;
+    this._refreshStatPointsPanel();
+    this._refreshStatsPanel();
+    this._showToast(`已投資 ${confirmed} 點到爆擊率`);
+  }
+
+  _onResetStatPoints() {
+    if (this._pendingCritPoints > 0) {
+      this._showToast('請先確認或不要點「+1」，再重置');
+      return;
+    }
+    if (!resetStatPoints()) {
+      this._showToast(`金幣不足，重置需要 ${RESET_STAT_POINTS_GOLD_COST.toLocaleString()} 金幣`);
+      return;
+    }
+    this.goldText.setText(`金幣：${getGold()}`);
+    this._refreshStatPointsPanel();
+    this._refreshStatsPanel();
+    this._showToast('已重置所有升級能力值');
+  }
+
+  _refreshStatPointsPanel() {
+    const invested = getCritRatePoints();
+    const available = getStatPoints() - this._pendingCritPoints;
+    const previewBonus = (invested + this._pendingCritPoints) * CRIT_RATE_PER_POINT_VALUE;
+    this.statPointsText.setText(`剩餘點數：${available}`);
+    this.critBonusText.setText(`+${previewBonus.toFixed(1)}% / 40%`);
+    this.pendingCritText.setText(this._pendingCritPoints > 0 ? `待確認：+${this._pendingCritPoints} 點` : '');
+  }
+
   _refreshStatsPanel() {
     const mods = CHARACTERS.balanced.mods;
     const stats = {
@@ -164,7 +273,7 @@ export default class InventoryScene extends Phaser.Scene {
       defense: Math.round(BASE_STATS.defense * mods.defense),
       moveSpeed: Math.round(BASE_STATS.moveSpeed * mods.moveSpeed),
       atkSpeed: BASE_STATS.atkSpeed,
-      critRate: BASE_STATS.critRate,
+      critRate: BASE_STATS.critRate + getCritRateBonus() + this._pendingCritPoints * CRIT_RATE_PER_POINT_VALUE,
       critDmg: BASE_STATS.critDmg,
     };
     Object.values(this.equipped).forEach((itemId) => {
@@ -238,7 +347,9 @@ export default class InventoryScene extends Phaser.Scene {
     });
 
     this.goldText.setText(`金幣：${getGold()}`);
+    this.levelText.setText(`Lv.${getStatLevel()}　${getStatExp()}/${getStatExpToNext()} EXP`);
     this._refreshStatsPanel();
+    this._refreshStatPointsPanel();
   }
 
   // 滑鼠移到裝備上顯示的名稱／數值提示框，固定畫在裝備正上方

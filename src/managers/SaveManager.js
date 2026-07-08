@@ -15,6 +15,10 @@ const GOLD_KEY = 'pixelSurvivors_gold';
 const INVENTORY_KEY = 'pixelSurvivors_inventory'; // JSON: 長度 50 的陣列，每格是 itemId 或 null
 const EQUIPPED_KEY = 'pixelSurvivors_equipped';   // JSON: { weapon, helmet, clothes, pants, shoes }
 const CHECKPOINT_KEY = 'pixelSurvivors_checkpointStage'; // 目前記錄到的最高關卡存檔點（每 5 關記一次）
+const STAT_LEVEL_KEY = 'pixelSurvivors_statLevel'; // 永久等級（跟進遊戲後的戰鬥內等級是兩回事）
+const STAT_EXP_KEY = 'pixelSurvivors_statExp';     // 目前等級內已累積的經驗值
+const STAT_POINTS_KEY = 'pixelSurvivors_statPoints'; // 還沒花掉的技能點
+const CRIT_POINTS_KEY = 'pixelSurvivors_critRatePoints'; // 已投資到爆擊率的點數（重置時只退這個）
 
 const INVENTORY_SIZE = 50; // 5 列 x 10 欄，跟楓之谷倉庫一樣的排法
 
@@ -156,6 +160,124 @@ export function setCheckpointStage(stage) {
   }
 }
 
+// ---------- 永久等級系統 ----------
+// 注意：這個等級跟「進遊戲後那場戰鬥」的等級（Player.level，決定開局技能/被動選單）
+// 完全是兩回事——這是跨場次永久保留、只在背包／主選單顯示的帳號等級，用來發放
+// 可以永久投資能力值的技能點。
+//
+// 經驗值公式分三段，難度依序遞增：
+//   Lv 1~49　：溫和的多項式成長（BASE * L^EXP1），練起來很輕鬆
+//   Lv 50~99 ：改成複利成長（每級 x GROWTH2），明顯感覺變硬
+//   Lv 100+  ：複利成長但倍率更高（每級 x GROWTH3），刻意做得很硬，只有願意長期投入的玩家才練得上去
+// 三段在交界處都是「接著前一段最後的數值繼續複利」，不會出現數字忽然斷層式跳躍。
+const STAT_EXP_BASE = 25;
+const STAT_EXP_TIER1_EXPONENT = 1.6;
+const STAT_EXP_TIER1_MAX = 50;  // 到第 50 級之前都算 tier1
+const STAT_EXP_TIER2_MAX = 100; // 50~99 算 tier2，100 以後算 tier3
+const STAT_EXP_TIER2_GROWTH = 1.045; // 50 級複利下來大約 x9
+const STAT_EXP_TIER3_GROWTH = 1.08;  // 複利更陡，100 級之後每一級都要磨很久
+const STAT_POINTS_PER_LEVEL = 3;
+
+// 爆擊率技能點：每點 +0.2%，最多投資到 40%（200 點），其餘能力值一律不能用點數加，
+// 只能靠裝備／其他方式提升。
+const CRIT_RATE_PER_POINT = 0.2;
+const CRIT_RATE_POINT_CAP = 200; // 200 * 0.2% = 40%
+const RESET_STAT_POINTS_COST = 100000;
+
+// 從 level 升到 level+1 所需經驗值
+function expForLevel(level) {
+  const tier1 = (L) => Math.round(STAT_EXP_BASE * Math.pow(L, STAT_EXP_TIER1_EXPONENT));
+  if (level < STAT_EXP_TIER1_MAX) return tier1(level);
+
+  const e49 = tier1(STAT_EXP_TIER1_MAX - 1);
+  if (level < STAT_EXP_TIER2_MAX) {
+    const rel = level - (STAT_EXP_TIER1_MAX - 1); // 50 級時 rel=1
+    return Math.round(e49 * Math.pow(STAT_EXP_TIER2_GROWTH, rel));
+  }
+
+  const e99 = Math.round(e49 * Math.pow(STAT_EXP_TIER2_GROWTH, STAT_EXP_TIER2_MAX - STAT_EXP_TIER1_MAX + 1));
+  const rel = level - (STAT_EXP_TIER2_MAX - 1); // 100 級時 rel=1
+  return Math.round(e99 * Math.pow(STAT_EXP_TIER3_GROWTH, rel));
+}
+
+export function getStatLevel() {
+  return Math.max(1, parseInt(localStorage.getItem(STAT_LEVEL_KEY) || '1', 10));
+}
+
+export function getStatExp() {
+  return Math.max(0, parseInt(localStorage.getItem(STAT_EXP_KEY) || '0', 10));
+}
+
+// 目前等級升到下一級所需的經驗值（UI 畫進度條用）
+export function getStatExpToNext() {
+  return expForLevel(getStatLevel());
+}
+
+export function getStatPoints() {
+  return Math.max(0, parseInt(localStorage.getItem(STAT_POINTS_KEY) || '0', 10));
+}
+
+export function getCritRatePoints() {
+  return Math.max(0, Math.min(CRIT_RATE_POINT_CAP, parseInt(localStorage.getItem(CRIT_POINTS_KEY) || '0', 10)));
+}
+
+// 已投資的爆擊率點數換算成實際加成（%）
+export function getCritRateBonus() {
+  return getCritRatePoints() * CRIT_RATE_PER_POINT;
+}
+
+// 增加永久經驗值，處理連續升級（一次給很多經驗值可能一口氣跳好幾級）；
+// 每升一級發放 STAT_POINTS_PER_LEVEL 點技能點。回傳升了幾級，方便呼叫端顯示提示。
+export function addStatExp(amount) {
+  if (amount <= 0) return 0;
+  let level = getStatLevel();
+  let exp = getStatExp() + Math.floor(amount);
+  let levelsGained = 0;
+
+  let need = expForLevel(level);
+  while (exp >= need) {
+    exp -= need;
+    level += 1;
+    levelsGained += 1;
+    need = expForLevel(level);
+  }
+
+  localStorage.setItem(STAT_LEVEL_KEY, String(level));
+  localStorage.setItem(STAT_EXP_KEY, String(exp));
+  if (levelsGained > 0) {
+    localStorage.setItem(STAT_POINTS_KEY, String(getStatPoints() + levelsGained * STAT_POINTS_PER_LEVEL));
+  }
+  _scheduleCloudPush();
+  return levelsGained;
+}
+
+// 把一點技能點投資到爆擊率：沒有剩餘點數、或已經到 40% 上限就不會成功。
+// 回傳是否真的投資成功（呼叫端可以用這個決定要不要繼續讓玩家點下一次）。
+export function investCritRatePoint() {
+  const points = getStatPoints();
+  const critPoints = getCritRatePoints();
+  if (points <= 0 || critPoints >= CRIT_RATE_POINT_CAP) return false;
+  localStorage.setItem(STAT_POINTS_KEY, String(points - 1));
+  localStorage.setItem(CRIT_POINTS_KEY, String(critPoints + 1));
+  _scheduleCloudPush();
+  return true;
+}
+
+// 重置所有升級獲得的能力值：只退還「升級點數投資到爆擊率」的部分，裝備本身的加成
+// 完全不受影響。需要花費 10 萬金幣，金幣不夠就不會執行（回傳 false）。
+export function resetStatPoints() {
+  if (!spendGold(RESET_STAT_POINTS_COST)) return false;
+  const critPoints = getCritRatePoints();
+  localStorage.setItem(STAT_POINTS_KEY, String(getStatPoints() + critPoints));
+  localStorage.setItem(CRIT_POINTS_KEY, '0');
+  _scheduleCloudPush();
+  return true;
+}
+
+export const RESET_STAT_POINTS_GOLD_COST = RESET_STAT_POINTS_COST;
+export const CRIT_RATE_POINT_CAP_VALUE = CRIT_RATE_POINT_CAP;
+export const CRIT_RATE_PER_POINT_VALUE = CRIT_RATE_PER_POINT;
+
 // ---------- 帳號雲端同步 ----------
 
 // 把目前本機的存檔內容打包成一個物件，用來上傳／覆蓋雲端帳號資料
@@ -166,6 +288,10 @@ function _gatherLocalBundle() {
     equipped: getEquipped(),
     checkpointStage: getCheckpointStage(),
     bestScore: getBestScore(),
+    statLevel: getStatLevel(),
+    statExp: getStatExp(),
+    statPoints: getStatPoints(),
+    critRatePoints: getCritRatePoints(),
   };
 }
 
@@ -183,6 +309,18 @@ function _applyCloudBundle(data) {
   }
   if (typeof data.bestScore === 'number') {
     localStorage.setItem(BEST_KEY, String(Math.max(0, Math.floor(data.bestScore))));
+  }
+  if (typeof data.statLevel === 'number') {
+    localStorage.setItem(STAT_LEVEL_KEY, String(Math.max(1, Math.floor(data.statLevel))));
+  }
+  if (typeof data.statExp === 'number') {
+    localStorage.setItem(STAT_EXP_KEY, String(Math.max(0, Math.floor(data.statExp))));
+  }
+  if (typeof data.statPoints === 'number') {
+    localStorage.setItem(STAT_POINTS_KEY, String(Math.max(0, Math.floor(data.statPoints))));
+  }
+  if (typeof data.critRatePoints === 'number') {
+    localStorage.setItem(CRIT_POINTS_KEY, String(Math.max(0, Math.floor(data.critRatePoints))));
   }
 }
 
@@ -302,5 +440,9 @@ export function logout() {
   localStorage.removeItem(EQUIPPED_KEY);
   localStorage.removeItem(CHECKPOINT_KEY);
   localStorage.removeItem(BEST_KEY);
+  localStorage.removeItem(STAT_LEVEL_KEY);
+  localStorage.removeItem(STAT_EXP_KEY);
+  localStorage.removeItem(STAT_POINTS_KEY);
+  localStorage.removeItem(CRIT_POINTS_KEY);
   location.reload();
 }

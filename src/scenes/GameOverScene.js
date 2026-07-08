@@ -1,4 +1,4 @@
-import { getPlayerName, setBestScore, getBestScore, addGold, getGold } from '../managers/SaveManager.js';
+import { getPlayerName, setBestScore, getBestScore, addGold, getGold, addStatExp, getStatLevel } from '../managers/SaveManager.js';
 import { submitScore, subscribeLeaderboard } from '../firebase/firebase.js';
 import { textStyle } from '../utils/TextStyle.js';
 
@@ -29,6 +29,12 @@ export default class GameOverScene extends Phaser.Scene {
     const goldEarned = this.kills;
     addGold(goldEarned);
 
+    // 永久等級的經驗值（跟這場戰鬥內的等級是兩回事，只在背包/主選單顯示），
+    // 公式先抓一個合理的起始值，如果玩家實際玩起來覺得升級太快/太慢，
+    // 之後可以單獨調整這幾個係數，不用動到 SaveManager 裡的升級曲線本身。
+    const statExpEarned = this.kills * 50 + this.level * 250 + Math.floor(this.playTime * 2.5);
+    const levelsGained = addStatExp(statExpEarned);
+
     const mm = String(Math.floor(this.playTime / 60)).padStart(2, '0');
     const ss = String(this.playTime % 60).padStart(2, '0');
 
@@ -52,6 +58,9 @@ export default class GameOverScene extends Phaser.Scene {
       `存活時間：${mm}:${ss}`,
       `歷史最佳：${getBestScore()}`,
       `💰 獲得金幣：+${goldEarned}（目前總金幣：${getGold()}）`,
+      levelsGained > 0
+        ? `⭐ 帳號經驗：+${statExpEarned}（升級了！目前 Lv.${getStatLevel()}）`
+        : `⭐ 帳號經驗：+${statExpEarned}（目前 Lv.${getStatLevel()}）`,
     ];
     const statLineH = 36;
     statLines.forEach((line, i) => {
