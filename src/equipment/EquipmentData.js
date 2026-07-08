@@ -248,13 +248,14 @@ export const GACHA_RARITY_WEIGHTS = {
   mythic: 0.03,
 };
 
-// 背包一鍵出售的單件售價（依稀有度）；戒指類不在出售範圍（傳說/神話太稀有，
-// 誤賣損失太大，先不提供出售）。
+// 背包出售的單件售價（依稀有度，六階都可以賣，包含戒指）
 export const SELL_PRICES = {
   common: 100,
   uncommon: 300,
-  rare: 800,
-  epic: 2000,
+  rare: 500,
+  epic: 1000,
+  legendary: 5000,
+  mythic: 10000,
 };
 
 // 依稀有度分組的完整抽獎池（一般裝備 100 件 + 兩種戒指），供 rollGachaItem() 使用。

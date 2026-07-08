@@ -9,7 +9,7 @@ import {
 import { CHARACTERS, BASE_STATS } from '../player/Player.js';
 import { textStyle } from '../utils/TextStyle.js';
 
-const COLS = 10, ROWS = 5; // 5x10 背包格子，跟楓之谷倉庫版面一樣
+const COLS = 12, ROWS = 6; // 12x6 背包格子（放大版面＋增加格數）
 
 // 裝備欄分兩排「掛」在角色左右兩側，不再疊在身體部位上——
 // 左邊由上到下：武器／衣服／褲子；右邊由上到下：頭盔／鞋子。
@@ -42,9 +42,10 @@ const STATS_PANEL_DEFS = [
   { icon: 'icon_critDmg', label: '爆傷', color: '#ff9d3d', investKey: 'critDmg', get: (s) => `${s.critDmg.toFixed(0)}%` },
 ];
 
-// 背包場景：左邊是角色（裝備疊在對應身體部位上）+ 能力值面板，右邊是 5x10 的物品格子。
-// 點背包裡的裝備 = 穿上（原本穿的那件會換回這一格）；點身上穿的裝備 = 脫下（放回背包第一個空格）；
-// 滑鼠移到任何裝備上都會顯示名稱／數值提示；背包裡的裝備可以拖到垃圾桶丟棄。
+// 背包場景：左邊是角色（裝備疊在對應身體部位上）+ 能力值面板，右邊是 12x6 的物品格子。
+// 單擊背包裝備彈出「穿上／出售」小選單，雙擊直接穿上；點身上穿的裝備 = 脫下
+// （放回背包第一個空格）；滑鼠移到任何裝備上都會顯示名稱／數值提示；
+// 背包裡的裝備可以拖曳到別的格子交換位置。
 export default class InventoryScene extends Phaser.Scene {
   constructor() { super('InventoryScene'); }
 
@@ -64,16 +65,17 @@ export default class InventoryScene extends Phaser.Scene {
     this.goldText = this.add.text(w - 40, 50, `金幣：${getGold()}`, textStyle({
       fontSize: '30px', color: '#ffd93d',
     })).setOrigin(1, 0.5);
-    // 永久等級（跟進遊戲後那場戰鬥的等級是兩回事，只在這裡跟主選單顯示）
-    this.levelText = this.add.text(w - 40, 88, '', textStyle({
-      fontSize: '22px', color: '#6fd3ff',
-    })).setOrigin(1, 0.5);
 
     // ---------- 左側：角色（裝備疊在身體對應部位）----------
     const leftX = w * 0.2;
     const portraitY = 340;
     this.add.text(leftX, 90, '目前裝備', textStyle({ fontSize: '28px', color: '#9fd3ff' })).setOrigin(0.5);
     this.add.image(leftX, portraitY, 'player_balanced').setScale(PORTRAIT_SCALE);
+    // 永久等級放大，擺在「目前裝備」標題下方、角色圖示上方的空白處
+    // （跟進遊戲後那場戰鬥的等級是兩回事）
+    this.levelText = this.add.text(leftX, 145, '', textStyle({
+      fontSize: '34px', color: '#6fd3ff',
+    })).setOrigin(0.5);
 
     this.equipSlotImgs = {};
     this.equipIconImgs = {};
@@ -115,13 +117,13 @@ export default class InventoryScene extends Phaser.Scene {
     // ---------- 左側下方：能力值面板（每項能力值旁邊都能直接加點）----------
     this._buildStatsPanel(leftX, 480);
 
-    // ---------- 右側：5x10 背包格 ----------
-    const gridW = 720, gridH = 380;
-    const startX = w * 0.42, startY = 220;
+    // ---------- 右側：12x6 背包格（放大版面） ----------
+    const gridW = 940, gridH = 456;
+    const startX = w * 0.375, startY = 200;
     const cellW = gridW / COLS, cellH = gridH / ROWS;
     // 拖曳裝備到任一格時要反查「放開位置是哪一格」，把格線幾何存起來
     this.gridGeom = { startX, startY, cellW, cellH };
-    this.add.text(startX + gridW / 2, 170, '背包（點擊裝備／拖曳到垃圾桶丟棄）', textStyle({
+    this.add.text(startX + gridW / 2, 155, '背包（單擊顯示穿上／出售，雙擊直接穿上）', textStyle({
       fontSize: '26px', color: '#9fd3ff',
     })).setOrigin(0.5);
 
@@ -143,23 +145,22 @@ export default class InventoryScene extends Phaser.Scene {
     }
 
     // ---------- 一鍵出售／整理背包：放在背包格正下方一排 ----------
-    // 依稀有度一鍵賣掉背包內全部該階裝備（只賣背包，身上穿著的不動；
-    // 戒指是傳說/神話級稀有品，不提供出售避免誤賣）。
-    const sellRowY = 650;
-    const sellDefs = ['common', 'uncommon', 'rare', 'epic'];
-    const sellBtnW = 158, sellGap = 12;
-    const sortBtnW = 120;
+    // 依稀有度一鍵賣掉背包內全部該階裝備（只賣背包，身上穿著的不動；六階都能賣，含戒指）。
+    const sellRowY = startY + gridH + 55;
+    const sellDefs = RARITY_IDS; // common/uncommon/rare/epic/legendary/mythic
+    const sellBtnW = 148, sellGap = 8;
+    const sortBtnW = 130;
     const rowTotalW = sellDefs.length * sellBtnW + sellDefs.length * sellGap + sortBtnW;
     let bx = startX + gridW / 2 - rowTotalW / 2 + sellBtnW / 2;
     sellDefs.forEach((rarityId) => {
       const rarity = RARITY_DATA[rarityId];
       const hex = '#' + rarity.color.toString(16).padStart(6, '0');
-      const btn = this.add.image(bx, sellRowY, 'ui_button_parchment').setDisplaySize(sellBtnW, 52).setInteractive({ useHandCursor: true });
-      this.add.text(bx, sellRowY - 10, `出售全部${rarity.label}`, textStyle({
-        fontSize: '16px', color: hex === '#e8e8e8' ? '#5a5a5a' : hex,
+      const btn = this.add.image(bx, sellRowY, 'ui_button_parchment').setDisplaySize(sellBtnW, 60).setInteractive({ useHandCursor: true });
+      this.add.text(bx, sellRowY - 12, `出售全部${rarity.label}`, textStyle({
+        fontSize: '19px', color: hex === '#e8e8e8' ? '#3a2413' : hex,
       })).setOrigin(0.5);
-      this.add.text(bx, sellRowY + 12, `${SELL_PRICES[rarityId]} 金幣/件`, textStyle({
-        fontSize: '12px', color: '#3a2413',
+      this.add.text(bx, sellRowY + 14, `${SELL_PRICES[rarityId].toLocaleString()} 金幣/件`, textStyle({
+        fontSize: '16px', color: '#3a2413',
       })).setOrigin(0.5);
       btn.on('pointerover', () => btn.setTint(0xfff3d0));
       btn.on('pointerout', () => btn.clearTint());
@@ -167,27 +168,17 @@ export default class InventoryScene extends Phaser.Scene {
       bx += sellBtnW + sellGap;
     });
     {
-      const btn = this.add.image(bx - sellBtnW / 2 + sortBtnW / 2, sellRowY, 'ui_button_parchment').setDisplaySize(sortBtnW, 52).setInteractive({ useHandCursor: true });
+      const btn = this.add.image(bx - sellBtnW / 2 + sortBtnW / 2, sellRowY, 'ui_button_parchment').setDisplaySize(sortBtnW, 60).setInteractive({ useHandCursor: true });
       this.add.text(bx - sellBtnW / 2 + sortBtnW / 2, sellRowY, '整理背包', textStyle({
-        fontSize: '17px', color: '#3a2413',
+        fontSize: '19px', color: '#3a2413',
       })).setOrigin(0.5);
       btn.on('pointerover', () => btn.setTint(0xfff3d0));
       btn.on('pointerout', () => btn.clearTint());
       btn.on('pointerdown', () => this._sortInventory());
     }
 
-    // ---------- 垃圾桶：把背包裡的裝備拖過來就丟棄 ----------
-    this.trashX = startX + gridW / 2;
-    this.trashY = 830;
-    this.TRASH_TINT = 0xff6b6b;
-    this.trashZone = this.add.image(this.trashX, this.trashY, 'ui_slot').setDisplaySize(140, 140).setTint(this.TRASH_TINT);
-    this.add.text(this.trashX, this.trashY, '🗑', textStyle({ fontSize: '52px', color: '#ffffff' })).setOrigin(0.5);
-    this.add.text(this.trashX, this.trashY + 84, '拖曳裝備到這裡丟棄（拖到其他格子可換位置）', textStyle({
-      fontSize: '20px', color: '#ff9a9a',
-    })).setOrigin(0.5);
-
-    const backBtn = this.add.image(w / 2, h - 70, 'ui_bar_bg').setDisplaySize(280, 70).setInteractive({ useHandCursor: true });
-    this.add.text(w / 2, h - 70, '返回主選單', textStyle({ fontSize: '28px', color: '#10131a' })).setOrigin(0.5);
+    const backBtn = this.add.image(w / 2, h - 60, 'ui_bar_bg').setDisplaySize(280, 70).setInteractive({ useHandCursor: true });
+    this.add.text(w / 2, h - 60, '返回主選單', textStyle({ fontSize: '28px', color: '#10131a' })).setOrigin(0.5);
     backBtn.on('pointerover', () => backBtn.setTint(0x6fd3ff));
     backBtn.on('pointerout', () => backBtn.clearTint());
     backBtn.on('pointerdown', () => this.scene.start('MainMenuScene'));
@@ -353,8 +344,8 @@ export default class InventoryScene extends Phaser.Scene {
       }
     });
 
-    // 重新畫出背包格的圖示：可拖曳，拖到垃圾桶上放開就丟棄；滑鼠移上去顯示名稱/數值提示；
-    // 沒有拖動、單純點一下的話維持原本「點擊裝備」的行為。
+    // 重新畫出背包格的圖示：可拖曳到別的格子交換位置；滑鼠移上去顯示名稱/數值提示；
+    // 沒有拖動、單純點一下的話走「單擊選單／雙擊穿上」的行為。
     this.slotIcons.forEach((icon) => { if (icon) icon.destroy(); });
     this.slotRarityFrames.forEach((frame) => { if (frame) frame.destroy(); });
     this.inventory.forEach((itemId, idx) => {
@@ -373,14 +364,8 @@ export default class InventoryScene extends Phaser.Scene {
         icon.on('drag', (pointer, dragX, dragY) => {
           icon.setData('dragged', true);
           icon.setPosition(dragX, dragY);
-          this.trashZone.setTint(this._isOverTrash(dragX, dragY) ? 0xff0000 : this.TRASH_TINT);
         });
         icon.on('dragend', () => {
-          this.trashZone.setTint(this.TRASH_TINT);
-          if (this._isOverTrash(icon.x, icon.y)) {
-            this._discardFromInventory(idx);
-            return;
-          }
           // 拖到背包的其他格子上放開＝把裝備移到那一格（目標格有東西就交換位置），
           // 讓玩家可以自由決定每件裝備放在哪
           const targetIdx = this._cellIndexAt(icon.x, icon.y);
@@ -476,33 +461,66 @@ export default class InventoryScene extends Phaser.Scene {
     this._tooltip = null;
   }
 
-  _isOverTrash(x, y) {
-    const half = 70; // 垃圾桶顯示尺寸 140x140 的一半
-    return Math.abs(x - this.trashX) < half && Math.abs(y - this.trashY) < half;
-  }
-
-  // 把背包裡的裝備永久丟棄（不會退還金幣），拖曳放開在垃圾桶上時呼叫
-  _discardFromInventory(idx) {
-    const itemId = this.inventory[idx];
-    if (!itemId) return;
-    const def = EQUIPMENT_DATA[itemId];
-    this.inventory[idx] = null;
-    setInventory(this.inventory);
-    this._refresh();
-    this._showToast(`已丟棄「${def ? def.name : itemId}」`);
-  }
-
-  // 背包格點擊：改成「雙擊才穿上」防止誤穿——第一下只記錄，400ms 內點同一格
-  // 第二下才真的執行穿裝備。
+  // 背包格點擊：單擊顯示「穿上／出售」小選單；400ms 內在同一格再點一次（雙擊）
+  // 則跳過選單直接穿上——防止誤穿，同時保留快速穿裝的手感。
   _handleSlotClick(idx) {
+    if (!this.inventory[idx]) { this._hideActionMenu(); return; }
     const now = this.time.now;
     if (this._lastClickIdx === idx && now - (this._lastClickAt || 0) < 400) {
       this._lastClickIdx = null;
+      this._hideActionMenu();
       this._equipFromInventory(idx);
     } else {
       this._lastClickIdx = idx;
       this._lastClickAt = now;
+      this._showActionMenu(idx);
     }
+  }
+
+  // 單擊裝備彈出的「穿上／出售」小選單，畫在該格正上方
+  _showActionMenu(idx) {
+    this._hideActionMenu();
+    this._hideTooltip();
+    const itemId = this.inventory[idx];
+    const def = EQUIPMENT_DATA[itemId];
+    if (!def) return;
+    const bg = this.slotBgs[idx];
+    const price = SELL_PRICES[def.rarity] || 0;
+    const menuW = 150, btnH = 40;
+    const cx = bg.x, cy = bg.y - bg.displayHeight / 2 - btnH - 6;
+
+    const container = this.add.container(0, 0).setDepth(950);
+    const wearBtn = this.add.image(cx, cy - btnH / 2 - 2, 'ui_button_parchment').setDisplaySize(menuW, btnH).setInteractive({ useHandCursor: true });
+    const wearText = this.add.text(cx, cy - btnH / 2 - 2, '穿上', textStyle({ fontSize: '18px', color: '#3a2413' })).setOrigin(0.5);
+    const sellBtn = this.add.image(cx, cy + btnH / 2 + 2, 'ui_button_parchment').setDisplaySize(menuW, btnH).setInteractive({ useHandCursor: true });
+    const sellText = this.add.text(cx, cy + btnH / 2 + 2, `出售（${price.toLocaleString()}）`, textStyle({ fontSize: '16px', color: '#3a2413' })).setOrigin(0.5);
+    container.add([wearBtn, wearText, sellBtn, sellText]);
+
+    wearBtn.on('pointerover', () => wearBtn.setTint(0xfff3d0));
+    wearBtn.on('pointerout', () => wearBtn.clearTint());
+    wearBtn.on('pointerdown', () => { this._hideActionMenu(); this._equipFromInventory(idx); });
+    sellBtn.on('pointerover', () => sellBtn.setTint(0xfff3d0));
+    sellBtn.on('pointerout', () => sellBtn.clearTint());
+    sellBtn.on('pointerdown', () => { this._hideActionMenu(); this._sellSingle(idx); });
+
+    this._actionMenu = container;
+  }
+
+  _hideActionMenu() {
+    if (this._actionMenu) { this._actionMenu.destroy(); this._actionMenu = null; }
+  }
+
+  // 出售背包內單一件裝備（單擊選單的「出售」按鈕）
+  _sellSingle(idx) {
+    const itemId = this.inventory[idx];
+    const def = itemId && EQUIPMENT_DATA[itemId];
+    if (!def) return;
+    const price = SELL_PRICES[def.rarity] || 0;
+    this.inventory[idx] = null;
+    if (price > 0) addGold(price);
+    setInventory(this.inventory);
+    this._refresh();
+    this._showToast(`已出售「${def.name}」，獲得 ${price.toLocaleString()} 金幣`);
   }
 
   // 把座標反查成背包格 index；不在格線範圍內回傳 null
@@ -514,14 +532,14 @@ export default class InventoryScene extends Phaser.Scene {
     return r * COLS + c;
   }
 
-  // 一鍵出售背包內全部指定稀有度的裝備（身上穿著的不賣、戒指不在出售清單內）
+  // 一鍵出售背包內全部指定稀有度的裝備（含戒指；身上穿著的不賣）
   _sellAllOfRarity(rarityId) {
     const price = SELL_PRICES[rarityId];
     if (!price) return;
     let sold = 0;
     this.inventory.forEach((itemId, idx) => {
       const def = itemId && EQUIPMENT_DATA[itemId];
-      if (def && def.rarity === rarityId && def.slot !== 'ring') {
+      if (def && def.rarity === rarityId) {
         this.inventory[idx] = null;
         sold++;
       }
