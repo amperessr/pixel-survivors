@@ -74,6 +74,8 @@ export default class GameScene extends Phaser.Scene {
     this.dragonAuraActive = false; // 是否已接受龍之光環（永久跟隨光環視覺開關）
     this.dragonWingsActive = false; // 是否已接受龍之翼（永久跟隨風之尾跡視覺開關）
     this._pendingRelic = null; // 擊敗 Boss 順便升級時，排隊等升級選單關閉後再跳遺物選擇視窗
+    this._pendingLevelUps = 0; // 一次撿到大量經驗值可能一口氣跳好幾級，排隊逐張顯示升級選單（見 onGainExp）
+    this._levelUpOpen = false; // 升級選單目前是否開著，避免同一幀連續升級時重複 launch
     // 重要修正：Phaser 同一個 GameScene 物件會在好幾場遊戲之間重複使用（scene.start()
     // 只會重新呼叫 init()/create()，不會真的整個重建），這幾個旗標如果沒有在這裡
     // 重設，會直接沿用「上一場遊戲死亡時」留下的值——這正是「這場遊戲結束後，下一場
@@ -104,36 +106,30 @@ export default class GameScene extends Phaser.Scene {
       this._exitSaveDone = true;
       try {
         addGold(this.killCount);
-        // 分數不再看存活時間，改用「目前關卡數」代表推進深度（關卡數越高代表打的
-        // 怪越硬，比單純看擊殺數更能反映真實強度），跟 GameOverScene 的公式一致。
-        const score = this.killCount * 10 + this.player.level * 50 + this.getStage() * 150
-          + this.bossKillCount * 5000; // 擊殺魔王額外加分
-        setBestScore(score);
-        // 關卡進度原本只有每滿 5 關才存一次存檔點，玩家在中間關卡離開的話會漏掉
-        // 這幾關的進度，這裡連同金幣/分數一起把「目前關卡」存下去（只會往前推進，
-        // 不會蓋掉更高的紀錄，見 setCheckpointStage()）。
-        setCheckpointStage(this.getStage());
+        this._syncProgress();
       } catch (err) {
         console.error('[GameScene] 離開前存檔失敗：', err);
       }
     };
     window.addEventListener('beforeunload', this._saveOnExit);
     window.addEventListener('pagehide', this._saveOnExit);
-    // 手機瀏覽器（尤其是被切到背景、被系統直接砍掉分頁時）pagehide/beforeunload
-    // 不一定每次都會確實觸發，額外掛 visibilitychange 當保險。因為 `_exitSaveDone`
-    // 這個旗標只會在「開新的一局」時重置，同一局遊戲裡不管切幾次分頁都只會
-    // 存一次，不會被重複觸發、也不會被拿來重複洗金幣。
-    // 分頁切到背景時額外暫停物理世界（不只是存檔）：分頁背景期間瀏覽器通常會
-    // 節流/停止 requestAnimationFrame，切回來的那一刻 Phaser 量到的「這一幀經過的
-    // 時間」會是一大段背景期間，即使有 fps.min 限制單幀最大補算量，背景時間夠長
-    // 還是會補算好幾幀，玩家/怪物看起來像瞬間被推走一段距離——直接暫停物理世界
-    // 就不會有東西需要補算。`_bgPaused` 只標記「是這裡自己暫停的」，避免跟
-    // ESC/升級選單等其他暫停來源互相蓋掉彼此的狀態。
+    // 重要修正：分頁切到背景（visibilitychange → hidden）常常只是玩家切去看別的
+    // 分頁、等一下就切回來，不是真的要離開——如果這裡也呼叫 _saveOnExit()（會加
+    // 金幣、且靠 _exitSaveDone 擋掉之後真正結束時的重複計算），玩家切回來後繼續玩
+    // 到正常死亡，GameOverScene 又會把同一批擊殺數的金幣再加一次，等於同一場
+    // 遊戲的金幣被算了兩次。所以背景時只做「不會重複計算」的 monotonic 存檔
+    // （分數/關卡只增不減，見 _syncProgress）跟暫停，金幣一律留給真正的離開事件
+    // （beforeunload/pagehide）或正常死亡結算，兩者都各自只會執行一次。
     this._bgPaused = false;
     this._onVisibilityChange = () => {
       if (this.gameEnded) return;
       if (document.visibilityState === 'hidden') {
-        this._saveOnExit();
+        try { this._syncProgress(); } catch (err) { console.error('[GameScene] 背景同步存檔失敗：', err); }
+        // 分頁背景期間瀏覽器通常會節流/停止 requestAnimationFrame，切回來的那一刻
+        // Phaser 量到的「這一幀經過的時間」會是一大段背景期間，即使有 fps.min
+        // 限制單幀最大補算量，背景時間夠長還是會補算好幾幀，玩家/怪物看起來像
+        // 瞬間被推走一段距離——直接暫停物理世界就不會有東西需要補算。`_bgPaused`
+        // 只標記「是這裡自己暫停的」，避免跟 ESC/升級選單等其他暫停來源互相蓋掉。
         if (!this.paused) {
           this.paused = true;
           this.physics.world.pause();
@@ -172,6 +168,18 @@ export default class GameScene extends Phaser.Scene {
     this.paused = true;
     this.physics.world.pause();
     this.scene.launch('StartSkillScene', { gameScene: this });
+  }
+
+  // 只存「只增不減」的進度（歷史最佳分數／存檔點關卡），不會加金幣，重複呼叫
+  // 也不會造成任何重複計算——安全給分頁切背景等「可能不是真的要離開」的情境用。
+  // 金幣只在真正離開（_saveOnExit）或正常死亡結算（GameOverScene）各自加一次。
+  _syncProgress() {
+    // 分數不再看存活時間，改用「目前關卡數」代表推進深度（關卡數越高代表打的
+    // 怪越硬，比單純看擊殺數更能反映真實強度），跟 GameOverScene 的公式一致。
+    const score = this.killCount * 10 + this.player.level * 50 + this.getStage() * 150
+      + this.bossKillCount * 5000; // 擊殺魔王額外加分
+    setBestScore(score);
+    setCheckpointStage(this.getStage());
   }
 
   resumeFromStartSkillChoice() {
@@ -619,6 +627,12 @@ export default class GameScene extends Phaser.Scene {
     if (leveledUp.length > 0) {
       audioManager.levelUp();
       this.spawnLevelUpFx(this.player.sprite.x, this.player.sprite.y);
+      // 重要修正：一次撿到大量經驗值（例如磁鐵一次吸一整片經驗寶石、或擊敗魔王
+      // 補的固定經驗值疊加）可能一口氣跳好幾級，gainExp() 會把每一級都算出來，
+      // 但畫面一次只能開一張升級選單——多出來的升級次數以前會被直接吃掉，玩家
+      // 明明跳了 3 級卻只選到 1 次強化。現在先排進佇列，等目前這張選完、
+      // resumeFromLevelUp() 裡再接著開下一張，一級都不會漏。
+      this._pendingLevelUps += leveledUp.length - 1;
       this._openLevelUp();
       return true;
     }
@@ -626,7 +640,11 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _openLevelUp() {
-    if (this.gameEnded) return;
+    // this._levelUpOpen 防止「同一幀內連續撿到好幾顆經驗寶石、每顆都觸發升級」時
+    // 重複呼叫 scene.launch('LevelUpScene')——physics.world.pause() 不會中斷當下
+    // 這輪同步迴圈，光靠它擋不住同一幀內的重複觸發。
+    if (this.gameEnded || this._levelUpOpen) return;
+    this._levelUpOpen = true;
     this.paused = true;
     this.physics.world.pause();
     this.scene.launch('LevelUpScene', {
@@ -642,6 +660,13 @@ export default class GameScene extends Phaser.Scene {
     // 又能推著「已經死亡」的玩家滑動，而且遊戲永遠不會真的結束——
     // 這正是「死亡時人物會往一個方向不停前進、無法結束遊戲」的根本原因。
     if (this.gameEnded) return;
+    this._levelUpOpen = false;
+    // 佇列裡還有沒選完的升級次數，馬上接著開下一張，維持暫停狀態不恢復遊戲
+    if (this._pendingLevelUps > 0) {
+      this._pendingLevelUps--;
+      this._openLevelUp();
+      return;
+    }
     this.paused = false;
     this.physics.world.resume();
     this.player.clearBankedInput();

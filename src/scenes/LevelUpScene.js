@@ -56,9 +56,10 @@ export default class LevelUpScene extends Phaser.Scene {
     const owned = this.weaponSystem.owned;
     const pool = [];
 
-    // 新武器選項
+    // 新武器選項：被某個目前擁有中的融合武器鎖住的基礎武器（例如飛刀+鋸片融合出
+    // 血肉風暴之後的「鋸片」）不能再選，選了也不會真的開火，見 isLockedByFusion()。
     for (const id of WEAPON_IDS) {
-      if (!owned[id]) {
+      if (!owned[id] && !this.weaponSystem.isLockedByFusion(id)) {
         pool.push({
           type: 'newWeapon', id,
           title: `新武器：${WEAPON_DATA[id].name}`,

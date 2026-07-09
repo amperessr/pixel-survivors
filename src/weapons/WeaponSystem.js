@@ -40,6 +40,15 @@ export default class WeaponSystem {
   // 融合武器暫時不開放再進化（之後有需要再開放），所以這裡額外排除掉它
   canEvolve(id) { return this.owned[id] >= 5 && !this.evolved[id] && !WEAPON_FUSIONS[id]; }
 
+  // 這把「基礎武器」是不是被某個目前擁有中的融合武器鎖住了——例如飛刀+鋸片融合
+  // 出血肉風暴之後，_rebuildSawblades() 只認 owned['knife_sawblade']，這時候如果
+  // 又重新選到「新武器：旋轉鋸片」，鋸片會完全不開火、不計傷害，變成一張廢卡。
+  // LevelUpScene 的新武器選項要用這個排除掉這種情況，直到玩家哪天把血肉風暴
+  // 系統性地拆開（目前沒有拆開機制）才會又重新開放。
+  isLockedByFusion(id) {
+    return Object.values(WEAPON_FUSIONS).some((f) => f.parents.includes(id) && this.owned[f.id]);
+  }
+
   // 兩把武器都滿 5 級、都還沒進化、也都還不是融合武器本身，且剛好有對應配方
   // （見 WeaponData.findFusionFor）才能融合。融合會清掉原本兩把武器（見
   // fuseWeapons），所以玩家之後還能重新拿到雷電/飛刀這些「融合前」的武器去

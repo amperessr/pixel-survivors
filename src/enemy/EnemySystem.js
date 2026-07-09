@@ -53,6 +53,12 @@ export default class EnemySystem {
   _resetEnemy(sprite, typeId, x, y, tier = 'normal') {
     const def = ENEMY_TYPES[typeId];
     const tierDef = ENEMY_TIERS[tier] || ENEMY_TIERS.normal;
+    // 重要修正：受擊時的「擠壓」tween（見 damageEnemy）如果在播放到一半時這隻怪物
+    // 被打死、物件池回收，tween 本身不會被中斷——如果 120ms 內這個 sprite 被
+    // 重新生成成另一隻怪物，舊 tween 的 onComplete 還是會在稍後把縮放蓋回「上一隻
+    // 怪物」的 baseScale，讓新怪物短暫顯示成錯誤的大小。回收再利用前先把殘留的
+    // tween 清掉，新怪物才不會被上一輪的動畫尾巴影響。
+    this.scene.tweens.killTweensOf(sprite);
     sprite.setTexture(def.texture);
     sprite.setPosition(x, y);
     sprite.setScale(def.scale * tierDef.scaleMult);
