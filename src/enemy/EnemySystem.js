@@ -124,9 +124,12 @@ export default class EnemySystem {
     gem.setData('amount', amount);
     gem.setData('magnetHoming', false); // 物件池回收再利用，不能沿用上一輪生命週期的磁鐵狀態
     gem.setAlpha(1);
-    // 經驗寶石依經驗值大小呈現不同體積與亮度，讓玩家一眼看出這顆值多少經驗
-    const scale = Math.min(2.4, 0.8 + amount / 12);
+    // 經驗寶石依經驗值大小呈現不同體積與亮度，讓玩家一眼看出這顆值多少經驗。
+    // 尺寸曲線整體調小（上限 2.4→1.3）：原本大顆寶石快跟怪物一樣大，滿地寶石
+    // 會把怪物蓋到看不見；另外深度固定壓到極低，寶石永遠畫在怪物腳下。
+    const scale = Math.min(1.3, 0.55 + amount / 24);
     gem.setScale(scale);
+    gem.setDepth(-1000000);
     if (amount >= 24) gem.setTint(0xff9ad6);
     else if (amount >= 10) gem.setTint(0xffe066);
     else gem.clearTint();
