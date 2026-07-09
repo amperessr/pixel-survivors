@@ -78,20 +78,23 @@ export default class ShopScene extends Phaser.Scene {
     })).setOrigin(0.5);
     this.add.rectangle(cx, panelTop + 66, panelW - 60, 2, 0xff9ad6, 0.4);
 
-    this.add.image(cx, panelTop + 265, 'gacha_machine').setScale(1.3);
+    // 扭蛋機圖片縮小一點、整體往上收，騰出空間給下面的提示/保底進度兩行字——
+    // 原本保底進度那一行（+493）剛好被「一抽」按鈕（中心 +521、高 68，上緣 +487）
+    // 蓋住，看起來就是「字卡在按鈕後面」。
+    this.add.image(cx, panelTop + 240, 'gacha_machine').setScale(1.15);
 
-    this.add.text(cx, panelTop + 467, '每次抽獎都有機會拿到豐厚獎勵！', textStyle({
+    this.add.text(cx, panelTop + 428, '每次抽獎都有機會拿到豐厚獎勵！', textStyle({
       fontSize: '19px', color: '#cfe9ff',
     })).setOrigin(0.5);
-    this.pityText = this.add.text(cx, panelTop + 493, '', textStyle({
+    this.pityText = this.add.text(cx, panelTop + 458, '', textStyle({
       fontSize: '16px', color: '#ffd93d',
     })).setOrigin(0.5);
     this._refreshPityText();
 
     const btnW = panelW - 100;
-    this._buildGachaButton(cx, panelTop + 521, btnW, `一抽　💰 ${GACHA_SINGLE_PRICE}`, () => this._gachaPull(1, GACHA_SINGLE_PRICE));
-    this._buildGachaButton(cx, panelTop + 611, btnW, `十抽　💰 ${GACHA_TEN_PRICE}`, () => this._gachaPull(10, GACHA_TEN_PRICE));
-    this._buildGachaButton(cx, panelTop + 701, btnW, '📜 出現道具', () => this._showDropList());
+    this._buildGachaButton(cx, panelTop + 508, btnW, `一抽　💰 ${GACHA_SINGLE_PRICE}`, () => this._gachaPull(1, GACHA_SINGLE_PRICE));
+    this._buildGachaButton(cx, panelTop + 588, btnW, `十抽　💰 ${GACHA_TEN_PRICE}`, () => this._gachaPull(10, GACHA_TEN_PRICE));
+    this._buildGachaButton(cx, panelTop + 668, btnW, '📜 出現道具', () => this._showDropList());
 
     this._buildAutoSellRow(cx, panelTop + 780, panelW - 40);
   }
