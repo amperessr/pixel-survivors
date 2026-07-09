@@ -519,8 +519,8 @@ export default class GameScene extends Phaser.Scene {
   // 攻擊技能、敵人不會閃避，所以不需要警示圈，按下去直接開始墜落，反應更快。
   spawnMeteorDrop(x, y, dmg, aoe, critRate, critDmg, knockback) {
     if (!this.player || !this.player.sprite.active) return;
-    const meteor = this.add.image(x, y - 620, 'proj_fireball')
-      .setDepth(30003).setScale(3.2).setTint(0xff6a2d).setRotation(0.4);
+    // 改用正式美術圖（燃燒隕石），取代借用一般火球貼圖再染色的做法
+    const meteor = this.add.image(x, y - 620, 'worldend_meteor').setDepth(30003).setScale(0.9).setRotation(0.15);
     const trailTimer = this.time.addEvent({
       delay: 40, loop: true,
       callback: () => { if (meteor.active) this.spawnEmbersFx(meteor.x, meteor.y - 10, 2, 0xff8a3d); },
@@ -530,7 +530,7 @@ export default class GameScene extends Phaser.Scene {
       onComplete: () => {
         trailTimer.remove();
         meteor.destroy();
-        this.spawnImpactFx(x, y, 'fireball', aoe, true);
+        this._spawnWorldEndImpactFx(x, y, aoe, 'fire');
         this.enemySystem.queryNear(x, y, aoe, (e) => {
           if (dist(x, y, e.x, e.y) > aoe) return;
           this.enemySystem.damageEnemy(e, dmg, critRate, critDmg, knockback ? {
@@ -552,13 +552,13 @@ export default class GameScene extends Phaser.Scene {
   // 敵人持續減速（見 EnemySystem.applySlow()／addHazardZone()）。
   spawnIceDrop(x, y, dmg, aoe, critRate, critDmg) {
     if (!this.player || !this.player.sprite.active) return;
-    const ice = this.add.image(x, y - 620, 'proj_frost')
-      .setDepth(30003).setScale(3.4).setTint(0xcdefff).setRotation(-0.3);
+    // 改用正式美術圖（墜落冰晶），取代借用一般冰霜貼圖再染色的做法
+    const ice = this.add.image(x, y - 620, 'worldend_ice').setDepth(30003).setScale(0.9);
     this.tweens.add({
       targets: ice, y, duration: 430, ease: 'Cubic.easeIn',
       onComplete: () => {
         ice.destroy();
-        this.spawnImpactFx(x, y, 'frost', aoe, true);
+        this._spawnWorldEndImpactFx(x, y, aoe, 'frost');
         this.enemySystem.queryNear(x, y, aoe, (e) => {
           if (dist(x, y, e.x, e.y) > aoe) return;
           this.enemySystem.damageEnemy(e, dmg, critRate, critDmg, null);
@@ -573,13 +573,23 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
+  // 隕石／冰塊落地瞬間的爆閃特效：用正式美術圖的裂地火花／冰晶飛濺，取代借用
+  // 一般火球/冰霜的命中特效（那兩種是共用給其他武器的，世界末日改用專屬素材）。
+  _spawnWorldEndImpactFx(x, y, aoe, type) {
+    const texture = type === 'fire' ? 'worldend_fire_burst' : 'worldend_ice_burst';
+    const scale = Math.min(2.4, aoe / 70);
+    const fx = this.add.image(x, y, texture).setDepth(29999).setScale(scale * 0.5).setAlpha(0.95);
+    this.tweens.add({ targets: fx, scale: scale, alpha: 0, duration: 320, onComplete: () => fx.destroy() });
+    this.spawnGlowRing(x, y, type === 'fire' ? 'fx_flame' : 'fx_frost', type === 'fire' ? 0xff8a3d : 0x8fe3ff, 0.4, aoe / 26, 380);
+  }
+
   // 地面殘留特效：燃燒地板／冰霜地板疊在怪物腳下（深度用 y-2，確保永遠畫在怪物/
-  // 玩家下方），淡入後持續、配合 3 秒地板持續時間淡出，呼應地板還在生效中。
+  // 玩家下方），用正式美術圖的裂地紋理，淡入後持續、配合 3 秒地板持續時間淡出，
+  // 呼應地板還在生效中。
   _spawnGroundPatchFx(x, y, aoe, type) {
-    const texture = type === 'fire' ? 'fx_flame' : 'fx_frost';
-    const tint = type === 'fire' ? 0xff8a3d : 0x8fe3ff;
-    const patch = this.add.image(x, y, texture).setDepth(y - 2).setAlpha(0).setScale(aoe / 90).setTint(tint);
-    this.tweens.add({ targets: patch, alpha: 0.45, duration: 200 });
+    const texture = type === 'fire' ? 'worldend_fire_ground' : 'worldend_ice_ground';
+    const patch = this.add.image(x, y, texture).setDepth(y - 2).setAlpha(0).setScale(aoe / 190);
+    this.tweens.add({ targets: patch, alpha: 0.8, duration: 200 });
     this.tweens.add({ targets: patch, alpha: 0, duration: 400, delay: 2600, onComplete: () => patch.destroy() });
   }
 
@@ -1292,16 +1302,18 @@ export default class GameScene extends Phaser.Scene {
       // 以下三種是融合武器專屬命中特效，刻意比同系武器的「進化版」規格再往上加一截
       // （更大的縮放/更多碎片/多疊一層光環），呼應融合武器本來就比單一進化更稀有。
       case 'electroKnife': {
-        const fx = this.add.image(x, y, 'fx_crit').setDepth(29999).setScale(1.7).setTint(0x7ef7ff);
-        this.tweens.add({ targets: fx, scale: 1.7 * 1.9, alpha: 0, duration: 180, onComplete: () => fx.destroy() });
+        // 改用正式美術圖（藍白電光+金色電花的斜向閃電）取代借用的十字爆閃圖示
+        const fx = this.add.image(x, y, 'proj_electroknife').setDepth(29999).setScale(0.7).setAlpha(0.95);
+        this.tweens.add({ targets: fx, scale: 0.7 * 1.9, alpha: 0, duration: 180, onComplete: () => fx.destroy() });
         this.spawnGlowRing(x, y, 'fx_bolt', 0x7ef7ff, 0.35, 2.3, 260);
         this.spawnBurstFx(x, y, 0xffe94d, 9, 'fx_bolt', 130); // 黃色電花混在藍白碎片裡，呼應圖示配色
         this.spawnBurstFx(x, y, 0xdfefff, 6, 'fx_crit', 100);
         break;
       }
       case 'bloodStorm': {
-        const fx = this.add.image(x, y, 'fx_crit').setDepth(29999).setScale(1.6).setTint(0xff5050);
-        this.tweens.add({ targets: fx, scale: 1.6 * 2, alpha: 0, duration: 160, onComplete: () => fx.destroy() });
+        // 改用正式美術圖（血紅色旋轉刀刃圖騰）取代借用的十字爆閃圖示
+        const fx = this.add.image(x, y, 'fx_bloodstorm').setDepth(29999).setScale(0.55).setAlpha(0.95);
+        this.tweens.add({ targets: fx, scale: 0.55 * 2, alpha: 0, duration: 160, onComplete: () => fx.destroy() });
         this.spawnGlowRing(x, y, 'fx_crit', 0xff5050, 0.3, 2, 200);
         this.spawnBurstFx(x, y, 0xff8f8f, 9, 'fx_crit', 120);
         break;

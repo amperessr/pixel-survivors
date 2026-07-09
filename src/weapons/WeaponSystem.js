@@ -393,11 +393,14 @@ export default class WeaponSystem {
     for (let i = 0; i < data.count; i++) {
       const off = (i - (data.count - 1) / 2) * spread;
       const proj = this.projectilePool.spawn();
-      proj.setTexture('proj_knife');
+      // 改用正式美術圖（藍白電光+金色電花的斜向閃電飛刃），取代原本借用一般飛刀
+      // 貼圖再染色的做法。素材本身畫的是右上-左下走向，這裡補一個 45 度的旋轉
+      // 校正，讓貼圖的視覺方向對齊實際飛行角度。
+      proj.setTexture('proj_electroknife');
       proj.setPosition(px, py);
-      proj.setRotation(baseAng + off);
-      proj.setScale(3.6); // 電擊飛刃的飛刀比一般飛刀大一圈，讓玩家一眼認出是融合武器（再放大兩倍）
-      proj.setTint(0x7ef7ff);
+      proj.setRotation(baseAng + off + Math.PI / 4);
+      proj.setScale(0.9);
+      proj.clearTint();
       proj.setData('dmg', dmg);
       proj.setData('pierce', data.pierce);
       proj.setData('chainRange', data.chainRange);
@@ -433,8 +436,10 @@ export default class WeaponSystem {
     if (this.owned['knife_sawblade']) {
       const s = WEAPON_FUSIONS['knife_sawblade'].stats;
       for (let i = 0; i < s.innerCount; i++) {
-        const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'proj_sawblade');
-        sp.setScale(2); // 內圈鋸片再放大兩倍，跟放大後的外圈飛鏢體型比較搭配
+        // 內圈改用正式美術圖（血紅色的旋轉刀刃圖騰），取代原本借用一般鋸片貼圖，
+        // 本身已經有完整配色，不用再額外染色。
+        const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_bloodstorm');
+        sp.setScale(0.5);
         sp.setDepth(6000).setData('kind', 'sawblade').setData('lastHit', new Map()).setData('ring', 0);
         this.sawbladeSprites.push(sp);
       }
