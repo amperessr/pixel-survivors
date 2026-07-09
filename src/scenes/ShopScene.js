@@ -289,7 +289,13 @@ export default class ShopScene extends Phaser.Scene {
       onComplete: () => flash.destroy(),
     });
 
-    const card = this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH).setScale(0.3).setAlpha(0);
+    // 注意：setDisplaySize() 之後不能再呼叫 setScale()，setScale 會直接蓋掉
+    // setDisplaySize 算出來的縮放比例，讓卡片最後變回貼圖原始大小（跟放大過的
+    // cardW/cardH 對不上，畫面看起來就是卡片跑掉、跟外框/其他元素大小不一致）。
+    // 改成先量出「顯示成 cardW x cardH 需要的縮放值」，用它當動畫終點。
+    const card = this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH).setAlpha(0);
+    const cardScaleX = card.scaleX, cardScaleY = card.scaleY;
+    card.setScale(cardScaleX * 0.3, cardScaleY * 0.3);
     const frame = createRarityFrame(this, cx, cy, cardW - 6, cardH - 6, def.rarity).setScale(0.3).setAlpha(0);
     const icon = this.add.image(cx, cy - 115, def.icon).setScale(0).setAlpha(0);
     const rarityLabel = this.add.text(cx, cy - 204, rarity.label, textStyle({
@@ -304,7 +310,8 @@ export default class ShopScene extends Phaser.Scene {
     })).setOrigin(0.5).setAlpha(0);
     overlay.add([card, frame, icon, rarityLabel, nameText, descText]);
 
-    this.tweens.add({ targets: [card, frame], scale: 1, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 120 });
+    this.tweens.add({ targets: frame, scale: 1, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 120 });
+    this.tweens.add({ targets: card, scaleX: cardScaleX, scaleY: cardScaleY, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 120 });
     this.tweens.add({ targets: icon, scale: 0.87, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 200 });
     this.tweens.add({
       targets: [rarityLabel, nameText, descText], alpha: 1, duration: 380, delay: 420,
@@ -343,7 +350,10 @@ export default class ShopScene extends Phaser.Scene {
     const { id, sold, soldPrice } = result;
     const def = EQUIPMENT_DATA[id];
     const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
-    const card = this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH).setScale(0.5).setAlpha(0);
+    // 同樣要避免 setDisplaySize() 後又整個蓋掉 scale（見 _revealSingleCard 的說明）。
+    const card = this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH).setAlpha(0);
+    const cardScaleX = card.scaleX, cardScaleY = card.scaleY;
+    card.setScale(cardScaleX * 0.5, cardScaleY * 0.5);
     const frame = createRarityFrame(this, cx, cy, cardW - 6, cardH - 6, def.rarity).setScale(0.5).setAlpha(0);
     const icon = this.add.image(cx, cy - cardH * 0.16, def.icon).setScale(0.51).setAlpha(0);
     const rarityHex = '#' + rarity.color.toString(16).padStart(6, '0');
@@ -352,7 +362,8 @@ export default class ShopScene extends Phaser.Scene {
       wordWrap: { width: cardW - 20, useAdvancedWrap: true },
     })).setOrigin(0.5).setAlpha(0);
     overlay.add([card, frame, icon, nameText]);
-    this.tweens.add({ targets: [card, frame], scale: 1, alpha: 1, duration: 320, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: frame, scale: 1, alpha: 1, duration: 320, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: card, scaleX: cardScaleX, scaleY: cardScaleY, alpha: 1, duration: 320, ease: 'Back.easeOut' });
     this.tweens.add({
       targets: [icon, nameText], alpha: 1, duration: 320, ease: 'Cubic.easeOut',
       onComplete: sold ? () => this._playSmallSoldFx(overlay, icon, cx, cy, cardH, soldPrice) : undefined,
