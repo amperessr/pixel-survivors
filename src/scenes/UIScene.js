@@ -1,7 +1,7 @@
 import { WEAPON_DATA, WEAPON_EVOLUTIONS, WEAPON_FUSIONS } from '../weapons/WeaponData.js';
 import { EQUIP_SLOTS, RING_SLOTS, EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
 import { PASSIVE_IDS, PASSIVE_DATA } from '../skills/PassiveData.js';
-import { getEquipped } from '../managers/SaveManager.js';
+import { getEquipped, isLevelUpAutoMode, setLevelUpAutoMode } from '../managers/SaveManager.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 
@@ -189,6 +189,23 @@ export default class UIScene extends Phaser.Scene {
       this.muteBtnText.setText(audioManager.enabled ? '🔊' : '🔇');
     });
 
+    // ---- 升級選卡模式按鈕：只有戴著自動戒指（ring1 或 ring2 = ring_auto）才顯示，
+    // 點一下在「半自動」（維持手動選卡）跟「全自動」（升級直接自動選最左邊那張卡，
+    // 見 LevelUpScene.create()）之間切換，設定會存進帳號、跨場次/跨裝置都保留。
+    const autoModeBtnX = 205 + 28 + 8 + 70;
+    this.autoModeBtn = this.add.image(autoModeBtnX, menuBtnY, 'ui_button_parchment')
+      .setDisplaySize(150, 46).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    this.autoModeBtnText = this.add.text(autoModeBtnX, menuBtnY, '', textStyle({
+      fontSize: '18px', color: '#3a2413',
+    })).setOrigin(0.5).setScrollFactor(0);
+    this.autoModeBtn.on('pointerover', () => this.autoModeBtn.setTint(0xfff3d0));
+    this.autoModeBtn.on('pointerout', () => this._refreshAutoModeBtn());
+    this.autoModeBtn.on('pointerdown', () => {
+      setLevelUpAutoMode(!isLevelUpAutoMode());
+      this._refreshAutoModeBtn();
+    });
+    this._refreshAutoModeBtn();
+
     // ---- 畫面邊緣指示箭頭：血包（紅）／磁鐵（藍紫）不在畫面內時，指出方向 ----
     this.healthArrow = this.add.image(0, 0, 'ui_arrow').setTint(0xff5a5a).setScale(1.1)
       .setScrollFactor(0).setDepth(20000).setVisible(false);
@@ -227,6 +244,20 @@ export default class UIScene extends Phaser.Scene {
     yesBtn.on('pointerdown', () => this._confirmLeave());
     noBtn.on('pointerdown', () => this._cancelLeaveConfirm());
     this.confirmOverlay.add([confirmDim, confirmText, yesBtn, yesText, noBtn, noText]);
+  }
+
+  // 更新升級選卡模式按鈕的顯示：沒戴自動戒指就整顆隱藏；戴著的話顯示目前是
+  // 半自動還是全自動（金色外框＝全自動）。裝備只會在主選單的背包場景更動，
+  // 進來遊戲畫面後不會變，所以只在 create() 跟每次點擊後呼叫，不用放進 update()。
+  _refreshAutoModeBtn() {
+    const equipped = getEquipped();
+    const hasRing = equipped.ring1 === 'ring_auto' || equipped.ring2 === 'ring_auto';
+    this.autoModeBtn.setVisible(hasRing);
+    this.autoModeBtnText.setVisible(hasRing);
+    if (!hasRing) return;
+    const auto = isLevelUpAutoMode();
+    this.autoModeBtnText.setText(auto ? '選卡:全自動' : '選卡:半自動');
+    this.autoModeBtn.setTint(auto ? 0xffe066 : 0xffffff);
   }
 
   // 按「返回主選單」先跳確認彈窗，暫停遊戲避免確認期間繼續受傷/死亡

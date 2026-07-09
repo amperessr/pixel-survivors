@@ -5,7 +5,6 @@ import {
   getStatLevel, getStatExp, getStatExpToNext, getStatPoints, getStatInvest,
   getStatBonus, investStatPoint, resetStatPoints,
   RESET_STAT_POINTS_GOLD_COST, STAT_INVEST_DEFS,
-  isLevelUpAutoMode, setLevelUpAutoMode,
 } from '../managers/SaveManager.js';
 import { CHARACTERS, BASE_STATS } from '../player/Player.js';
 import { textStyle } from '../utils/TextStyle.js';
@@ -123,10 +122,6 @@ export default class InventoryScene extends Phaser.Scene {
         fontSize: '15px', color: '#ffe066',
       })).setOrigin(0.5).setAlpha(0.6).setDepth(11);
     }
-
-    // ---------- 左側：自動戒指專屬的升級選卡模式切換（半自動／全自動），
-    // 只有戴著自動戒指（ring1 或 ring2 = ring_auto）時才顯示，見 _refreshAutoModeToggle()。
-    this._buildAutoModeToggle(leftX, 110);
 
     // ---------- 左側下方：能力值面板（每項能力值旁邊都能直接加點）----------
     this._buildStatsPanel(leftX, 480);
@@ -339,8 +334,6 @@ export default class InventoryScene extends Phaser.Scene {
   }
 
   _refresh() {
-    this._refreshAutoModeToggle();
-
     // 重新畫出裝備欄（五個一般欄 + 兩個戒指欄）的圖示：有裝備時顯示圖示、隱藏空格
     // 標籤；沒有裝備時反過來。裝備旁邊加一圈對應稀有度顏色的外框，一眼分辨階級。
     [...EQUIP_SLOTS, ...RING_SLOTS].forEach((slot) => {
@@ -623,48 +616,6 @@ export default class InventoryScene extends Phaser.Scene {
     setInventory(this.inventory);
     this._hideTooltip();
     this._refresh();
-  }
-
-  // 自動戒指專屬：半自動＝維持現狀（升級畫面照常手動選卡），全自動＝升級時
-  // 直接自動選最左邊那張卡，玩家不用停下來操作（見 LevelUpScene.create()）。
-  // 沒戴自動戒指時整組按鈕連同標題都隱藏，不佔位置。
-  _buildAutoModeToggle(cx, cy) {
-    this.autoModeHint = this.add.text(cx, cy - 30, '⚙ 升級選卡模式', textStyle({
-      fontSize: '14px', color: '#9fd3ff',
-    })).setOrigin(0.5);
-
-    const optW = 96, optH = 34, gap = 6;
-    const defs = [
-      { auto: false, label: '半自動' },
-      { auto: true, label: '全自動' },
-    ];
-    this.autoModeBtns = [];
-    let bx = cx - (optW * defs.length + gap * (defs.length - 1)) / 2 + optW / 2;
-    defs.forEach((def) => {
-      const bg = this.add.image(bx, cy, 'ui_button_parchment').setDisplaySize(optW, optH).setInteractive({ useHandCursor: true });
-      const label = this.add.text(bx, cy, def.label, textStyle({ fontSize: '15px', color: '#3a2413' })).setOrigin(0.5);
-      bg.on('pointerover', () => bg.setTint(0xfff3d0));
-      bg.on('pointerout', () => this._refreshAutoModeToggle());
-      bg.on('pointerdown', () => {
-        setLevelUpAutoMode(def.auto);
-        this._refreshAutoModeToggle();
-        this._showToast(def.auto ? '已切換為全自動選卡（升級自動選最左邊那張）' : '已切換為半自動選卡（維持手動選擇）');
-      });
-      this.autoModeBtns.push({ bg, label, auto: def.auto });
-      bx += optW + gap;
-    });
-    this._refreshAutoModeToggle();
-  }
-
-  _refreshAutoModeToggle() {
-    const hasRing = this.equipped.ring1 === 'ring_auto' || this.equipped.ring2 === 'ring_auto';
-    const autoMode = isLevelUpAutoMode();
-    this.autoModeHint.setVisible(hasRing);
-    this.autoModeBtns.forEach(({ bg, label, auto }) => {
-      bg.setVisible(hasRing);
-      label.setVisible(hasRing);
-      bg.setTint(auto === autoMode ? 0xffe066 : 0xffffff);
-    });
   }
 
   _showToast(msg) {
