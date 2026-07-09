@@ -257,7 +257,7 @@ export const LEGENDARY_SET_BONUS_TEXT = {
   flame: { label: '烈焰套裝', three: '燃燒持續時間 +50%', five: '燃燒傷害額外 +10% 攻擊力' },
   ice: { label: '寒冰套裝', three: '緩速持續時間 +50%', five: '冰凍結束時造成 10% 攻擊力傷害' },
   wind: { label: '狂風套裝', three: '擊退效果 +100%', five: '所有技能大小 +100%' },
-  holy: { label: '聖光套裝', three: '攻擊速度 +30%', five: '攻擊速度額外 +100%' },
+  holy: { label: '聖光套裝', three: '攻擊速度 +30%', five: '攻擊速度額外 +60%' },
   thunder: { label: '雷霆套裝', three: '雷電系技能 30% 機率造成 1 秒麻痺', five: '攻擊麻痺中的怪物額外造成 10% 攻擊力傷害' },
 };
 

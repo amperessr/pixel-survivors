@@ -242,9 +242,12 @@ export default class GameScene extends Phaser.Scene {
     });
     this.setBonuses = flags;
 
-    // 聖光套裝：攻速加成直接疊進玩家數值（3件 +30%／5件再疊 +100%，滿五件共 +130%）
+    // 聖光套裝：攻速加成直接疊進玩家數值（3件 +30%／5件再疊 +60%，滿五件共 +90%）。
+    // 5 件套原本是 +100%，但 2026-07-10 攻速對所有武器的冷卻權重全面拉高之後
+    // （見 WeaponSystem.ATK_SPEED_COOLDOWN_WEIGHT），+100% 幾乎全額轉成射速，
+    // 聖光套會壓倒其他四套傳說裝，降到 +60% 拉回套裝之間的平衡。
     if (flags.holy3) this.player.stats.atkSpeed += 30;
-    if (flags.holy5) this.player.stats.atkSpeed += 100;
+    if (flags.holy5) this.player.stats.atkSpeed += 60;
   }
 
   // 分身戒：開局時召喚一個半透明的分身幻影。分身沒有物理實體（怪物打不到、
