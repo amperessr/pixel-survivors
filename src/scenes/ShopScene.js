@@ -94,7 +94,17 @@ export default class ShopScene extends Phaser.Scene {
     const btnW = panelW - 100;
     this._buildGachaButton(cx, panelTop + 508, btnW, `一抽　💰 ${GACHA_SINGLE_PRICE}`, () => this._gachaPull(1, GACHA_SINGLE_PRICE));
     this._buildGachaButton(cx, panelTop + 588, btnW, `十抽　💰 ${GACHA_TEN_PRICE}`, () => this._gachaPull(10, GACHA_TEN_PRICE));
-    this._buildGachaButton(cx, panelTop + 668, btnW, '📜 出現道具', () => this._showDropList());
+
+    // 道具機率表按鈕：純資訊查詢入口，刻意做成跟上面兩顆羊皮紙「花錢抽獎」按鈕
+    // 不同的深色底＋粉紅描邊樣式（呼應扭蛋面板的粉紅主題），一眼就分得出
+    // 「這顆不用錢、是看說明的」。
+    const infoBtnY = panelTop + 664;
+    const infoBtn = this.add.rectangle(cx, infoBtnY, btnW, 54, 0x2a1a2e, 1)
+      .setStrokeStyle(2, 0xff9ad6, 0.9).setInteractive({ useHandCursor: true });
+    this.add.text(cx, infoBtnY, '📊 道具機率表', textStyle({ fontSize: '22px', color: '#ff9ad6' })).setOrigin(0.5);
+    infoBtn.on('pointerover', () => infoBtn.setFillStyle(0x45294a, 1));
+    infoBtn.on('pointerout', () => infoBtn.setFillStyle(0x2a1a2e, 1));
+    infoBtn.on('pointerdown', () => this._showDropList());
 
     this._buildAutoSellRow(cx, panelTop + 780, panelW - 40);
   }
@@ -144,55 +154,69 @@ export default class ShopScene extends Phaser.Scene {
     });
   }
 
-  // 「出現道具」清單：整畫面覆蓋層，依稀有度分欄列出扭蛋抽得到的所有道具、
-  // 能力效果與各稀有度的機率，讓玩家抽之前知道獎池內容。
+  // 道具機率表：整畫面覆蓋層，參考一般手遊的抽卡機率公示排版——每個稀有度一欄，
+  // 欄首是「稀有度色帶＋總機率」的標題區塊，下面標示件數與單件機率，清單只列
+  // 道具名稱（效果說明拿掉了——塞在表裡太亂，玩家滑鼠移到商店/背包的裝備上
+  // 本來就看得到完整效果），道具多的稀有度自動分成兩小欄。
   _showDropList() {
     const w = this.scale.width, h = this.scale.height;
     const overlay = this.add.container(0, 0).setDepth(9500);
-    overlay.add(this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.88).setInteractive());
-    overlay.add(this.add.text(w / 2, 44, '🎰 扭蛋出現道具一覽', textStyle({
+    overlay.add(this.add.rectangle(w / 2, h / 2, w, h, 0x0a0c12, 0.95).setInteractive());
+    overlay.add(this.add.text(w / 2, 40, '📊 道具機率表', textStyle({
       fontSize: '34px', color: '#ff9ad6',
     })).setOrigin(0.5));
+    overlay.add(this.add.text(w / 2, 80, '每次抽獎先依各稀有度的機率決定階級，再從該階級的道具池中均勻隨機抽出一件', textStyle({
+      fontSize: '17px', color: '#8fa3b8',
+    })).setOrigin(0.5));
 
-    // 六個稀有度各一欄（含機率標題），道具多的欄位字級縮小塞得下
     const colW = w / RARITY_IDS.length;
     RARITY_IDS.forEach((rarityId, col) => {
       const rarity = RARITY_DATA[rarityId];
       const pool = GACHA_POOL_BY_RARITY[rarityId] || [];
-      const weight = GACHA_RARITY_WEIGHTS[rarityId];
+      const weight = GACHA_RARITY_WEIGHTS[rarityId] || 0;
       const cx = colW * col + colW / 2;
       const hex = '#' + rarity.color.toString(16).padStart(6, '0');
 
-      overlay.add(this.add.text(cx, 100, `${rarity.label}`, textStyle({
-        fontSize: '26px', color: hex,
+      // 欄首色帶：稀有度底色色塊＋名稱＋總機率，抬頭一眼掃過就能比較六個階級
+      overlay.add(this.add.rectangle(cx, 148, colW - 26, 66, rarity.color, 0.14)
+        .setStrokeStyle(2, rarity.color, 0.9));
+      overlay.add(this.add.text(cx, 136, rarity.label, textStyle({
+        fontSize: '24px', color: hex, fontStyle: 'bold',
       })).setOrigin(0.5));
-      overlay.add(this.add.text(cx, 132, weight != null ? `機率 ${weight}%` : '（暫無）', textStyle({
+      overlay.add(this.add.text(cx, 163, `${weight}%`, textStyle({
         fontSize: '18px', color: hex,
       })).setOrigin(0.5));
-      overlay.add(this.add.rectangle(cx, 152, colW - 40, 2, rarity.color, 0.5));
 
-      // 一般裝備一行一件「名稱 效果」；戒指的效果說明較長，交給 wordWrap 換行
-      const fontSize = pool.length > 30 ? 15 : 17;
-      const rowH = pool.length > 30 ? 23 : 27;
-      let y = 172;
-      pool.forEach((id) => {
-        const def = EQUIPMENT_DATA[id];
-        const effect = def.desc.replace('（僅扭蛋機取得）', '');
-        const line = this.add.text(cx - colW / 2 + 22, y, `${def.name}　${effect}`, textStyle({
-          fontSize: `${fontSize}px`, color: '#cfe9ff',
-          wordWrap: { width: colW - 44, useAdvancedWrap: true },
-        })).setOrigin(0, 0);
-        overlay.add(line);
-        y += Math.max(rowH, line.height + 6);
+      // 件數與單件機率（總機率平均分給池內每一件）
+      const per = pool.length ? weight / pool.length : 0;
+      const perStr = per >= 0.1 ? per.toFixed(2) : per.toFixed(3);
+      overlay.add(this.add.text(cx, 196, `共 ${pool.length} 件・每件 ${perStr}%`, textStyle({
+        fontSize: '14px', color: '#8fa3b8',
+      })).setOrigin(0.5));
+      overlay.add(this.add.rectangle(cx, 214, colW - 40, 1, rarity.color, 0.35));
+
+      // 名單只列名稱；超過 18 件的稀有度自動排成兩小欄，才不會一路長到畫面外
+      const twoCol = pool.length > 18;
+      const rowH = twoCol ? 26 : 28;
+      const startY = 228;
+      pool.forEach((id, i) => {
+        const name = EQUIPMENT_DATA[id].name;
+        const mini = twoCol ? i % 2 : 0;
+        const row = twoCol ? Math.floor(i / 2) : i;
+        const nx = twoCol ? cx - colW * 0.23 + mini * colW * 0.46 : cx;
+        overlay.add(this.add.text(nx, startY + row * rowH, name, textStyle({
+          fontSize: twoCol ? '15px' : '16px', color: '#cfe9ff',
+        })).setOrigin(0.5, 0));
       });
     });
 
-    const closeBtn = this.add.image(w / 2, h - 56, 'ui_button_parchment').setDisplaySize(200, 56)
-      .setInteractive({ useHandCursor: true });
+    // 關閉鈕沿用「深色底＋粉紅描邊」的資訊按鈕樣式，跟開啟它的那顆按鈕成對
+    const closeBtn = this.add.rectangle(w / 2, h - 52, 220, 54, 0x2a1a2e, 1)
+      .setStrokeStyle(2, 0xff9ad6, 0.9).setInteractive({ useHandCursor: true });
     overlay.add(closeBtn);
-    overlay.add(this.add.text(w / 2, h - 56, '關閉', textStyle({ fontSize: '24px', color: '#3a2413' })).setOrigin(0.5));
-    closeBtn.on('pointerover', () => closeBtn.setTint(0xfff3d0));
-    closeBtn.on('pointerout', () => closeBtn.clearTint());
+    overlay.add(this.add.text(w / 2, h - 52, '關閉', textStyle({ fontSize: '24px', color: '#ff9ad6' })).setOrigin(0.5));
+    closeBtn.on('pointerover', () => closeBtn.setFillStyle(0x45294a, 1));
+    closeBtn.on('pointerout', () => closeBtn.setFillStyle(0x2a1a2e, 1));
     closeBtn.on('pointerdown', () => overlay.destroy());
   }
 
