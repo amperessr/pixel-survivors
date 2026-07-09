@@ -1,6 +1,7 @@
-import { promptPlayerName, getCheckpointStage, getPlayerName, logout, getStatLevel } from '../managers/SaveManager.js';
+import { promptPlayerName, getCheckpointStage, getPlayerName, logout, getStatLevel, isMailClaimed, isMailDeleted } from '../managers/SaveManager.js';
 import { subscribeLeaderboard } from '../firebase/firebase.js';
 import { textStyle } from '../utils/TextStyle.js';
+import { MAIL_DATA } from '../mail/MailData.js';
 
 // 主選單：初始角色固定為「平衡型」，不再需要選角，
 // 改成「背包／商店／開始遊戲」三個入口（GameScene 沒帶 characterId 時預設就是 balanced）。
@@ -38,9 +39,35 @@ export default class MainMenuScene extends Phaser.Scene {
     const checkpointStage = getCheckpointStage();
 
     const btnW = 420, btnH = 88, gap = 24;
-    const items = [
+
+    // ---- 快捷功能列：背包／商店／信箱，三個並排的小按鈕 ----
+    // 信箱是給開發者手動發獎勵用的入口（見 MailboxScene／MailData.js），
+    // 有還沒領取/刪除的信時右上角會冒出一個紅點提醒玩家去看。
+    const hasUnreadMail = MAIL_DATA.some((m) => !isMailClaimed(m.id) && !isMailDeleted(m.id));
+    const quickItems = [
       { label: '背包', onPick: () => this.scene.start('InventoryScene') },
       { label: '商店', onPick: () => this.scene.start('ShopScene') },
+      { label: '信箱', onPick: () => this.scene.start('MailboxScene'), badge: hasUnreadMail },
+    ];
+    const quickBtnH = 70, quickGap = 16;
+    const quickTotalW = quickItems.length * btnW / 3 + (quickItems.length - 1) * quickGap;
+    let qx = w / 2 - quickTotalW / 2 + (btnW / 3) / 2;
+    const quickY = 560;
+    quickItems.forEach((item) => {
+      const bw = btnW / 3;
+      const btn = this.add.image(qx, quickY, 'ui_button_parchment').setDisplaySize(bw, quickBtnH).setInteractive({ useHandCursor: true });
+      this.add.text(qx, quickY, item.label, textStyle({ fontSize: '26px', color: '#3a2413' })).setOrigin(0.5);
+      if (item.badge) {
+        this.add.circle(qx + bw / 2 - 14, quickY - quickBtnH / 2 + 14, 8, 0xff3b3b).setStrokeStyle(2, 0xffffff);
+      }
+      btn.on('pointerover', () => btn.setTint(0xfff3d0));
+      btn.on('pointerout', () => btn.clearTint());
+      btn.on('pointerdown', item.onPick);
+      qx += bw + quickGap;
+    });
+
+    // ---- 開始遊戲：當前關卡／第一關，維持原本的直向大按鈕堆疊 ----
+    const items = [
       {
         label: '當前關卡', stageLabel: `第 ${checkpointStage} 關`,
         // 除錯用：暫時印出玩家實際點了哪顆按鈕，方便排查「點第一關卻從別的關卡開始」的問題，
@@ -55,7 +82,7 @@ export default class MainMenuScene extends Phaser.Scene {
     // 按鈕區塊改用固定像素起點（不再用畫面高度百分比推算），確保上方角色圖片不會
     // 跟按鈕擠在一起重疊。關卡數字改成直接畫在按鈕本體裡（跟按鈕文字同一顆按鈕、
     // 分兩行顯示），而不是按鈕外部的浮動文字——不然會被上一顆按鈕的底部擋住一部分。
-    let cy = 560;
+    let cy = quickY + quickBtnH / 2 + gap + btnH / 2;
 
     items.forEach((item) => {
       const btn = this.add.image(w / 2, cy, 'ui_button_parchment').setDisplaySize(btnW, btnH).setInteractive({ useHandCursor: true });
@@ -126,6 +153,7 @@ export default class MainMenuScene extends Phaser.Scene {
 
     // 更新日誌：簡單列出近期幾項重點更新，方便玩家知道遊戲還在持續開發（新的排在上面）
     const CHANGELOG = [
+      '📬 新增信箱功能，不定期會收到獎勵信',
       '🆕 新增武器融合系統：飛刀融合雷電/鋸片、火球融合冰霜，打造全新招式',
       '🆕 分數計算改用「抵達關卡數」，不再看存活時間',
       '🆕 魔王登場新增開場演出：警示字置中、開場 3 秒無法攻擊',
@@ -135,7 +163,6 @@ export default class MainMenuScene extends Phaser.Scene {
       '🆕 新增永久等級系統，升級可投資爆擊率',
       '🆕 新增帳號密碼系統，跨裝置同步存檔進度',
       '🆕 五魔王輪流登場，各有專屬技能與外觀',
-      '🆕 新增裝備系統：武器/頭盔/衣服/褲子/鞋子/戒指',
     ];
     const logBodyStyle = {
       fontSize: '19px', color: '#e6e6e6', align: 'left', lineSpacing: 12,
