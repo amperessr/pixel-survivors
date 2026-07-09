@@ -166,55 +166,71 @@ export default class Player {
     return equipped.ring1 === ringId || equipped.ring2 === ringId;
   }
 
-  // 自動戒指：代替玩家自動移動。優先閃避範圍內的怪物（多隻怪物會把「遠離每一隻」
-  // 的方向向量加總，越近的怪物權重越高），範圍內沒有怪物時才會去撿最近的血包/磁鐵，
-  // 兩者都沒有就停在原地不動（不亂跑，避免看起來像失控）。
+  // 自動戒指：代替玩家自動移動。以「前往血包/磁鐵優先，經驗寶石其次」為主要
+  // 驅動方向，同時把怪物/魔王的閃避向量混進去，讓路徑自然繞開威脅，而不是
+  // 完全無視怪物筆直穿過去；貼到危險距離內時閃避權重會加重、逼近的力道相對
+  // 變小，體感上就像「一邊慢慢靠近目標、一邊繞開怪物」。完全沒有拾取物目標時
+  // 才單純閃避／原地待機。
   _computeAutoPilotDirection() {
     const px = this.sprite.x, py = this.sprite.y;
-    let avoidX = 0, avoidY = 0, threatCount = 0, dangerCount = 0;
+    const avoid = this._computeThreatAvoidance(px, py);
 
+    const target = this._findPriorityPickup();
+    if (target) {
+      const d = dist(px, py, target.x, target.y) || 1;
+      let tx = (target.x - px) / d, ty = (target.y - py) / d;
+      if (avoid.threatCount > 0) {
+        // 危險距離內閃避權重加重，確保就算目標剛好在怪物後面，也不會硬衝過去
+        // 被打到；範圍內但還不危險時閃避權重較輕，路徑只是稍微偏一點、還是會
+        // 持續朝目標靠近，就是「慢慢接近」的手感。
+        const avoidWeight = avoid.dangerCount > 0 ? 1.6 : 0.7;
+        tx += avoid.x * avoidWeight;
+        ty += avoid.y * avoidWeight;
+      }
+      const len = Math.hypot(tx, ty) || 1;
+      return { vx: tx / len, vy: ty / len };
+    }
+
+    if (avoid.threatCount > 0) return { vx: avoid.x, vy: avoid.y };
+    return { vx: 0, vy: 0 };
+  }
+
+  // 算出遠離所有威脅（一般小怪＋魔王）的加總方向向量，越近權重越高；魔王的
+  // 閃避半徑比小怪大很多、權重也加倍，避免自動駕駛只顧著閃小怪卻一路把玩家
+  // 帶去撞魔王（魔王接觸傷害的判定半徑本來就比小怪大上不少）。
+  _computeThreatAvoidance(px, py) {
+    let x = 0, y = 0, threatCount = 0, dangerCount = 0;
     if (this.scene.enemySystem && this.scene.enemySystem.pool) {
       this.scene.enemySystem.pool.forEachActive((e) => {
         const d = dist(px, py, e.x, e.y);
         if (d > 0 && d < AUTO_PILOT_AVOID_RADIUS) {
           const w = (AUTO_PILOT_AVOID_RADIUS - d) / AUTO_PILOT_AVOID_RADIUS;
-          avoidX += ((px - e.x) / d) * w;
-          avoidY += ((py - e.y) / d) * w;
+          x += ((px - e.x) / d) * w;
+          y += ((py - e.y) / d) * w;
           threatCount++;
           if (d < AUTO_PILOT_DANGER_RADIUS) dangerCount++;
         }
       });
     }
-    // 魔王：閃避半徑比一般小怪大很多、威脅權重也加倍，避免自動駕駛只顧著閃小怪
-    // 卻一路把玩家帶去撞魔王（魔王接觸傷害的判定半徑本來就比小怪大上不少）。
     if (this.scene.boss && this.scene.boss.alive) {
       const b = this.scene.boss.sprite;
       const d = dist(px, py, b.x, b.y);
       if (d > 0 && d < AUTO_PILOT_BOSS_AVOID_RADIUS) {
         const w = (AUTO_PILOT_BOSS_AVOID_RADIUS - d) / AUTO_PILOT_BOSS_AVOID_RADIUS;
-        avoidX += ((px - b.x) / d) * w * 2;
-        avoidY += ((py - b.y) / d) * w * 2;
+        x += ((px - b.x) / d) * w * 2;
+        y += ((py - b.y) / d) * w * 2;
         threatCount++;
         if (d < AUTO_PILOT_BOSS_DANGER_RADIUS) dangerCount++;
       }
     }
-    // 怪物（含魔王）貼身到危險距離內，無條件優先逃命，不管旁邊有沒有拾取物
-    if (dangerCount > 0) return { vx: avoidX, vy: avoidY };
-
-    // 危險距離外時，拾取物優先於一般閃避——怪物幾乎隨時都會在閃避範圍內徘徊，
-    // 若閃避永遠優先，玩家會被卡在「一直躲、永遠吃不到血包/磁鐵」的狀態
-    const target = this._findNearestPickup();
-    if (target) {
-      const d = dist(px, py, target.x, target.y) || 1;
-      return { vx: (target.x - px) / d, vy: (target.y - py) / d };
-    }
-
-    if (threatCount > 0) return { vx: avoidX, vy: avoidY };
-    return { vx: 0, vy: 0 };
+    return { x, y, threatCount, dangerCount };
   }
 
-  // 找最近的血包／磁鐵／經驗寶石（各物件池都掃過，取距離最近的那一個）
-  _findNearestPickup() {
+  // 找優先拾取目標：血包／磁鐵優先於經驗寶石。重要修正：以前是三種拾取物混在
+  // 一起純比距離，但經驗寶石多到幾乎隨時都有一顆離玩家最近，血包/磁鐵幾乎永遠
+  // 選不到、形同虛設，玩家會覺得「自動戒指不會主動去找血包/磁鐵」——現在先只
+  // 在血包/磁鐵的池子裡找最近的一個，兩者都沒有時才退而求其次去撿經驗寶石。
+  _findPriorityPickup() {
     const px = this.sprite.x, py = this.sprite.y;
     let best = null, bestDist = Infinity;
     const scan = (pool) => {
@@ -226,6 +242,8 @@ export default class Player {
     };
     scan(this.scene.healthPackSystem && this.scene.healthPackSystem.pool);
     scan(this.scene.magnetSystem && this.scene.magnetSystem.pool);
+    if (best) return best;
+
     scan(this.scene.enemySystem && this.scene.enemySystem.expGemPool);
     return best;
   }
