@@ -237,6 +237,15 @@ export default class Boss {
     const px = this.player.sprite.x, py = this.player.sprite.y;
     const bx = this.sprite.x, by = this.sprite.y;
 
+    // 開場 3 秒魔王也不能動作（見 _playIntroCinematic 設的 scene.attacksLocked）：
+    // 不移動、不選技能、也不會造成接觸傷害，靜靜站著讓玩家看完警示、站穩位置——
+    // 這段時間一定是剛出場的 'chase' 階段（lock 在 constructor 裡就立刻設定），
+    // 不會卡在技能前搖/衝刺半途中被凍結。
+    if (this.scene.attacksLocked) {
+      this.sprite.body.setVelocity(0, 0);
+      return;
+    }
+
     if (time > this.nextSkillAt && this.phase === 'chase') {
       this._chooseSkill(time);
     }
