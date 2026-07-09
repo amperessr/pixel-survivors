@@ -378,6 +378,7 @@ export default class WeaponSystem {
       proj.setTexture('proj_knife');
       proj.setPosition(px, py);
       proj.setRotation(baseAng + off);
+      proj.setScale(1.8); // 電擊飛刃的飛刀比一般飛刀大一圈，讓玩家一眼認出是融合武器
       proj.setTint(0x7ef7ff);
       proj.setData('dmg', dmg);
       proj.setData('pierce', data.pierce);
@@ -428,6 +429,7 @@ export default class WeaponSystem {
       }
       for (let i = 0; i < s.outerCount; i++) {
         const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'proj_knife');
+        sp.setScale(1.7); // 外圈飛鏢比一般飛刀大一圈，跟內圈鋸片的體型比較搭配
         sp.setTint(0xff8f8f);
         sp.setDepth(6000).setData('kind', 'sawblade').setData('lastHit', new Map()).setData('ring', 1);
         this.sawbladeSprites.push(sp);
