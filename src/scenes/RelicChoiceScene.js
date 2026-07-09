@@ -1,3 +1,4 @@
+import { getEquipped, isLevelUpAutoMode } from '../managers/SaveManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 
 // 遺物選擇彈窗：擊敗 Boss 後跳出的二選一視窗，內容依傳入的 relic 資料動態產生，
@@ -11,6 +12,15 @@ export default class RelicChoiceScene extends Phaser.Scene {
   }
 
   create() {
+    // 自動戒指的全自動模式：遺物一律直接拿取，不用停下來手動選（跟 LevelUpScene
+    // 的全自動選卡是同一個開關，見 UIScene 的升級選卡模式按鈕）。
+    const equipped = getEquipped();
+    const hasAutoRing = equipped.ring1 === 'ring_auto' || equipped.ring2 === 'ring_auto';
+    if (hasAutoRing && isLevelUpAutoMode()) {
+      this._accept();
+      return;
+    }
+
     const w = this.scale.width, h = this.scale.height;
     this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.8).setScrollFactor(0);
 
