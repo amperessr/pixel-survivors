@@ -6,12 +6,6 @@ import { getEquipped } from '../managers/SaveManager.js';
 const MAX_MAGNETS = 1; // 同時間地圖上最多存在的磁鐵數量（比血包稀有，同時只會有一個）
 const MIN_INTERVAL = 35000; // 最短生成間隔（毫秒），刻意比血包更久，維持「偶爾掉落」的稀有感
 const MAX_INTERVAL = 55000; // 最長生成間隔（毫秒）
-// 拾取後，全地圖經驗值飛向玩家的持續時間。原本 1600ms，配合 EnemySystem 修正
-// 「經驗寶石亂飛」bug 之後（磁鐵效果一結束，還沒飛到玩家身邊的寶石現在會確實
-// 停在原地，不再像以前那樣繼續亂飛亂撞、反而常常誤打誤撞飛到玩家身上），距離
-// 較遠的寶石常常來不及在 1.6 秒內飛到玩家身邊就被晾在半路，變成「磁鐵吸不到
-// 經驗」。拉長到 4000ms，讓大部分寶石都有足夠時間真的飛到玩家身邊被撿起。
-const MAGNET_EFFECT_MS = 4000;
 // 磁鐵離玩家太遠就直接回收，理由跟 HealthPackSystem 一樣：避免畫面邊緣的箭頭
 // 一直指向一個玩家要走超久才追得到的舊磁鐵
 const MAX_KEEP_DIST = 1400;
@@ -84,7 +78,10 @@ export default class MagnetSystem {
   _pickup(img) {
     this.pool.free(img);
     audioManager.pickup();
-    this.scene.enemySystem.activateMagnet(MAGNET_EFFECT_MS);
+    // 標記「拾取當下」地圖上所有經驗寶石永久朝玩家飛，直到真的被撿到為止，
+    // 不會像以前的計時器版本一樣時間到了就放著不管、卡在半路（見 EnemySystem.
+    // pullAllGemsToPlayer() 的說明）。
+    this.scene.enemySystem.pullAllGemsToPlayer();
     this.scene.spawnMagnetFx(img.x, img.y);
   }
 

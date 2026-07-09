@@ -42,12 +42,17 @@ export default class EnemySystem {
       80
     );
 
-    this.magnetUntil = 0; // 磁鐵效果持續到的時間戳，期間內所有經驗寶石都會被強制吸過來
   }
 
-  // 磁鐵拾取物觸發：讓地圖上「目前所有」經驗寶石在接下來這段時間內飛向玩家並被吸收
-  activateMagnet(duration = 1600) {
-    this.magnetUntil = this.scene.time.now + duration;
+  // 磁鐵拾取物觸發：讓地圖上「目前所有」經驗寶石飛向玩家並被吸收。
+  // 重要修正：以前是用一個有時限的全域計時器（magnetUntil）控制，時間一到，
+  // 還沒飛到玩家身邊的寶石就會停在半路——玩家反應「磁鐵吸到一半就停下來」。
+  // 改成幫「目前」場上每一顆寶石各自標記一個永久 magnetHoming 旗標（不是比對
+  // 全域計時器），一旦標記了就會一直飛向玩家直到被撿到為止，不會有時間到了
+  // 就半路放棄的情況；新的寶石（磁鐵生效後才產生的）不會被追加標記，維持
+  // 「磁鐵吸的是拾取當下地圖上已經存在的寶石」這個原本的設計。
+  pullAllGemsToPlayer() {
+    this.expGemPool.forEachActive((g) => g.setData('magnetHoming', true));
   }
 
   _resetEnemy(sprite, typeId, x, y, tier = 'normal') {
@@ -98,6 +103,7 @@ export default class EnemySystem {
   _resetGem(gem, x, y, amount) {
     gem.setPosition(x, y);
     gem.setData('amount', amount);
+    gem.setData('magnetHoming', false); // 物件池回收再利用，不能沿用上一輪生命週期的磁鐵狀態
     gem.setAlpha(1);
     // 經驗寶石依經驗值大小呈現不同體積與亮度，讓玩家一眼看出這顆值多少經驗
     const scale = Math.min(2.4, 0.8 + amount / 12);
@@ -188,11 +194,11 @@ export default class EnemySystem {
       }
     });
 
-    const magnetActive = time < this.magnetUntil;
     this.expGemPool.forEachActive((g) => {
       const d = dist(g.x, g.y, px, py);
-      if (magnetActive) {
-        // 磁鐵效果期間：不論距離多遠，全部寶石都朝玩家飛（距離越遠飛得越快，才追得上）
+      if (g.getData('magnetHoming')) {
+        // 被磁鐵標記的寶石：不論距離多遠、不論過了多久，都會持續朝玩家飛
+        // （距離越遠飛得越快，才追得上），直到被撿到為止，見 pullAllGemsToPlayer()。
         const ang = Math.atan2(py - g.y, px - g.x);
         const speed = Math.min(1400, 380 + d * 2.2);
         g.body.setVelocity(Math.cos(ang) * speed, Math.sin(ang) * speed);
