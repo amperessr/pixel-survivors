@@ -322,7 +322,8 @@ export default class InventoryScene extends Phaser.Scene {
     });
     this.statPointsText.setText(`剩餘點數：${getStatPoints() - this._pendingTotal()}`);
     STATS_PANEL_DEFS.forEach((def) => {
-      this.statsValueTexts[def.label].setText(def.get(stats));
+      const invested = invest[def.investKey] + this._pendingInvest[def.investKey];
+      this.statsValueTexts[def.label].setText(`${def.get(stats)} (${invested})`);
     });
   }
 
