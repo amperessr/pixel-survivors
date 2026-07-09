@@ -91,6 +91,10 @@ export default class EnemySystem {
     sprite.setData('exp', Math.round(def.exp * tierDef.expMult));
     sprite.setData('slowUntil', 0);
     sprite.setData('slowFactor', 1);
+    sprite.setData('frozenUntil', 0); // 極端冰火：完全定住不能動也不能攻擊，跟一般減速（slowFactor）分開處理
+    sprite.setData('burnUntil', 0);
+    sprite.setData('burnDps', 0);
+    sprite.setData('burnNextTick', 0);
     sprite.setData('knockbackUntil', 0);
     sprite.setData('knockbackVX', 0);
     sprite.setData('knockbackVY', 0);
@@ -173,8 +177,12 @@ export default class EnemySystem {
       e.setDepth(e.y);
       e.setFlipX(px < e.x);
 
+      const frozen = now < e.getData('frozenUntil');
       const knockbackUntil = e.getData('knockbackUntil');
-      if (now < knockbackUntil) {
+      if (frozen) {
+        // 極端冰火的冰凍：完全定住，連擊退慣性都不套用，直接停在原地
+        e.body.setVelocity(0, 0);
+      } else if (now < knockbackUntil) {
         // 擊退期間：直接套用擊退速度並隨時間衰減，暫時不追玩家，製造「被打飛」的手感
         const totalDuration = e.getData('knockbackDuration') || 220;
         const remainRatio = Math.max(0, (knockbackUntil - now) / totalDuration);
@@ -186,8 +194,15 @@ export default class EnemySystem {
         e.body.setVelocity(Math.cos(ang) * spd, Math.sin(ang) * spd);
       }
 
-      // 接觸傷害
-      if (dist(e.x, e.y, px, py) < 20 && now - e.getData('lastHitAt') > 500) {
+      // 燃燒：持續時間內每 400ms 扣一次傷害，跟冰凍/減速互不影響、可以同時生效
+      if (now < e.getData('burnUntil') && now >= e.getData('burnNextTick')) {
+        e.setData('burnNextTick', now + 400);
+        this._applyBurnTick(e, e.getData('burnDps') * 0.4);
+        if (!e.active) return; // 這一 tick 燒死了，這隻怪物後面的接觸傷害判定不用再跑
+      }
+
+      // 接觸傷害：冰凍期間怪物完全動彈不得，也不會主動造成接觸傷害
+      if (!frozen && dist(e.x, e.y, px, py) < 20 && now - e.getData('lastHitAt') > 500) {
         e.setData('lastHitAt', now);
         const died = this.player.takeDamage(e.getData('dmg'), now);
         if (died) this.scene.onPlayerDeath();
@@ -319,6 +334,28 @@ export default class EnemySystem {
       this._killEnemy(enemy);
     }
     return isCrit;
+  }
+
+  // 燃燒的單次扣血 tick：跟 damageEnemy 不同，不算爆擊、不做擊退/受擊擠壓動畫，
+  // 避免每 400ms 一次的 DOT 也跟著疊一輪受擊特效，看起來會很吵
+  _applyBurnTick(enemy, dmg) {
+    if (!enemy.active || dmg <= 0) return;
+    const hp = enemy.getData('hp') - dmg;
+    enemy.setData('hp', hp);
+    this.scene.spawnDamageNumber(enemy.x, enemy.y, Math.round(dmg), false);
+    if (hp <= 0) this._killEnemy(enemy);
+  }
+
+  // 極端冰火專用：套用冰凍（完全定住 frozenDuration 毫秒）＋燃燒（burnDuration 毫秒內
+  // 每 400ms 燒 burnDps*0.4 點傷害）。兩個狀態各自獨立計時，重複命中會刷新持續時間。
+  applyFreezeAndBurn(enemy, frozenDuration, burnDps, burnDuration) {
+    const now = this.scene.time.now;
+    if (frozenDuration > 0) enemy.setData('frozenUntil', now + frozenDuration);
+    if (burnDps > 0 && burnDuration > 0) {
+      enemy.setData('burnDps', burnDps);
+      enemy.setData('burnUntil', now + burnDuration);
+      if (enemy.getData('burnNextTick') < now) enemy.setData('burnNextTick', now + 400);
+    }
   }
 
   _killEnemy(enemy) {

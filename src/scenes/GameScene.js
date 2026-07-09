@@ -485,7 +485,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // 灼熱冰彈（融合武器）：命中判定跟火球一樣一撞就炸，範圍內敵人除了照常吃傷害，
-  // 還會被套用跟冰霜一樣的減速效果（見 spawnIcePillar 用的同一套 slowUntil/slowFactor）。
+  // 還會被完全冰凍一小段時間＋附加燃燒 DOT（見 EnemySystem.applyFreezeAndBurn）。
   _handleIceFireHit(p, stats) {
     if (p.getData('exploded')) return;
     const aoe = p.getData('aoe');
@@ -500,27 +500,37 @@ export default class GameScene extends Phaser.Scene {
 
     p.setData('exploded', true);
     const kb = WEAPON_KNOCKBACK.frost;
-    const slow = p.getData('slow'), slowDuration = p.getData('slowDuration');
+    const dmg = p.getData('dmg');
+    // 冰凍固定 900ms（跟原本的減速拆開，改成完全定住），燃燒 2 秒內燒掉命中傷害
+    // 40% 的總量，用命中傷害算而不是固定值，才會跟著武器等級/加成一起變強。
+    const frozenDuration = 900, burnDuration = 2000;
+    const burnDps = (dmg * 0.4) / (burnDuration / 1000);
     this.enemySystem.queryNear(p.x, p.y, aoe, (e) => {
       if (dist(p.x, p.y, e.x, e.y) > aoe) return;
-      this.enemySystem.damageEnemy(e, p.getData('dmg'), stats.critRate, stats.critDmg, {
+      this.enemySystem.damageEnemy(e, dmg, stats.critRate, stats.critDmg, {
         fromX: p.x, fromY: p.y, force: kb.force, duration: kb.duration,
       });
-      e.setData('slowUntil', this.time.now + slowDuration);
-      e.setData('slowFactor', 1 - slow);
+      this.enemySystem.applyFreezeAndBurn(e, frozenDuration, burnDps, burnDuration);
     });
     if (this.boss && this.boss.alive && dist(p.x, p.y, this.boss.sprite.x, this.boss.sprite.y) <= aoe) {
-      this.boss.takeDamage(p.getData('dmg'), stats.critRate, stats.critDmg);
+      this.boss.takeDamage(dmg, stats.critRate, stats.critDmg);
     }
-    // 冰火雙色爆炸疊在一起，加畫面閃光加重份量感。原本這裡還有 hitStop()，拿掉了：
-    // 玩家反應打極端冰火時角色會不受控一直移動——iceFire 命中一次可能同時打中一大群
-    // 敵人，spawnImpactFx('iceFire',...) 本身粒子量也偏多，兩者疊加造成的單幀卡頓，
-    // 配合 physics.world.timeScale 被短暫壓到 0.05 又還原，懷疑就是造成那個現象的
-    // 元凶，所以連 hitStop 一起拿掉、粒子量也一併收斂（見下面 spawnImpactFx 的
-    // 'iceFire' case），減少同一幀内一次性建立大量物件的機會。
-    this.cameras.main.flash(160, 255, 170, 90);
+    // 原本這裡有 cameras.main.flash()，拿掉了：iceFire 常常一次炸中一大群敵人，
+    // 頻繁觸發的全螢幕閃光疊加起來就是玩家反應的「畫面閃爍」，改成只在命中點
+    // 本地播放更大、更明顯的特效＋地面冰火痕跡，不影響整個畫面。
     this.spawnImpactFx(p.x, p.y, 'iceFire', aoe, false);
+    this.spawnIceFireGroundFx(p.x, p.y, aoe);
     this.weaponSystem.projectilePool.free(p);
+  }
+
+  // 極端冰火地面痕跡：命中點留一灘裂冰＋一灘火痕，疊在怪物腳下（深度用 y-2，
+  // 確保永遠畫在怪物/玩家下方），淡出前持續一小段時間，呼應「地板要有冰跟火焰」。
+  spawnIceFireGroundFx(x, y, aoe) {
+    const iceBase = Math.min(2.2, aoe / 60);
+    const firePatch = this.add.image(x, y, 'fx_flame').setDepth(y - 2).setAlpha(0.55).setScale(iceBase * 0.9).setTint(0xff8a3d);
+    const icePatch = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setAlpha(0.5).setScale(iceBase).setTint(0x8fe3ff);
+    this.tweens.add({ targets: firePatch, alpha: 0, duration: 900, delay: 150, onComplete: () => firePatch.destroy() });
+    this.tweens.add({ targets: icePatch, alpha: 0, duration: 900, delay: 150, onComplete: () => icePatch.destroy() });
   }
 
   // 雷電：用 hitSet 記錄已命中對象，命中後嘗試往附近尚未命中的目標跳躍
@@ -1227,12 +1237,12 @@ export default class GameScene extends Phaser.Scene {
         // 約 40 個新物件+tween；iceFire 常常一次炸中一大群敵人，疊加起來的單幀
         // 建立量比其他武器的命中特效重上不少，懷疑是玩家反應「打極端冰火角色會
         // 不受控移動」的成因之一，這裡收斂到跟其他融合武器差不多的量級。
-        const fx = this.add.image(x, y, 'fx_flame').setDepth(29999).setScale(2.9 * 0.55);
-        this.tweens.add({ targets: fx, scale: 2.9, alpha: 0, duration: 300, onComplete: () => fx.destroy() });
-        this.spawnGlowRing(x, y, 'fx_flame', 0xff8a3d, 0.4, 3.6, 360);
-        this.spawnGlowRing(x, y, 'fx_frost', 0x8fe3ff, 0.3, 3.0, 420);
-        this.spawnBurstFx(x, y, 0xffdd55, 8, 'fx_flame', 170);
-        this.spawnBurstFx(x, y, 0x8fe3ff, 8, 'fx_frost', 190);
+        const fx = this.add.image(x, y, 'fx_flame').setDepth(29999).setScale(4.2 * 0.55);
+        this.tweens.add({ targets: fx, scale: 4.2, alpha: 0, duration: 320, onComplete: () => fx.destroy() });
+        this.spawnGlowRing(x, y, 'fx_flame', 0xff8a3d, 0.4, 5.0, 380);
+        this.spawnGlowRing(x, y, 'fx_frost', 0x8fe3ff, 0.3, 4.2, 440);
+        this.spawnBurstFx(x, y, 0xffdd55, 8, 'fx_flame', 190);
+        this.spawnBurstFx(x, y, 0x8fe3ff, 8, 'fx_frost', 210);
         break;
       }
       default: {

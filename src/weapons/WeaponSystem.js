@@ -401,7 +401,7 @@ export default class WeaponSystem {
     const proj = this.projectilePool.spawn();
     proj.setTexture('proj_frost');
     proj.setPosition(px, py);
-    proj.setScale(2.3); // 極端冰火的冰彈再放大兩倍
+    proj.setScale(3.4); // 極端冰火的冰彈再放大一圈，跟其他融合武器的視覺份量看齊
     proj.clearTint();
     proj.setData('dmg', dmg);
     proj.setData('aoe', data.aoe);
