@@ -1,5 +1,6 @@
 import { WEAPON_IDS, WEAPON_DATA, WEAPON_EVOLUTIONS, findFusionFor } from '../weapons/WeaponData.js';
 import { PASSIVE_IDS, PASSIVE_DATA, MAX_PASSIVE_LEVEL, passiveLevelValue } from '../skills/PassiveData.js';
+import { getEquipped, isLevelUpAutoMode } from '../managers/SaveManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 
 export default class LevelUpScene extends Phaser.Scene {
@@ -11,6 +12,17 @@ export default class LevelUpScene extends Phaser.Scene {
   }
 
   create() {
+    // 自動戒指的全自動模式：戴著自動戒指且切到全自動時，升級不用停下來選卡，
+    // 直接自動選最左邊那張（見 InventoryScene 的升級選卡模式切換），
+    // 半自動（預設）維持原本手動選卡的樣子，這裡完全不受影響。
+    const equipped = getEquipped();
+    const hasAutoRing = equipped.ring1 === 'ring_auto' || equipped.ring2 === 'ring_auto';
+    if (hasAutoRing && isLevelUpAutoMode()) {
+      const options = this._buildOptions();
+      this._select(options[0]);
+      return;
+    }
+
     const w = this.scale.width, h = this.scale.height;
     this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.78).setScrollFactor(0);
     this.add.text(w / 2, h * 0.12, '升 級！選擇一項強化', textStyle({
