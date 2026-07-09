@@ -1,8 +1,11 @@
 import {
   EQUIPMENT_DATA, EQUIP_SLOTS, SLOT_LABELS, EQUIP_LINES, RARITY_DATA, rollGachaItem,
-  GACHA_RARITY_WEIGHTS, GACHA_POOL_BY_RARITY, RARITY_IDS,
+  GACHA_RARITY_WEIGHTS, GACHA_POOL_BY_RARITY, RARITY_IDS, SELL_PRICES,
 } from '../equipment/EquipmentData.js';
-import { getGold, spendGold, addGold, isItemOwned, upgradeEquipment, addItemToInventory, getInventory } from '../managers/SaveManager.js';
+import {
+  getGold, spendGold, addGold, isItemOwned, upgradeEquipment, addItemToInventory, getInventory,
+  getAutoSellRarities, setAutoSellRarities,
+} from '../managers/SaveManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 import { createRarityFrame } from '../utils/RarityFrame.js';
 
@@ -60,11 +63,11 @@ export default class ShopScene extends Phaser.Scene {
     backBtn.on('pointerdown', () => this.scene.start('MainMenuScene'));
   }
 
-  // 抽獎機面板：日式扭蛋機圖片 + 一抽／十抽兩個按鈕。
+  // 抽獎機面板：日式扭蛋機圖片 + 一抽／十抽兩個按鈕 + 自動賣出勾選列。
   _buildGachaPanel(panelLeft, screenW) {
     const panelW = screenW - panelLeft - 60;
     const cx = panelLeft + panelW / 2;
-    const panelTop = 150, panelH = 820;
+    const panelTop = 150, panelH = 900;
     const cy = panelTop + panelH / 2;
 
     this.add.image(cx, cy, 'ui_panel').setDisplaySize(panelW, panelH);
@@ -84,6 +87,45 @@ export default class ShopScene extends Phaser.Scene {
     this._buildGachaButton(cx, panelTop + 521, btnW, `一抽　💰 ${GACHA_SINGLE_PRICE}`, () => this._gachaPull(1, GACHA_SINGLE_PRICE));
     this._buildGachaButton(cx, panelTop + 611, btnW, `十抽　💰 ${GACHA_TEN_PRICE}`, () => this._gachaPull(10, GACHA_TEN_PRICE));
     this._buildGachaButton(cx, panelTop + 701, btnW, '📜 出現道具', () => this._showDropList());
+
+    this._buildAutoSellRow(cx, panelTop + 780, panelW - 40);
+  }
+
+  // 自動賣出勾選列：勾起來的稀有度，扭蛋抽到時直接原地換成金幣（見 _gachaPull），
+  // 不會佔背包格子。只開放普通/優秀/稀有/史詩四階，傳說/神話太稀有，不給誤勾賣掉。
+  _buildAutoSellRow(cx, cy, rowW) {
+    this.autoSellSet = new Set(getAutoSellRarities());
+    this.add.text(cx, cy - 30, '扭蛋抽到時自動賣出：', textStyle({
+      fontSize: '17px', color: '#9fd3ff',
+    })).setOrigin(0.5);
+
+    const rarities = ['common', 'uncommon', 'rare', 'epic'];
+    const colW = rowW / rarities.length;
+    this.autoSellBoxes = {};
+    rarities.forEach((rarity, i) => {
+      const rx = cx - rowW / 2 + colW * i + colW / 2;
+      const rarityDef = RARITY_DATA[rarity];
+      const hex = '#' + rarityDef.color.toString(16).padStart(6, '0');
+      const box = this.add.image(rx, cy, 'ui_equip_slot').setDisplaySize(28, 28).setInteractive({ useHandCursor: true });
+      const check = this.add.text(rx, cy, '✓', textStyle({ fontSize: '20px', color: '#5bff8f' })).setOrigin(0.5);
+      this.add.text(rx, cy + 24, rarityDef.label, textStyle({ fontSize: '15px', color: hex })).setOrigin(0.5);
+      this.autoSellBoxes[rarity] = check;
+      box.on('pointerover', () => box.setTint(0xffe066));
+      box.on('pointerout', () => box.clearTint());
+      box.on('pointerdown', () => {
+        if (this.autoSellSet.has(rarity)) this.autoSellSet.delete(rarity);
+        else this.autoSellSet.add(rarity);
+        setAutoSellRarities(Array.from(this.autoSellSet));
+        this._refreshAutoSellBoxes();
+      });
+    });
+    this._refreshAutoSellBoxes();
+  }
+
+  _refreshAutoSellBoxes() {
+    Object.entries(this.autoSellBoxes).forEach(([rarity, check]) => {
+      check.setVisible(this.autoSellSet.has(rarity));
+    });
   }
 
   // 「出現道具」清單：整畫面覆蓋層，依稀有度分欄列出扭蛋抽得到的所有道具、
@@ -147,7 +189,10 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   // 抽獎前先確認背包有足夠空格，不夠就直接擋下、不扣款——避免抽了裝備卻發不出去。
-  // 通過檢查後才扣款、依機率表抽出 times 件裝備／戒指、塞進背包、播開獎動畫。
+  // 這裡仍然用 times（而不是「扣掉自動賣出後真正要塞背包的件數」）當門檻，因為
+  // 抽到什麼要等真的抽了才知道；用 times 當保守上限，保證不管抽到什麼都塞得下。
+  // 通過檢查後才扣款、依機率表抽出 times 件裝備／戒指：稀有度有勾選自動賣出的
+  // 直接換成金幣、不進背包，其餘照常塞進背包，最後播開獎動畫。
   _gachaPull(times, price) {
     const freeSlots = getInventory().filter((s) => !s).length;
     if (freeSlots < times) {
@@ -158,9 +203,20 @@ export default class ShopScene extends Phaser.Scene {
       this._showToast('金幣不足！');
       return;
     }
+    const autoSellSet = this.autoSellSet || new Set(getAutoSellRarities());
     const results = [];
-    for (let i = 0; i < times; i++) results.push(rollGachaItem());
-    results.forEach((id) => addItemToInventory(id));
+    for (let i = 0; i < times; i++) {
+      const id = rollGachaItem();
+      const rarity = EQUIPMENT_DATA[id].rarity;
+      if (autoSellSet.has(rarity)) {
+        const soldPrice = SELL_PRICES[rarity];
+        addGold(soldPrice);
+        results.push({ id, sold: true, soldPrice });
+      } else {
+        addItemToInventory(id);
+        results.push({ id, sold: false });
+      }
+    }
     this.goldText.setText(`金幣：${getGold()}`);
     this._showGachaReveal(results, times, price);
   }
@@ -206,19 +262,21 @@ export default class ShopScene extends Phaser.Scene {
       const totalW = cols * cardW + (cols - 1) * gapX;
       const startX = w / 2 - totalW / 2 + cardW / 2;
       const startY = h / 2 - (rows * cardH + (rows - 1) * gapY) / 2 + cardH / 2 - 30;
-      results.forEach((id, i) => {
+      results.forEach((result, i) => {
         const col = i % cols, row = Math.floor(i / cols);
         const cx = startX + col * (cardW + gapX);
         const cy = startY + row * (cardH + gapY);
-        this.time.delayedCall(i * 130, () => this._revealSmallCard(overlay, cx, cy, cardW, cardH, id));
+        this.time.delayedCall(i * 130, () => this._revealSmallCard(overlay, cx, cy, cardW, cardH, result));
       });
       this.time.delayedCall(results.length * 130 + 400, revealCloseBtn);
     }
   }
 
   // 單抽大卡片：先炸一圈跟稀有度同色的光暈，卡片、圖示、稀有度標籤、名稱、
-  // 敘述依序淡入＋彈跳縮放，強化「開獎瞬間」的驚喜感。
-  _revealSingleCard(overlay, cx, cy, id, onDone) {
+  // 敘述依序淡入＋彈跳縮放，強化「開獎瞬間」的驚喜感。result = { id, sold, soldPrice }；
+  // sold 的話翻牌動畫結束後會再多播一段「變成金幣」的特效（見 _playSoldFx）。
+  _revealSingleCard(overlay, cx, cy, result, onDone) {
+    const { id, sold, soldPrice } = result;
     const def = EQUIPMENT_DATA[id];
     const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
     const rarityHex = '#' + rarity.color.toString(16).padStart(6, '0');
@@ -250,12 +308,39 @@ export default class ShopScene extends Phaser.Scene {
     this.tweens.add({ targets: icon, scale: 0.87, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 200 });
     this.tweens.add({
       targets: [rarityLabel, nameText, descText], alpha: 1, duration: 380, delay: 420,
+      onComplete: () => {
+        if (sold) this._playSoldFx(overlay, icon, descText, cx, cy - 115, soldPrice, 34, onDone);
+        else onDone();
+      },
+    });
+  }
+
+  // 自動賣出特效：等翻牌動畫播完之後，圖示原地翻轉縮小消失、原位置冒出一枚放大
+  // 彈跳的金幣圖案，說明文字換成「已自動賣出 +N 金幣」，呼應「翻成金幣」的感覺。
+  _playSoldFx(overlay, icon, infoText, iconX, iconY, soldPrice, coinFontSize, onDone) {
+    this.tweens.add({
+      targets: icon, scaleX: 0, angle: 360, duration: 260, ease: 'Cubic.easeIn',
+    });
+    const coin = this.add.text(iconX, iconY, '💰', textStyle({ fontSize: `${coinFontSize}px` }))
+      .setOrigin(0.5).setScale(0);
+    overlay.add(coin);
+    this.tweens.add({
+      targets: coin, scale: 1.3, duration: 300, delay: 220, ease: 'Back.easeOut',
+      onComplete: () => this.tweens.add({ targets: coin, scale: 1, duration: 140 }),
+    });
+    infoText.setText(`💰 已自動賣出 +${soldPrice.toLocaleString()} 金幣`);
+    infoText.setColor('#ffd93d');
+    this.tweens.add({
+      targets: infoText, scale: 1.25, duration: 200, delay: 220, ease: 'Back.easeOut', yoyo: true,
       onComplete: onDone,
     });
   }
 
-  // 十抽網格用的小卡片：比較簡單的縮放淡入，避免十張同時大爆閃洗版面
-  _revealSmallCard(overlay, cx, cy, cardW, cardH, id) {
+  // 十抽網格用的小卡片：比較簡單的縮放淡入，避免十張同時大爆閃洗版面。
+  // result = { id, sold, soldPrice }；sold 的話淡入結束後圖示會翻成金幣圖案，
+  // 名稱下方多冒出一行「+售出金額」。
+  _revealSmallCard(overlay, cx, cy, cardW, cardH, result) {
+    const { id, sold, soldPrice } = result;
     const def = EQUIPMENT_DATA[id];
     const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
     const card = this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH).setScale(0.5).setAlpha(0);
@@ -268,7 +353,25 @@ export default class ShopScene extends Phaser.Scene {
     })).setOrigin(0.5).setAlpha(0);
     overlay.add([card, frame, icon, nameText]);
     this.tweens.add({ targets: [card, frame], scale: 1, alpha: 1, duration: 320, ease: 'Back.easeOut' });
-    this.tweens.add({ targets: [icon, nameText], alpha: 1, duration: 320, ease: 'Cubic.easeOut' });
+    this.tweens.add({
+      targets: [icon, nameText], alpha: 1, duration: 320, ease: 'Cubic.easeOut',
+      onComplete: sold ? () => this._playSmallSoldFx(overlay, icon, cx, cy, cardH, soldPrice) : undefined,
+    });
+  }
+
+  // 十抽小卡片版的自動賣出特效：圖示翻轉縮小消失，原位置冒出金幣圖案，
+  // 名稱下方補一行黃色的「+售出金額」。
+  _playSmallSoldFx(overlay, icon, cx, cy, cardH, soldPrice) {
+    this.tweens.add({ targets: icon, scaleX: 0, angle: 360, duration: 220, ease: 'Cubic.easeIn' });
+    const coin = this.add.text(cx, cy - cardH * 0.16, '💰', textStyle({ fontSize: '22px' }))
+      .setOrigin(0.5).setScale(0);
+    overlay.add(coin);
+    this.tweens.add({ targets: coin, scale: 1, duration: 260, delay: 180, ease: 'Back.easeOut' });
+    const priceText = this.add.text(cx, cy + cardH * 0.4, `+${soldPrice.toLocaleString()}`, textStyle({
+      fontSize: '17px', color: '#ffd93d',
+    })).setOrigin(0.5).setScale(0);
+    overlay.add(priceText);
+    this.tweens.add({ targets: priceText, scale: 1, duration: 260, delay: 180, ease: 'Back.easeOut' });
   }
 
   _buildGrid() {

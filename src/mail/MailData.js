@@ -31,4 +31,11 @@ export const MAIL_DATA = [
     message: '各位抽起來!!',
     rewards: { gold: 100000, items: [] },
   },
+  {
+    id: 'gold_apology_2026_07_10',
+    title: '💰 補償金幣',
+    date: '2026-07-10',
+    message: '抱歉機率太低了嗚嗚',
+    rewards: { gold: 100000, items: [] },
+  },
 ];

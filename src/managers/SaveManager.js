@@ -21,6 +21,7 @@ const STAT_POINTS_KEY = 'pixelSurvivors_statPoints'; // 還沒花掉的技能點
 const STAT_INVEST_KEY = 'pixelSurvivors_statInvest'; // JSON：七項能力值各自已投資的點數（重置時只退這個）
 const MAIL_STATUS_KEY = 'pixelSurvivors_mailStatus'; // JSON：{ [郵件id]: 'claimed' | 'deleted' }
 const LEVEL_UP_AUTO_KEY = 'pixelSurvivors_levelUpAutoMode'; // '1' = 全自動（升級自動選最左邊的卡片），其餘/沒有 = 半自動
+const AUTO_SELL_KEY = 'pixelSurvivors_autoSellRarities'; // JSON 陣列：扭蛋抽到這些稀有度的裝備會自動賣掉換金幣，不進背包
 
 // 背包格數要跟 InventoryScene.js 的 COLS(12) x ROWS(6) 格子數對齊——這裡原本寫死 50，
 // 但畫面早就改成 12x6=72 格了，兩邊對不上導致背包畫面明明還有一堆空格、抽獎/購買
@@ -197,6 +198,21 @@ export function isLevelUpAutoMode() {
 
 export function setLevelUpAutoMode(auto) {
   localStorage.setItem(LEVEL_UP_AUTO_KEY, auto ? '1' : '0');
+  _scheduleCloudPush();
+}
+
+// ---------- 扭蛋自動賣出（商店抽獎機旁的稀有度勾選）----------
+export function getAutoSellRarities() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(AUTO_SELL_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setAutoSellRarities(arr) {
+  localStorage.setItem(AUTO_SELL_KEY, JSON.stringify(arr));
   _scheduleCloudPush();
 }
 
@@ -379,6 +395,7 @@ function _gatherLocalBundle() {
     statInvest: getStatInvest(),
     mailStatus: getMailStatus(),
     levelUpAutoMode: isLevelUpAutoMode(),
+    autoSellRarities: getAutoSellRarities(),
   };
 }
 
@@ -418,6 +435,9 @@ function _applyCloudBundle(data) {
   }
   if (typeof data.levelUpAutoMode === 'boolean') {
     localStorage.setItem(LEVEL_UP_AUTO_KEY, data.levelUpAutoMode ? '1' : '0');
+  }
+  if (Array.isArray(data.autoSellRarities)) {
+    localStorage.setItem(AUTO_SELL_KEY, JSON.stringify(data.autoSellRarities));
   }
 }
 
@@ -543,5 +563,6 @@ export function logout() {
   localStorage.removeItem(STAT_INVEST_KEY);
   localStorage.removeItem(MAIL_STATUS_KEY);
   localStorage.removeItem(LEVEL_UP_AUTO_KEY);
+  localStorage.removeItem(AUTO_SELL_KEY);
   location.reload();
 }
