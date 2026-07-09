@@ -185,12 +185,7 @@ export default class UIScene extends Phaser.Scene {
     muteBtn.on('pointerover', () => muteBtn.setTint(0xfff3d0));
     muteBtn.on('pointerout', () => muteBtn.clearTint());
     muteBtn.on('pointerdown', () => {
-      audioManager.enabled = !audioManager.enabled;
-      if (audioManager.enabled) {
-        audioManager.startBgm();
-      } else {
-        audioManager.stopBgm();
-      }
+      audioManager.setEnabled(!audioManager.enabled);
       this.muteBtnText.setText(audioManager.enabled ? '🔊' : '🔇');
     });
 
