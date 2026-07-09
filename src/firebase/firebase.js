@@ -4,7 +4,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import {
   getDatabase,
   ref,
-  push,
   query,
   orderByChild,
   limitToLast,
@@ -21,24 +20,30 @@ const firebaseConfig = {
 
 let app = null;
 let db = null;
-let leaderboardRef = null;
 
 function ensureInit() {
   if (!app) {
     app = initializeApp(firebaseConfig);
     db = getDatabase(app);
-    leaderboardRef = ref(db, "leaderboard");
   }
 }
 
 /**
- * 上傳分數紀錄到排行榜
+ * 上傳分數紀錄到排行榜。
+ * 改版（修正「榜上的人一直消失」）：不再每場遊戲 push 一筆新紀錄（那會讓資料庫
+ * 無限成長，顯示端只撈前 100 筆原始紀錄，常玩的人一個人就佔掉幾十筆，把其他人的
+ * 最高分擠出窗口、名字就從榜上消失）——改成每個玩家在 leaderboardBest/<名字> 底下
+ * 永遠只存「一筆」自己的最高分，新分數比較高才覆蓋，每人固定一筆、誰也擠不掉誰。
  * @param {{name:string, score:number, kill:number, time:number, date:string}} entry
  */
 export async function submitScore(entry) {
   try {
     ensureInit();
-    await push(leaderboardRef, entry);
+    const bestRef = ref(db, `leaderboardBest/${sanitizeNameKey(entry.name || "???")}`);
+    const snapshot = await get(bestRef);
+    if (!snapshot.exists() || (entry.score || 0) > (snapshot.val().score || 0)) {
+      await set(bestRef, entry);
+    }
     return true;
   } catch (err) {
     console.warn("[Firebase] 上傳分數失敗（可能離線或網路受限）：", err.message);
@@ -48,16 +53,17 @@ export async function submitScore(entry) {
 
 /**
  * 訂閱排行榜 TOP10，依 score 排序，即時同步。
- * 同一個名稱只會顯示一次（取該名稱底下的最高分），避免同一人重複刷分把排行榜洗成
- * 都是自己的名字——做法是多撈一些原始紀錄（100 筆）回來，前端依名稱去重後再取前 10 名。
+ * 資料來源是 leaderboardBest（每個玩家固定一筆最高分，見 submitScore），
+ * 直接撈前 10 筆就是前 10 名「不同的人」，不需要再去重，也不會有人被擠出窗口。
+ * 舊的「每場一筆」leaderboard 節點資料已經在 2026-07-10 一次性搬移到
+ * leaderboardBest（依名字取最高分），舊節點保留不動、但程式不再讀寫。
  * @param {(list: Array) => void} callback
  * @returns {Function} unsubscribe
  */
 export function subscribeLeaderboard(callback) {
   try {
     ensureInit();
-    // 撈多一點原始紀錄（不是只撈 10 筆），才有足夠的資料可以在去重之後還湊得滿 10 個不同的名字
-    const topQuery = query(leaderboardRef, orderByChild("score"), limitToLast(100));
+    const topQuery = query(ref(db, "leaderboardBest"), orderByChild("score"), limitToLast(10));
     const unsubscribe = onValue(
       topQuery,
       (snapshot) => {
@@ -66,19 +72,7 @@ export function subscribeLeaderboard(callback) {
           rows.push(child.val());
         });
         rows.sort((a, b) => (b.score || 0) - (a.score || 0));
-
-        // 依名稱去重：陣列已經是分數由高到低排序，所以每個名字第一次出現
-        // 的那筆就是他的最高分，直接跳過後面重複的名字即可
-        const seenNames = new Set();
-        const deduped = [];
-        for (const row of rows) {
-          const key = row.name || "???";
-          if (seenNames.has(key)) continue;
-          seenNames.add(key);
-          deduped.push(row);
-          if (deduped.length >= 10) break;
-        }
-        callback(deduped);
+        callback(rows);
       },
       (err) => {
         console.warn("[Firebase] 讀取排行榜失敗：", err.message);
