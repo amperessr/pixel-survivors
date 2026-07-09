@@ -422,10 +422,11 @@ export default class Boss {
     this.sprite.clearTint();
   }
 
-  // 特殊技能：新星 —— 惡魔王／樹王專屬的第三招，取代兩隻龍的衝刺。novaCenter 決定
-  // 爆炸中心是「Boss 自己」（惡魔王的詛咒新星，逼玩家遠離）還是「前搖鎖定的目標點」
-  // （樹王的樹根衝擊，玩家站在原地不動就會被炸到，逼玩家在前搖時間內先跑開）。
-  // 沒有續航動作，前搖結束的瞬間直接判定一次範圍傷害，跟龍爪同樣是瞬間打擊型技能。
+  // 特殊技能：新星 —— 惡魔王／樹王／獅鷲王的第三招。novaCenter 決定爆炸中心是
+  // 「Boss 自己」還是「前搖鎖定的目標點」。改版：不再是前搖結束瞬間的隱形範圍判定
+  // （玩家反應會莫名其妙被打），而是一圈「看得到、實際往外掃」的衝擊波光環——
+  // 波前掃過玩家所在位置的那一刻才判定命中；衝擊波往外擴的期間玩家可以往外跑
+  // 拉開距離，或是衝擊波過去之後再走回來，都不會被打到。
   _executeNova(time) {
     this.phase = 'nova';
     const t = this.typeDef;
@@ -433,73 +434,84 @@ export default class Boss {
     const cx = t.novaCenter === 'target' ? this._telegraphTarget.x : bx;
     const cy = t.novaCenter === 'target' ? this._telegraphTarget.y : by;
     const radius = t.novaRadius;
+    const EXPAND_MS = 700; // 衝擊波從中心掃到最大半徑要多久（越久越好躲）
 
     this.scene.cameras.main.flash(220, (t.aoeColor >> 16) & 0xff, (t.aoeColor >> 8) & 0xff, t.aoeColor & 0xff);
-    this.scene.hitStop(120);
     audioManager.bossRoar();
 
-    // 由中心向外炸開的雙層光環（主題色 + 內層純白），加上大量碎片噴發，做出「新星」的份量感
-    this.scene.spawnGlowRing(cx, cy, 'fx_bossdeath', t.aoeColor, 0.5, radius / 26, 480);
-    this.scene.spawnGlowRing(cx, cy, 'fx_bossdeath', 0xffffff, 0.4, radius / 45, 340);
+    // 衝擊波本體：主題色大環＋內層白色亮環一起往外掃，這一圈就是實際的命中判定
+    const ring = this.scene.add.image(cx, cy, 'fx_bossdeath').setTint(t.aoeColor)
+      .setAlpha(0.9).setBlendMode(Phaser.BlendModes.ADD).setDepth(20006).setScale(0.2);
+    const ringCore = this.scene.add.image(cx, cy, 'fx_bossdeath').setTint(0xffffff)
+      .setAlpha(0.6).setBlendMode(Phaser.BlendModes.ADD).setDepth(20007).setScale(0.12);
+    // fx_bossdeath 貼圖在 scale 1 時半徑約 26px（跟 spawnGlowRing 的換算一致），
+    // 讓視覺大小跟命中判定的波前半徑同步放大。
+    this.scene.tweens.add({ targets: ring, scale: radius / 26, duration: EXPAND_MS, ease: 'Sine.easeOut' });
+    this.scene.tweens.add({ targets: ringCore, scale: radius / 30, duration: EXPAND_MS, ease: 'Sine.easeOut' });
+    this.scene.tweens.add({ targets: [ring, ringCore], alpha: 0, duration: 240, delay: EXPAND_MS, onComplete: () => { ring.destroy(); ringCore.destroy(); } });
     this.scene.spawnBurstFx(cx, cy, t.aoeColor, 22, 'fx_crit', 210);
 
-    this.scene.time.delayedCall(120, () => {
-      if (!this.alive) return;
-      const d = dist(cx, cy, this.player.sprite.x, this.player.sprite.y);
-      if (d < radius) {
-        const died = this.player.takeDamage(this.dmg * 1.3, this.scene.time.now);
-        if (died) this.scene.onPlayerDeath();
-      }
+    // 波前命中判定：每 30ms 算一次目前衝擊波掃到的半徑，玩家跟中心的距離剛好
+    // 落在波前附近（±34px）才算被掃到，整招最多命中一次。
+    let hasHit = false;
+    const startAt = this.scene.time.now;
+    const waveTimer = this.scene.time.addEvent({
+      delay: 30, loop: true,
+      callback: () => {
+        const progress = (this.scene.time.now - startAt) / EXPAND_MS;
+        if (progress >= 1) { waveTimer.remove(); return; }
+        if (hasHit || !this.alive) return;
+        const waveR = radius * progress;
+        const d = dist(cx, cy, this.player.sprite.x, this.player.sprite.y);
+        if (Math.abs(d - waveR) < 34) {
+          hasHit = true;
+          const died = this.player.takeDamage(this.dmg * 1.3, this.scene.time.now);
+          if (died) this.scene.onPlayerDeath();
+        }
+      },
+    });
+
+    this.scene.time.delayedCall(EXPAND_MS, () => {
       this.phase = 'chase';
       this.nextSkillAt = this.scene.time.now + 3200;
     });
   }
 
-  // 技能二：近戰揮擊 —— 往前搖鎖定方向的前方揮出五道爪痕/揮擊痕，短暫延遲後在揮擊點
-  // 造成範圍傷害。顏色改用 typeDef.clawColor（兩隻龍是金色，惡魔王紫色，樹王綠色），
-  // 讓不同 Boss 的近戰攻擊有各自的視覺辨識度；五道痕跡垂直排列、依序些微延遲出現，
-  // 模擬「同時劃過」的斬擊感。
+  // 技能二：爪擊斬波 —— 改版：不再是「原地隱形範圍判定」（玩家反應會莫名其妙被打），
+  // 而是往前搖鎖定方向「射出」五道排成扇形、實際往前飛的爪痕震波投射物——
+  // 震波本身就是命中判定（跟龍息彈幕共用 bossBoltGroup 的碰撞邏輯，見
+  // GameScene.update()），玩家看得到它飛過來、也真的閃得掉，被打到就是被震波碰到。
   _executeClaw(time) {
     this.phase = 'claw';
     const bx = this.sprite.x, by = this.sprite.y;
     const ang = this._telegraphAngle;
-    const reach = 130; // 爪擊點距離 Boss 中心多遠（往玩家方向前撲一段距離）
-    const cx = bx + Math.cos(ang) * reach;
-    const cy = by + Math.sin(ang) * reach;
-    const hitRadius = 95;
     const clawColor = this.typeDef.clawColor || 0xffe066;
 
-    this.scene.cameras.main.flash(200, 255, 224, 130);
-    this.scene.hitStop(110);
+    this.scene.cameras.main.flash(140, 255, 224, 130);
     audioManager.bossRoar();
+    // 出手瞬間在 Boss 前方閃一圈揮擊光環，交代「這些震波是從這一爪揮出來的」
+    const originX = bx + Math.cos(ang) * 60, originY = by + Math.sin(ang) * 60;
+    this.scene.spawnGlowRing(originX, originY, 'fx_bossdeath', clawColor, 0.3, 2.2, 300);
+    this.scene.spawnBurstFx(originX, originY, clawColor, 12, 'fx_crit', 160);
 
-    // 五爪齊揮（原本只有三條），扇形展開角度也加大，斬擊感更誇張、更有魄力
     const perpAng = ang + Math.PI / 2;
     for (let i = -2; i <= 2; i++) {
-      const off = i * 24;
-      const sx = cx + Math.cos(perpAng) * off;
-      const sy = cy + Math.sin(perpAng) * off;
-      const claw = this.scene.add.image(sx, sy, 'fx_claw_slash')
-        .setDepth(20005).setRotation(ang).setScale(0.4, 1).setAlpha(0.95).setTint(clawColor);
-      this.scene.tweens.add({
-        targets: claw, scaleX: 1.5, alpha: 0, duration: 280, delay: Math.abs(i) * 35,
-        onComplete: () => claw.destroy(),
-      });
+      const off = i * 34;
+      const sx = originX + Math.cos(perpAng) * off;
+      const sy = originY + Math.sin(perpAng) * off;
+      const wave = this.scene.physics.add.image(sx, sy, 'fx_claw_slash')
+        .setDepth(20005).setRotation(ang).setScale(1.0, 1.2).setAlpha(0.95).setTint(clawColor);
+      wave.body.setVelocity(Math.cos(ang) * 430, Math.sin(ang) * 430);
+      wave.setData('dmg', this.dmg * 1.1);
+      wave.setData('kind', 'bossBolt');
+      wave.setData('hitRadius', 36); // 震波體積大，命中半徑也放大（見 GameScene 的 bossBoltGroup 判定）
+      this.scene.bossBoltGroup.add(wave);
+      // 飛行途中慢慢變淡，快消失前就幾乎打不到人，避免「看起來已經消失卻還會命中」
+      this.scene.tweens.add({ targets: wave, alpha: 0.35, duration: 900, delay: Math.abs(i) * 40 });
+      this.scene.time.delayedCall(950, () => { if (wave.active) wave.destroy(); });
     }
 
-    this.scene.time.delayedCall(140, () => {
-      if (!this.alive) return; // 動畫播放期間 Boss 可能已被打死，避免存取已銷毀的物件
-      // 落地瞬間追加一圈衝擊光環＋碎片噴發＋二次打擊停頓，把「揮擊真正打中地面」
-      // 那一刻的份量感做出來，不再只有斬擊殘影而已
-      this.scene.spawnGlowRing(cx, cy, 'fx_bossdeath', clawColor, 0.35, 3.4, 400);
-      this.scene.spawnBurstFx(cx, cy, clawColor, 20, 'fx_crit', 210);
-      this.scene.cameras.main.flash(140, 255, 255, 210);
-      this.scene.hitStop(70);
-      const d = dist(cx, cy, this.player.sprite.x, this.player.sprite.y);
-      if (d < hitRadius) {
-        const died = this.player.takeDamage(this.dmg * 1.1, this.scene.time.now);
-        if (died) this.scene.onPlayerDeath();
-      }
+    this.scene.time.delayedCall(400, () => {
       this.phase = 'chase';
       this.nextSkillAt = this.scene.time.now + 3200;
     });
@@ -555,10 +567,12 @@ export default class Boss {
     for (let i = 0; i < count; i++) {
       const off = (i - (count - 1) / 2) * (spreadTotal / (count - 1));
       const ang = baseAng + off;
-      const bolt = this.scene.physics.add.image(bx, by, t.boltTexture).setTint(t.breathColor).setScale(1.8);
+      // 彈幕放大（1.8→2.6）讓玩家更容易看清楚每一顆的位置；命中半徑跟著視覺放大
+      const bolt = this.scene.physics.add.image(bx, by, t.boltTexture).setTint(t.breathColor).setScale(2.6);
       bolt.body.setVelocity(Math.cos(ang) * 400, Math.sin(ang) * 400);
       bolt.setData('dmg', this.dmg * 0.55);
       bolt.setData('kind', 'bossBolt');
+      bolt.setData('hitRadius', 24);
       this.scene.bossBoltGroup.add(bolt);
       this.scene.time.delayedCall(2200, () => { if (bolt.active) bolt.destroy(); });
     }

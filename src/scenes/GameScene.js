@@ -344,9 +344,12 @@ export default class GameScene extends Phaser.Scene {
       this.boss = new Boss(this, this.player, this.stage - 1, bossType, this.bossSpawnCount);
     }
 
+    // 魔王投射物（龍息彈幕/爪擊震波）命中判定：命中半徑依每顆投射物自己的
+    // hitRadius 資料（沒設定就用預設 16），讓大顆的震波/彈幕「看起來碰到就是碰到」。
     this.bossBoltGroup.children.iterate((bolt) => {
       if (!bolt || !bolt.active) return;
-      if (dist(bolt.x, bolt.y, this.player.sprite.x, this.player.sprite.y) < 16) {
+      const hitRadius = bolt.getData('hitRadius') || 16;
+      if (dist(bolt.x, bolt.y, this.player.sprite.x, this.player.sprite.y) < hitRadius) {
         const died = this.player.takeDamage(bolt.getData('dmg'), time);
         bolt.destroy();
         if (died) this.onPlayerDeath();

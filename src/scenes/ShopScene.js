@@ -297,17 +297,23 @@ export default class ShopScene extends Phaser.Scene {
   // 單抽大卡片：先炸一圈跟稀有度同色的光暈，卡片、圖示、稀有度標籤、名稱、
   // 敘述依序淡入＋彈跳縮放，強化「開獎瞬間」的驚喜感。result = { id, sold, soldPrice }；
   // sold 的話翻牌動畫結束後會再多播一段「變成金幣」的特效（見 _playSoldFx）。
+  // 傳說/神話另外先播一段盛大的出場特效（光柱＋旋轉光芒＋連環光環，見
+  // _playRareEntranceFx），卡片本體延後 900ms 才翻出來，做出「抽到大獎」的儀式感。
   _revealSingleCard(overlay, cx, cy, result, onDone) {
     const { id, sold, soldPrice } = result;
     const def = EQUIPMENT_DATA[id];
     const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
     const rarityHex = '#' + rarity.color.toString(16).padStart(6, '0');
     const cardW = 380, cardH = 460; // 單抽卡片放大一圈，開獎瞬間份量感更足
+    const isRare = def.rarity === 'legendary' || def.rarity === 'mythic';
+    const rareDelay = isRare ? 900 : 0;
+    if (isRare) this._playRareEntranceFx(overlay, cx, cy, def.rarity, 1);
 
     const flash = this.add.circle(cx, cy, 10, rarity.color, 0.9);
     overlay.add(flash);
     this.tweens.add({
       targets: flash, radius: 260, alpha: 0, duration: 500, ease: 'Cubic.easeOut',
+      delay: rareDelay,
       onComplete: () => flash.destroy(),
     });
 
@@ -332,16 +338,80 @@ export default class ShopScene extends Phaser.Scene {
     })).setOrigin(0.5).setAlpha(0);
     overlay.add([card, frame, icon, rarityLabel, nameText, descText]);
 
-    this.tweens.add({ targets: frame, scale: 1, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 120 });
-    this.tweens.add({ targets: card, scaleX: cardScaleX, scaleY: cardScaleY, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 120 });
-    this.tweens.add({ targets: icon, scale: 0.87, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 200 });
+    this.tweens.add({ targets: frame, scale: 1, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 120 + rareDelay });
+    this.tweens.add({ targets: card, scaleX: cardScaleX, scaleY: cardScaleY, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 120 + rareDelay });
+    this.tweens.add({ targets: icon, scale: 0.87, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 200 + rareDelay });
     this.tweens.add({
-      targets: [rarityLabel, nameText, descText], alpha: 1, duration: 380, delay: 420,
+      targets: [rarityLabel, nameText, descText], alpha: 1, duration: 380, delay: 420 + rareDelay,
       onComplete: () => {
         if (sold) this._playSoldFx(overlay, icon, descText, cx, cy - 115, soldPrice, 34, onDone);
         else onDone();
       },
     });
+  }
+
+  // 傳說/神話抽卡出場特效：參考其他遊戲抽到大獎的演出——全畫面色光一閃、
+  // 一道光柱從畫面頂端打到卡片位置、卡片背後展開一圈慢慢旋轉的放射光芒、
+  // 中心連環炸出多層擴散光環＋大量碎片，最後卡片才翻出來（翻牌延遲由呼叫端控制）。
+  // 傳說＝金色系，神話＝紅色系再多疊一層金色光環，比傳說更誇張一階。
+  _playRareEntranceFx(overlay, cx, cy, rarityId, scale = 1) {
+    const isMythic = rarityId === 'mythic';
+    const color = isMythic ? 0xff3b3b : 0xffb830;
+    const w = this.scale.width, h = this.scale.height;
+
+    // 全畫面色光一閃：告訴玩家「這一抽不一樣」
+    const screenFlash = this.add.rectangle(w / 2, h / 2, w, h, color, 0.32)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    overlay.add(screenFlash);
+    this.tweens.add({ targets: screenFlash, alpha: 0, duration: 550, onComplete: () => screenFlash.destroy() });
+
+    // 從畫面頂端打下來的光柱，落在卡片位置後慢慢收掉
+    const beam = this.add.rectangle(cx, cy / 2, 110 * scale, cy, color, 0.55)
+      .setBlendMode(Phaser.BlendModes.ADD).setScale(0.08, 1);
+    overlay.add(beam);
+    this.tweens.add({ targets: beam, scaleX: 1, duration: 220, ease: 'Cubic.easeOut' });
+    this.tweens.add({ targets: beam, alpha: 0, duration: 350, delay: 550, onComplete: () => beam.destroy() });
+
+    // 卡片背後的放射狀光芒：12 道長條光束繞著中心慢慢旋轉，整段出場期間都亮著
+    const rays = this.add.container(cx, cy).setDepth(1);
+    for (let i = 0; i < 12; i++) {
+      const ray = this.add.rectangle(0, 0, 460 * scale, 20 * scale, color, 0.28)
+        .setBlendMode(Phaser.BlendModes.ADD).setOrigin(0, 0.5).setRotation((i / 12) * Math.PI * 2);
+      rays.add(ray);
+    }
+    rays.setScale(0.2).setAlpha(0);
+    overlay.add(rays);
+    this.tweens.add({ targets: rays, scale: 1, alpha: 1, duration: 320, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: rays, angle: 60, duration: 2400, ease: 'Linear' });
+    this.tweens.add({ targets: rays, alpha: 0, duration: 500, delay: 1900, onComplete: () => rays.destroy() });
+
+    // 連環擴散光環：三波錯開時間往外炸，神話多疊一圈金色，做出「比傳說更高一階」的差異
+    const ringWaves = isMythic ? [color, 0xffd700, color] : [color, 0xffe9b0, color];
+    ringWaves.forEach((ringColor, i) => {
+      const ring = this.add.image(cx, cy, 'fx_bossdeath').setTint(ringColor)
+        .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.85).setScale(0.2);
+      overlay.add(ring);
+      this.tweens.add({
+        targets: ring, scale: (5.5 + i * 1.5) * scale, alpha: 0, duration: 700,
+        delay: i * 180, ease: 'Cubic.easeOut', onComplete: () => ring.destroy(),
+      });
+    });
+
+    // 大量碎片從中心往外噴，數量比一般開獎多一截
+    for (let i = 0; i < 22; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const distR = (90 + Math.random() * 190) * scale;
+      const p = this.add.image(cx, cy, 'fx_crit').setTint(i % 3 === 0 ? 0xffffff : color)
+        .setBlendMode(Phaser.BlendModes.ADD).setScale(0.5 + Math.random() * 0.7).setAlpha(0.95);
+      overlay.add(p);
+      this.tweens.add({
+        targets: p,
+        x: cx + Math.cos(ang) * distR, y: cy + Math.sin(ang) * distR,
+        alpha: 0, scale: 0.15, duration: 620 + Math.random() * 260,
+        delay: Math.random() * 150, ease: 'Cubic.easeOut',
+        onComplete: () => p.destroy(),
+      });
+    }
   }
 
   // 自動賣出特效：等翻牌動畫播完之後，圖示原地翻轉縮小消失、原位置冒出一枚放大
@@ -384,6 +454,11 @@ export default class ShopScene extends Phaser.Scene {
       wordWrap: { width: cardW - 20, useAdvancedWrap: true },
     })).setOrigin(0.5).setAlpha(0);
     overlay.add([card, frame, icon, nameText]);
+    // 十抽滾到傳說/神話時，這格也播一份縮小版的出場特效（光柱＋光芒＋光環），
+    // 讓玩家一眼掃過十張卡片牆就知道「這格是大獎」。
+    if (def.rarity === 'legendary' || def.rarity === 'mythic') {
+      this._playRareEntranceFx(overlay, cx, cy, def.rarity, 0.45);
+    }
     this.tweens.add({ targets: frame, scale: 1, alpha: 1, duration: 320, ease: 'Back.easeOut' });
     this.tweens.add({ targets: card, scaleX: cardScaleX, scaleY: cardScaleY, alpha: 1, duration: 320, ease: 'Back.easeOut' });
     this.tweens.add({
