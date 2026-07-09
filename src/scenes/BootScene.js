@@ -58,19 +58,14 @@ export default class BootScene extends Phaser.Scene {
     });
 
     // 電擊飛刃／血肉風暴／世界末日三把融合武器改用正式美術圖，取代原本
-    // TextureFactory.generateFusionWeaponIcons() 畫的簡易圖示，並額外補上
-    // 世界末日隕石/冰塊落地的專屬特效素材（取代借用一般火球/冰霜特效）。
+    // TextureFactory.generateFusionWeaponIcons() 畫的簡易圖示。
+    // 世界末日的 worldend_* 特效切圖已棄用（切圖帶著原圖漸層背景去不乾淨，
+    // 畫面上會出現方形色塊），落地/地板特效全部改回程式繪製（見 GameScene）。
     this.load.image('weapon_lightning_knife_lv5', 'assets/weapon_lightning_knife_lv5.png');
     this.load.image('weapon_knife_sawblade_lv5', 'assets/weapon_knife_sawblade_lv5.png');
     this.load.image('weapon_fireball_frost_lv5', 'assets/weapon_fireball_frost_lv5.png');
     this.load.image('proj_electroknife', 'assets/proj_electroknife.png');
     this.load.image('fx_bloodstorm', 'assets/fx_bloodstorm.png');
-    this.load.image('worldend_meteor', 'assets/worldend_meteor.png');
-    this.load.image('worldend_fire_burst', 'assets/worldend_fire_burst.png');
-    this.load.image('worldend_fire_ground', 'assets/worldend_fire_ground.png');
-    this.load.image('worldend_ice', 'assets/worldend_ice.png');
-    this.load.image('worldend_ice_burst', 'assets/worldend_ice_burst.png');
-    this.load.image('worldend_ice_ground', 'assets/worldend_ice_ground.png');
   }
 
   create() {

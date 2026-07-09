@@ -2,6 +2,7 @@ import ObjectPool from '../managers/ObjectPool.js';
 import { dist, randRange } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { getEquipped } from '../managers/SaveManager.js';
+import { PICKUP_DEPTH } from './HealthPackSystem.js';
 
 const MAX_MAGNETS = 1; // 同時間地圖上最多存在的磁鐵數量（比血包稀有，同時只會有一個）
 const MIN_INTERVAL = 35000; // 最短生成間隔（毫秒），刻意比血包更久，維持「偶爾掉落」的稀有感
@@ -72,7 +73,8 @@ export default class MagnetSystem {
     const y = py + Math.sin(angle) * radius;
     const img = this.pool.spawn(x, y);
     img.setData('baseY', y);
-    img.setDepth(y);
+    // 固定高深度，永遠畫在經驗寶石/小怪上面，理由見 HealthPackSystem 的 PICKUP_DEPTH
+    img.setDepth(PICKUP_DEPTH);
   }
 
   _pickup(img) {

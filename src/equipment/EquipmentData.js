@@ -148,9 +148,11 @@ export const EQUIPMENT_DATA = {
   // 戒指：僅能從扭蛋機抽到，商店不販售（不會出現在 SHOP_ITEM_IDS），沒有階級/升級。
   // slot 統一是 'ring'：四種戒指共用兩個戒指欄位（ring1/ring2），穿戴時裝進
   // 第一個空的戒指欄，兩欄都滿了就換掉 ring1（見 InventoryScene._equipFromInventory）。
+  // 2026-07-10 改版：原「回血戒指」（血包 30% 機率自動飛向玩家）改成吸血——
+  // id 沿用 ring_heal，已抽到的玩家自動獲得新效果，不用重新發放。
   ring_heal: {
     id: 'ring_heal', slot: 'ring', tier: null, tierIndex: 0, prevId: null, rarity: 'legendary',
-    name: '回血戒指', desc: '掉落的血包有 30% 機率自動飛向玩家。（僅扭蛋機取得）',
+    name: '吸血戒指', desc: '攻擊造成傷害時，吸取傷害的 3% 回復生命（每秒最多回復最大生命的 5%）。（僅扭蛋機取得）',
     icon: 'ring_heal', bonus: {},
   },
   ring_auto: {

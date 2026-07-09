@@ -18,10 +18,10 @@ import { textStyle } from '../utils/TextStyle.js';
 // 魔王關（第 5、10、15...關）改成打死魔王才會進到下一關，見 registerKill()/onBossDefeated()。
 const BOSS_STAGE_INTERVAL = 5;
 const KILLS_PER_STAGE = 500;
-// Boss 現在體型大幅放大，命中/接觸判定半徑也要跟著放大，這裡統一定義方便调整
-const BOSS_HIT_RADIUS = 46;   // 子彈命中 Boss 的判定半徑
-const BOSS_TOUCH_RADIUS = 76; // Boss 對玩家造成接觸傷害的判定半徑
-const BOSS_SAW_RADIUS = 76;   // 鋸片對 Boss 造成傷害的判定半徑
+// Boss 判定半徑統一定義方便調整（2026-07-10 魔王體型全面縮小，半徑跟著縮）
+const BOSS_HIT_RADIUS = 36;   // 子彈命中 Boss 的判定半徑
+const BOSS_TOUCH_RADIUS = 60; // Boss 對玩家造成接觸傷害的判定半徑
+const BOSS_SAW_RADIUS = 60;   // 鋸片對 Boss 造成傷害的判定半徑
 const ELECTRO_KNIFE_CHAIN_MAX = 8; // 電擊飛刃命中後，連鎖閃電最多牽連的小怪數量
 
 export default class GameScene extends Phaser.Scene {
@@ -248,6 +248,30 @@ export default class GameScene extends Phaser.Scene {
     // 聖光套會壓倒其他四套傳說裝，降到 +60% 拉回套裝之間的平衡。
     if (flags.holy3) this.player.stats.atkSpeed += 30;
     if (flags.holy5) this.player.stats.atkSpeed += 60;
+
+    // 吸血戒指（ring_heal 改版）：開局檢查一次是否戴著，戰鬥中造成傷害時走
+    // applyLifesteal() 回血。
+    this._hasLifestealRing = equipped.ring1 === 'ring_heal' || equipped.ring2 === 'ring_heal';
+    this._lifestealWindowAt = 0;
+    this._lifestealHealed = 0;
+  }
+
+  // 吸血戒指：攻擊造成傷害時吸取傷害的 3% 回復生命，每秒最多回復最大生命的 5%
+  // ——上限是必要的：後期全武器同時輸出的總傷害極高，沒有上限的話吸血會直接
+  // 讓玩家鎖血打不死。由 EnemySystem.damageEnemy()／Boss.takeDamage() 呼叫。
+  applyLifesteal(dmg) {
+    if (!this._hasLifestealRing || !this.player || this.gameEnded) return;
+    const now = this.time.now;
+    if (now - this._lifestealWindowAt >= 1000) {
+      this._lifestealWindowAt = now;
+      this._lifestealHealed = 0;
+    }
+    const cap = this.player.stats.maxHp * 0.05;
+    if (this._lifestealHealed >= cap) return;
+    const heal = Math.min(dmg * 0.03, cap - this._lifestealHealed);
+    if (heal <= 0) return;
+    this._lifestealHealed += heal;
+    this.player.hp = Math.min(this.player.stats.maxHp, this.player.hp + heal);
   }
 
   // 分身戒：開局時召喚一個半透明的分身幻影。分身沒有物理實體（怪物打不到、
@@ -525,8 +549,10 @@ export default class GameScene extends Phaser.Scene {
   // 攻擊技能、敵人不會閃避，所以不需要警示圈，按下去直接開始墜落，反應更快。
   spawnMeteorDrop(x, y, dmg, aoe, critRate, critDmg, knockback) {
     if (!this.player || !this.player.sprite.active) return;
-    // 改用正式美術圖（燃燒隕石），取代借用一般火球貼圖再染色的做法
-    const meteor = this.add.image(x, y - 620, 'worldend_meteor').setDepth(30003).setScale(0.9).setRotation(0.15);
+    // 隕石本體回歸「火球貼圖染色」的做法：先前切自素材圖的 worldend_meteor 帶著
+    // 原圖的漸層背景（去不乾淨），在畫面上會看到一塊方形底，反而更粗糙。
+    const meteor = this.add.image(x, y - 620, 'proj_fireball')
+      .setDepth(30003).setScale(3.2).setTint(0xff6a2d).setRotation(0.4);
     const trailTimer = this.time.addEvent({
       delay: 40, loop: true,
       callback: () => { if (meteor.active) this.spawnEmbersFx(meteor.x, meteor.y - 10, 2, 0xff8a3d); },
@@ -558,8 +584,9 @@ export default class GameScene extends Phaser.Scene {
   // 敵人持續減速（見 EnemySystem.applySlow()／addHazardZone()）。
   spawnIceDrop(x, y, dmg, aoe, critRate, critDmg) {
     if (!this.player || !this.player.sprite.active) return;
-    // 改用正式美術圖（墜落冰晶），取代借用一般冰霜貼圖再染色的做法
-    const ice = this.add.image(x, y - 620, 'worldend_ice').setDepth(30003).setScale(0.9);
+    // 冰晶本體回歸「冰霜貼圖染色」的做法，理由同 spawnMeteorDrop：切圖背景去不乾淨
+    const ice = this.add.image(x, y - 620, 'proj_frost')
+      .setDepth(30003).setScale(3.4).setTint(0xcdefff).setRotation(-0.3);
     this.tweens.add({
       targets: ice, y, duration: 430, ease: 'Cubic.easeIn',
       onComplete: () => {
@@ -579,24 +606,62 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  // 隕石／冰塊落地瞬間的爆閃特效：用正式美術圖的裂地火花／冰晶飛濺，取代借用
-  // 一般火球/冰霜的命中特效（那兩種是共用給其他武器的，世界末日改用專屬素材）。
+  // 隕石／冰塊落地瞬間的爆閃特效：全程式繪製（爆閃圖＋發光圈＋碎片噴發）。
+  // 先前用切自素材圖的 worldend_*_burst，但那批切圖帶著原圖的漸層背景去不乾淨，
+  // 畫面上會出現一塊方形底，比程式特效更粗糙，全部改回程式繪製。
   _spawnWorldEndImpactFx(x, y, aoe, type) {
-    const texture = type === 'fire' ? 'worldend_fire_burst' : 'worldend_ice_burst';
-    const scale = Math.min(2.4, aoe / 70);
-    const fx = this.add.image(x, y, texture).setDepth(29999).setScale(scale * 0.5).setAlpha(0.95);
-    this.tweens.add({ targets: fx, scale: scale, alpha: 0, duration: 320, onComplete: () => fx.destroy() });
-    this.spawnGlowRing(x, y, type === 'fire' ? 'fx_flame' : 'fx_frost', type === 'fire' ? 0xff8a3d : 0x8fe3ff, 0.4, aoe / 26, 380);
+    const isFire = type === 'fire';
+    const texture = isFire ? 'fx_flame' : 'fx_frost';
+    const tint = isFire ? 0xff8a3d : 0x8fe3ff;
+    const fx = this.add.image(x, y, texture).setDepth(29999).setScale(2.2 * 0.55);
+    if (!isFire) fx.setTint(0xbfe9ff);
+    this.tweens.add({ targets: fx, scale: 2.2 * 1.9, alpha: 0, duration: 300, onComplete: () => fx.destroy() });
+    this.spawnGlowRing(x, y, texture, tint, 0.4, aoe / 26, 380);
+    this.spawnBurstFx(x, y, tint, 10, texture, 170);
   }
 
-  // 地面殘留特效：燃燒地板／冰霜地板疊在怪物腳下（深度用 y-2，確保永遠畫在怪物/
-  // 玩家下方），用正式美術圖的裂地紋理，淡入後持續、配合 3 秒地板持續時間淡出，
-  // 呼應地板還在生效中。
+  // 地面殘留特效（燃燒地板／冰霜地板）：不再貼一整張方形素材圖（切圖帶背景、
+  // 看起來像一塊方塊壓在地上），改成「圓形柔光底暈＋持續 3 秒隨機竄出的小火苗/
+  // 碎冰粒子」，讓地板看起來真的在燃燒/結凍。深度壓在怪物腳下（y-2/y-3）。
   _spawnGroundPatchFx(x, y, aoe, type) {
-    const texture = type === 'fire' ? 'worldend_fire_ground' : 'worldend_ice_ground';
-    const patch = this.add.image(x, y, texture).setDepth(y - 2).setAlpha(0).setScale(aoe / 190);
-    this.tweens.add({ targets: patch, alpha: 0.8, duration: 200 });
-    this.tweens.add({ targets: patch, alpha: 0, duration: 400, delay: 2600, onComplete: () => patch.destroy() });
+    const isFire = type === 'fire';
+    const tint = isFire ? 0xff7a2d : 0x8fe3ff;
+
+    // 底層圓形柔光（fx_bossdeath 是圓形柔光貼圖）：交代地板的生效範圍，
+    // 用 ADD 疊加模式呈現「地面在發光」而不是一張圖蓋在地上，並隨時間輕微脈動
+    const glow = this.add.image(x, y, 'fx_bossdeath').setDepth(y - 3).setTint(tint)
+      .setAlpha(0).setScale(aoe / 26).setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: glow, alpha: 0.3, duration: 200 });
+    this.tweens.add({ targets: glow, alpha: { from: 0.3, to: 0.16 }, duration: 450, delay: 250, yoyo: true, repeat: 2 });
+    this.tweens.add({ targets: glow, alpha: 0, duration: 400, delay: 2600, onComplete: () => glow.destroy() });
+
+    // 持續 3 秒、每 130ms 在範圍內隨機一點竄出一小簇火苗（往上飄）或碎冰（原地
+    // 結晶長出來再化掉），做出「地板正在燒／正在結凍」的動態感
+    this.time.addEvent({
+      delay: 130, repeat: Math.floor(2700 / 130),
+      callback: () => {
+        const ang = Math.random() * Math.PI * 2;
+        const r = Math.sqrt(Math.random()) * aoe * 0.9; // sqrt 讓分佈均勻鋪滿整個圓，不會擠在中心
+        const fxX = x + Math.cos(ang) * r, fxY = y + Math.sin(ang) * r;
+        if (isFire) {
+          const flame = this.add.image(fxX, fxY, 'fx_flame').setDepth(y - 2)
+            .setScale(0.3 + Math.random() * 0.35).setAlpha(0.9);
+          this.tweens.add({
+            targets: flame, y: fxY - 16, scale: 0.15, alpha: 0,
+            duration: 400 + Math.random() * 150, ease: 'Cubic.easeOut',
+            onComplete: () => flame.destroy(),
+          });
+        } else {
+          const shard = this.add.image(fxX, fxY, 'fx_frost').setDepth(y - 2)
+            .setScale(0.08).setAlpha(0.85).setTint(0xcdefff).setRotation(Math.random() * Math.PI);
+          this.tweens.add({
+            targets: shard, scale: 0.3 + Math.random() * 0.25, alpha: 0,
+            duration: 550 + Math.random() * 200, ease: 'Sine.easeOut',
+            onComplete: () => shard.destroy(),
+          });
+        }
+      },
+    });
   }
 
   // 雷霆套裝三件套：雷電系技能（雷電鎖鏈／電擊飛刃）命中敵人/魔王時 30% 機率

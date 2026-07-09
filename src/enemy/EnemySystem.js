@@ -12,6 +12,8 @@ const SLOW_SPEED_FACTOR = 0.5; // 減速固定降到 50% 移動速度
 const BURN_DPS_PERCENT = 0.05; // 燃燒固定每秒造成目標「最大生命值」5% 的傷害
 const SLOW_FREEZE_THRESHOLD_MS = 3000; // 連續被減速累積滿這麼久，直接冰凍
 const SLOW_FREEZE_DURATION_MS = 1000; // 累積減速觸發的冰凍持續多久
+const SEPARATION_DIST = 18; // 怪物間的分離距離：比這更近就互相推開，避免完全重疊
+const SEPARATION_FORCE = 60; // 分離力道（疊加在追擊速度上的推開速度）
 
 export default class EnemySystem {
   constructor(scene, player) {
@@ -113,6 +115,7 @@ export default class EnemySystem {
     sprite.setData('knockbackDuration', 220);
     sprite.setData('lastHitAt', 0);
     sprite.setData('flashToken', 0); // 用來讓「閃白後恢復顏色」的計時器只認得最新一次的傷害
+    sprite.setData('flashUntil', 0); // 受擊閃白的持續期間，狀態染色（燃燒/冰凍/緩速）先讓路
     if (tierDef.tint) sprite.setTint(tierDef.tint); else sprite.clearTint();
   }
 
@@ -204,7 +207,28 @@ export default class EnemySystem {
         const slowed = now < e.getData('slowUntil') ? e.getData('slowFactor') : 1;
         const spd = e.getData('speed') * slowed;
         const ang = Math.atan2(py - e.y, px - e.x);
-        e.body.setVelocity(Math.cos(ang) * spd, Math.sin(ang) * spd);
+        // 分離力：跟太近的其他怪物互相推開一點（用既有的空間網格粗篩附近的怪，
+        // 不用每隻掃全場），讓怪群擠在一起時不會完全重疊成同一坨。
+        let sepX = 0, sepY = 0;
+        this.queryNear(e.x, e.y, SEPARATION_DIST, (o) => {
+          if (o === e) return;
+          const ddx = e.x - o.x, ddy = e.y - o.y;
+          const d = Math.hypot(ddx, ddy);
+          if (d >= SEPARATION_DIST) return;
+          if (d < 0.5) {
+            // 兩隻完全疊在同一點：隨機挑個方向推開，不然算不出推開向量
+            const ra = Math.random() * Math.PI * 2;
+            sepX += Math.cos(ra); sepY += Math.sin(ra);
+            return;
+          }
+          const push = (SEPARATION_DIST - d) / SEPARATION_DIST;
+          sepX += (ddx / d) * push;
+          sepY += (ddy / d) * push;
+        });
+        e.body.setVelocity(
+          Math.cos(ang) * spd + sepX * SEPARATION_FORCE,
+          Math.sin(ang) * spd + sepY * SEPARATION_FORCE
+        );
       }
 
       // 燃燒：持續時間內每 400ms 扣一次傷害，跟冰凍/減速互不影響、可以同時生效
@@ -212,6 +236,19 @@ export default class EnemySystem {
         e.setData('burnNextTick', now + 400);
         this._applyBurnTick(e, e.getData('burnDps') * 0.4);
         if (!e.active) return; // 這一 tick 燒死了，這隻怪物後面的接觸傷害判定不用再跑
+      }
+
+      // 狀態視覺：中狀態的怪物身上要看得出變化——冰凍＝冰藍、燃燒＝橘紅、
+      // 緩速＝淡藍，都沒有才恢復階級色/原色。受擊閃白（flashUntil）期間先不蓋，
+      // 讓打擊回饋維持清楚。
+      if (now >= e.getData('flashUntil')) {
+        if (frozen) e.setTint(0x7ad6ff);
+        else if (now < e.getData('burnUntil')) e.setTint(0xff7a4d);
+        else if (now < e.getData('slowUntil')) e.setTint(0xb8e4ff);
+        else {
+          const tierTint = e.getData('tierTint');
+          if (tierTint) e.setTint(tierTint); else e.clearTint();
+        }
       }
 
       // 接觸傷害：冰凍期間怪物完全動彈不得，也不會主動造成接觸傷害
@@ -309,6 +346,9 @@ export default class EnemySystem {
       this.scene.spawnThunderStrikeFx(enemy.x, enemy.y);
     }
 
+    // 吸血戒指：造成傷害時回復玩家生命（比例與每秒上限見 GameScene.applyLifesteal）
+    this.scene.applyLifesteal(dmg);
+
     const hp = enemy.getData('hp') - dmg;
     enemy.setData('hp', hp);
     enemy.setTintFill(0xffffff);
@@ -332,6 +372,7 @@ export default class EnemySystem {
     // 被連續打好幾下時，較早的那次 delayedCall 事後又把顏色蓋回去、或誤判已死亡的物件
     const token = (enemy.getData('flashToken') || 0) + 1;
     enemy.setData('flashToken', token);
+    enemy.setData('flashUntil', this.scene.time.now + 60);
     this.scene.time.delayedCall(60, () => {
       if (!enemy.active) return;
       if (enemy.getData('flashToken') !== token) return; // 期間又被打了一下，交給更新的那次處理

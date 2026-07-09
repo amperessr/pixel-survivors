@@ -49,6 +49,20 @@ export default class UIScene extends Phaser.Scene {
       fontSize: '40px', color: '#ffffff', fontStyle: 'bold',
     })).setOrigin(0.5, 0).setScrollFactor(0);
 
+    // ---- 魔王血條：固定在關卡數字正下方，顯示名稱＋血量數字 ----
+    // 原本畫在 GameScene（鏡頭有 2.1 倍縮放，位置/大小會跑掉），改到這個
+    // 無縮放的 UI 疊加層；魔王在場才顯示，每幀從 gs.boss 讀血量（見 update()）。
+    this.bossLabel = this.add.text(w / 2, 76, '', textStyle({
+      fontSize: '26px', color: '#ff6a3d',
+    })).setOrigin(0.5, 0).setScrollFactor(0).setDepth(100).setVisible(false);
+    this.bossBarBg = this.add.image(w / 2, 132, 'ui_bar_bg')
+      .setScrollFactor(0).setDisplaySize(600, 34).setDepth(100).setVisible(false);
+    this.bossBarFill = this.add.image(w / 2 - 290, 132, 'ui_bar_fill_boss')
+      .setScrollFactor(0).setOrigin(0, 0.5).setDisplaySize(580, 30).setDepth(101).setVisible(false);
+    this.bossHpText = this.add.text(w / 2, 132, '', textStyle({
+      fontSize: '20px', color: '#ffffff',
+    })).setOrigin(0.5).setScrollFactor(0).setDepth(102).setVisible(false);
+
     // ---- 右側：目前技能（用面板框把整塊「技能」區域框起來）----
     const PANEL_W = 380;
     this.panelX = w - 220;
@@ -314,6 +328,21 @@ export default class UIScene extends Phaser.Scene {
       ? `💀 第 ${stage} 關（擊敗魔王）`
       : `第 ${stage} 關（${this.gs.stageKillCount}/500）`);
     this.stageText.setColor(isBossStage ? '#ff4d4d' : '#ffffff');
+
+    // 魔王血條：魔王在場才顯示，同步名稱、血量比例與數字
+    const boss = this.gs.boss;
+    const bossVisible = !!(boss && boss.alive);
+    this.bossLabel.setVisible(bossVisible);
+    this.bossBarBg.setVisible(bossVisible);
+    this.bossBarFill.setVisible(bossVisible);
+    this.bossHpText.setVisible(bossVisible);
+    if (bossVisible) {
+      this.bossLabel.setText(boss.typeDef.name).setColor(boss.typeDef.labelColor);
+      const bossRatio = Math.max(0, boss.hp / boss.maxHp);
+      this.bossBarFill.setDisplaySize(580 * bossRatio, 30);
+      this.bossHpText.setText(`${Math.ceil(Math.max(0, boss.hp))} / ${Math.round(boss.maxHp)}`);
+    }
+
     this.killText.setText(`💀 擊殺 ${this.gs.killCount}`);
     const elapsed = this.gs.getElapsedSeconds();
     const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');

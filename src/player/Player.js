@@ -3,6 +3,12 @@ import { audioManager } from '../managers/AudioManager.js';
 import { getEquipped } from '../managers/SaveManager.js';
 
 const PLAYER_BASE_SCALE = 0.5;
+// 玩家（含頭頂血條、龍之翼/龍之光環等身上的遺物視覺）改用固定高深度，不再用
+// y 座標排序——之前用 y 排序時，任何在玩家下方（y 較大）的怪物/經驗寶石都會
+// 蓋住翅膀和光環，被怪群包圍時遺物視覺整個被埋住，看起來就像「遺物沒顯示在身上」。
+// 數值取在拾取物深度（HealthPackSystem.PICKUP_DEPTH = 5000000）之下一點，
+// 血包/磁鐵仍然永遠畫在最上層。
+export const PLAYER_DEPTH = 4999000;
 const AUTO_PILOT_AVOID_RADIUS = 160; // 自動戒指：怪物進入這個範圍就會被當成威脅開始閃避
 const AUTO_PILOT_DANGER_RADIUS = 90; // 自動戒指：怪物貼近到這個範圍內才會無條件優先逃命（範圍外優先去吃拾取物）
 // 魔王體型大、接觸傷害判定半徑也大（見 Boss.js 的 BOSS_TOUCH_RADIUS=100），
@@ -62,7 +68,7 @@ export default class Player {
     const texW = this.sprite.frame.width, texH = this.sprite.frame.height;
     const bodyRadius = Math.min(texW, texH) * 0.42;
     this.sprite.body.setCircle(bodyRadius, texW / 2 - bodyRadius, texH / 2 - bodyRadius);
-    this.sprite.setDepth(y);
+    this.sprite.setDepth(PLAYER_DEPTH);
 
     this.level = 1;
     this.exp = 0;
@@ -155,7 +161,7 @@ export default class Player {
 
     this._updateSquishAnim(time, vx !== 0 || vy !== 0);
     this._updateHeadBar();
-    this.sprite.setDepth(this.sprite.y);
+    this.sprite.setDepth(PLAYER_DEPTH);
   }
 
   // 兩個戒指欄任一格裝著指定戒指就算「有裝備」（目前只有回血/自動兩種戒指，

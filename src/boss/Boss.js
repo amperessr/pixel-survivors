@@ -9,8 +9,10 @@ const BOSS_BASE_DMG = 22;
 // 的貼圖差不多大。惡魔王／樹王是直立人形，原始圖片長寬比跟龍差很多（比較接近正方形、
 // 沒有龍那麼寬扁），沿用同一個縮放倍率會顯得比兩隻龍巨大兩倍以上，所以改成每個型態自己
 // 的縮放倍率（見 BOSS_TYPES 的 scale 欄位），讓四種 Boss 站在畫面上的「體型感」比較一致。
-const BOSS_SCALE = 0.9;
-const BOSS_TOUCH_RADIUS = 100;   // Boss 對玩家造成接觸傷害的判定半徑（跟著體型放大）
+// 2026-07-10 全面縮小：玩家反應魔王大得誇張，兩隻龍 0.9→0.62、其餘型態的
+// 專屬 scale 也一併調小（見 BOSS_TYPES），接觸判定半徑跟著縮。
+const BOSS_SCALE = 0.62;
+const BOSS_TOUCH_RADIUS = 70;   // Boss 對玩家造成接觸傷害的判定半徑（跟著體型縮放）
 
 // 四種 Boss 型態的外觀／技能配色與死亡時提供的遺物設定。
 // 兩隻龍（黑藍／紅）沿用原本的衝刺／龍爪／龍息三招；惡魔王／樹王是新增的兩隻，
@@ -71,8 +73,8 @@ const BOSS_TYPES = {
     novaRadius: 260,
     // 新版惡魔王圖換成 1536x1024、雙翼展開幾乎頂到畫布左右邊緣的構圖（跟樹王同尺寸
     // 但翼展比樹王站姿佔滿更多畫面），縮放倍率比樹王再收一點，避免因為翼展撐滿畫面
-    // 而顯得比其他 Boss 誇張兩圈；玩家反應體型還是偏大，再收一點。
-    scale: 0.5,
+    // 而顯得比其他 Boss 誇張兩圈；配合 2026-07-10 全面縮小再收。
+    scale: 0.36,
   },
   treant: {
     name: '樹王',
@@ -91,7 +93,7 @@ const BOSS_TYPES = {
     skillLabels: { breath: '⚠ 荊棘彈幕！', nova: '⚠ 樹根衝擊！', claw: '⚠ 巨杖橫掃！' },
     novaCenter: 'target', // 樹根衝擊鎖定玩家所在位置冒出來，不是繞著樹王自己
     novaRadius: 170,
-    scale: 0.55, // 原本 0.61，玩家反應體型偏大，再收一點
+    scale: 0.4, // 原本 0.55，配合 2026-07-10 全面縮小再收一點
   },
   griffin: {
     name: '獅鷲王',
@@ -110,7 +112,7 @@ const BOSS_TYPES = {
     skillLabels: { breath: '⚠ 疾風彈幕！', nova: '⚠ 王者威壓！', claw: '⚠ 利爪連擊！' },
     novaCenter: 'self', // 王者威壓以獅鷲王自己為中心炸開，逼玩家退開
     novaRadius: 250,
-    scale: 0.5, // 原圖 700x616，展翅姿態跟龍類似，體型調到跟兩隻龍差不多的視覺份量
+    scale: 0.36, // 原圖 700x616，展翅姿態跟龍類似，體型調到跟兩隻龍差不多的視覺份量（2026-07-10 全面縮小）
   },
 };
 
@@ -174,23 +176,15 @@ export default class Boss {
     this.chargeTarget = null;
     this.paralyzedUntil = 0; // 雷霆套裝三件套：麻痺中無法選新技能（見 update()），見 GameScene._maybeThunderParalyze()
 
-    // 血條 UI (畫面固定位置，右上方中央)
-    this.barBg = scene.add.image(scene.scale.width / 2, 130, 'ui_bar_bg')
-      .setScrollFactor(0).setDepth(30000).setDisplaySize(600, 36);
-    this.barFill = scene.add.image(scene.scale.width / 2 - 290, 130, 'ui_bar_fill_boss')
-      .setScrollFactor(0).setDepth(30001).setOrigin(0, 0.5).setDisplaySize(580, 32);
-    this.label = scene.add.text(scene.scale.width / 2, 88, this.typeDef.label, textStyle({
-      fontSize: '34px', color: this.typeDef.labelColor,
-    })).setScrollFactor(0).setDepth(30001).setOrigin(0.5);
-    // 血條數字顯示：疊在血條中央，讓玩家清楚看到目前/最大 HP，不只是看色塊長度
-    this.hpText = scene.add.text(scene.scale.width / 2, 130, `${Math.ceil(this.hp)} / ${Math.round(this.maxHp)}`, textStyle({
-      fontSize: '22px', color: '#ffffff',
-    })).setScrollFactor(0).setDepth(30002).setOrigin(0.5);
+    // 頂部血條改由 UIScene 繪製（見 UIScene 的魔王血條區塊）——原本建立在
+    // GameScene 裡，但 GameScene 鏡頭有 2.1 倍縮放，scrollFactor(0) 的元素照樣
+    // 會被縮放，血條的位置/大小都會跑掉，不會乖乖固定在關卡數字下方。
+    // UIScene 是獨立的無縮放疊加層，每幀直接讀 this.hp/this.maxHp 來畫。
 
     // 頭頂血條：跟著 Boss 移動的世界座標血條，讓玩家不用一直看畫面上方，
     // 近戰纏鬥時也能直接看到 Boss 目前的血量比例（跟畫面固定的頂部血條並存，不衝突）
-    this.headBarBg = scene.add.image(x, y - 90, 'ui_bar_bg').setDisplaySize(120, 12).setDepth(29996);
-    this.headBarFill = scene.add.image(x - 58, y - 90, 'ui_bar_fill_boss').setOrigin(0, 0.5).setDisplaySize(116, 8).setDepth(29997);
+    this.headBarBg = scene.add.image(x, y - 64, 'ui_bar_bg').setDisplaySize(120, 12).setDepth(29996);
+    this.headBarFill = scene.add.image(x - 58, y - 64, 'ui_bar_fill_boss').setOrigin(0, 0.5).setDisplaySize(116, 8).setDepth(29997);
 
     // 登場震撼效果：閃光＋巨大陰影光環，凸顯體型巨大（不用鏡頭震動）
     scene.cameras.main.flash(300, 255, 255, 255);
@@ -271,11 +265,9 @@ export default class Boss {
 
     this.sprite.setFlipX(px < bx);
     this.sprite.setDepth(by);
-    this.barFill.setDisplaySize(Math.max(0, this.hp / this.maxHp) * 580, 32);
-    this.hpText.setText(`${Math.ceil(Math.max(0, this.hp))} / ${Math.round(this.maxHp)}`);
 
     // 頭頂血條跟著 Boss 移動，並同步血量比例
-    const headY = by - 90;
+    const headY = by - 64; // 頭頂血條跟著縮小後的體型往下貼近一點
     this.headBarBg.setPosition(bx, headY).setDepth(headY - 1);
     const hpRatio = Math.max(0, this.hp / this.maxHp);
     this.headBarFill.setPosition(bx - 58, headY).setDisplaySize(116 * hpRatio, 8).setDepth(headY);
@@ -595,6 +587,8 @@ export default class Boss {
       dmg += this.player.stats.attack * 0.1;
       this.scene.spawnThunderStrikeFx(this.sprite.x, this.sprite.y);
     }
+    // 吸血戒指：打魔王一樣會吸血（比例與每秒上限見 GameScene.applyLifesteal）
+    this.scene.applyLifesteal(dmg);
     this.hp -= dmg;
     this.sprite.setTintFill(0xffffff);
     this.scene.spawnDamageNumber(this.sprite.x, this.sprite.y - 30, dmg, isCrit);
@@ -638,10 +632,6 @@ export default class Boss {
     });
 
     this.sprite.destroy();
-    this.barBg.destroy();
-    this.barFill.destroy();
-    this.label.destroy();
-    this.hpText.destroy();
     this.headBarBg.destroy();
     this.headBarFill.destroy();
     this.scene.onBossDefeated(this.bossType, this.relicId, dx, dy);
@@ -650,10 +640,6 @@ export default class Boss {
   destroy() {
     this._clearTelegraphFx();
     if (this.sprite.active) this.sprite.destroy();
-    this.barBg.destroy();
-    this.barFill.destroy();
-    this.label.destroy();
-    this.hpText.destroy();
     this.headBarBg.destroy();
     this.headBarFill.destroy();
   }
