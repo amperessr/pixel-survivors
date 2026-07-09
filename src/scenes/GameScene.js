@@ -500,9 +500,13 @@ export default class GameScene extends Phaser.Scene {
     if (this.boss && this.boss.alive && dist(p.x, p.y, this.boss.sprite.x, this.boss.sprite.y) <= aoe) {
       this.boss.takeDamage(p.getData('dmg'), stats.critRate, stats.critDmg);
     }
-    // 冰火雙色爆炸疊在一起，再加畫面閃光＋打擊停頓，份量感比單純的進化版火球/冰霜更重
+    // 冰火雙色爆炸疊在一起，加畫面閃光加重份量感。原本這裡還有 hitStop()，拿掉了：
+    // 玩家反應打極端冰火時角色會不受控一直移動——iceFire 命中一次可能同時打中一大群
+    // 敵人，spawnImpactFx('iceFire',...) 本身粒子量也偏多，兩者疊加造成的單幀卡頓，
+    // 配合 physics.world.timeScale 被短暫壓到 0.05 又還原，懷疑就是造成那個現象的
+    // 元凶，所以連 hitStop 一起拿掉、粒子量也一併收斂（見下面 spawnImpactFx 的
+    // 'iceFire' case），減少同一幀内一次性建立大量物件的機會。
     this.cameras.main.flash(160, 255, 170, 90);
-    this.hitStop(80);
     this.spawnImpactFx(p.x, p.y, 'iceFire', aoe, false);
     this.weaponSystem.projectilePool.free(p);
   }
@@ -1207,13 +1211,16 @@ export default class GameScene extends Phaser.Scene {
         break;
       }
       case 'iceFire': {
+        // 粒子量原本是 2 個發光圈 + 28 個爆裂碎片 + 10 個餘燼，一次爆炸就同時建立
+        // 約 40 個新物件+tween；iceFire 常常一次炸中一大群敵人，疊加起來的單幀
+        // 建立量比其他武器的命中特效重上不少，懷疑是玩家反應「打極端冰火角色會
+        // 不受控移動」的成因之一，這裡收斂到跟其他融合武器差不多的量級。
         const fx = this.add.image(x, y, 'fx_flame').setDepth(29999).setScale(2.9 * 0.55);
         this.tweens.add({ targets: fx, scale: 2.9, alpha: 0, duration: 300, onComplete: () => fx.destroy() });
         this.spawnGlowRing(x, y, 'fx_flame', 0xff8a3d, 0.4, 3.6, 360);
         this.spawnGlowRing(x, y, 'fx_frost', 0x8fe3ff, 0.3, 3.0, 420);
-        this.spawnBurstFx(x, y, 0xffdd55, 14, 'fx_flame', 170);
-        this.spawnBurstFx(x, y, 0x8fe3ff, 14, 'fx_frost', 190);
-        this.spawnEmbersFx(x, y, 10, 0xffb066);
+        this.spawnBurstFx(x, y, 0xffdd55, 8, 'fx_flame', 170);
+        this.spawnBurstFx(x, y, 0x8fe3ff, 8, 'fx_frost', 190);
         break;
       }
       default: {
