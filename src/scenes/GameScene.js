@@ -17,7 +17,7 @@ import { textStyle } from '../utils/TextStyle.js';
 // 關卡推進規則：一般關（非 5 的倍數）擊殺滿 KILLS_PER_STAGE 隻小怪就進到下一關；
 // 魔王關（第 5、10、15...關）改成打死魔王才會進到下一關，見 registerKill()/onBossDefeated()。
 const BOSS_STAGE_INTERVAL = 5;
-const KILLS_PER_STAGE = 300;
+const KILLS_PER_STAGE = 500;
 // Boss 現在體型大幅放大，命中/接觸判定半徑也要跟著放大，這裡統一定義方便调整
 const BOSS_HIT_RADIUS = 46;   // 子彈命中 Boss 的判定半徑
 const BOSS_TOUCH_RADIUS = 76; // Boss 對玩家造成接觸傷害的判定半徑

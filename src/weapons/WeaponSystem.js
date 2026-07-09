@@ -114,7 +114,9 @@ export default class WeaponSystem {
     if (base.range != null) scaled.range = base.range * evo.extraMult;
     if (base.chains != null) scaled.chains = Math.round(base.chains * evo.extraMult);
     if (base.count != null) scaled.count = Math.round(base.count * evo.extraMult);
-    if (base.pierce != null) scaled.pierce = base.pierce + 1;
+    // 一般武器進化的穿透力預設是「+1」，飛刀進化要求命中數直接跳到 10，用
+    // evo.pierceOverride 覆蓋掉預設規則（見 WeaponData.js 的 WEAPON_EVOLUTIONS.knife）。
+    if (base.pierce != null) scaled.pierce = evo.pierceOverride != null ? evo.pierceOverride : base.pierce + 1;
     if (base.slow != null) scaled.slow = Math.min(0.85, base.slow * 1.2);
     scaled.cooldown = base.cooldown / (evo.cooldownMult || evo.extraMult);
     return scaled;

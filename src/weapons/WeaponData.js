@@ -43,7 +43,7 @@ export const WEAPON_DATA = {
       { dmg: 9, cooldown: 460, count: 2, speed: 440, pierce: 1 },
       { dmg: 11, cooldown: 420, count: 2, speed: 460, pierce: 2 },
       { dmg: 13, cooldown: 380, count: 3, speed: 480, pierce: 2 },
-      { dmg: 16, cooldown: 340, count: 4, speed: 500, pierce: 3 },
+      { dmg: 16, cooldown: 340, count: 4, speed: 500, pierce: 4 }, // pierce 4 = 命中數 5（見 pierce 定義：實際命中數 = pierce+1）
     ],
   },
   sawblade: {
@@ -88,7 +88,7 @@ export const WEAPON_FUSIONS = {
     parents: ['lightning', 'knife'],
     desc: '飛刀融合雷電。連續投擲帶電飛刀，命中後會對附近一名敵人補上一道連鎖閃電（傷害為本體 50%）。',
     icon: 'weapon_lightning_knife_lv5',
-    stats: { dmg: 35, cooldown: 374, count: 5, speed: 500, pierce: 3, chainRange: 130 },
+    stats: { dmg: 35, cooldown: 374, count: 5, speed: 500, pierce: 9, chainRange: 130 }, // pierce 9 = 命中數 10
   },
   knife_sawblade: {
     id: 'knife_sawblade',
@@ -149,6 +149,10 @@ export const WEAPON_EVOLUTIONS = {
     name: '旋風飛刃',
     desc: '飛刀的最終進化。數量與穿透力大幅提升，形成一片刀刃風暴。',
     dmgMult: 1.6, extraMult: 1.8, cooldownMult: 1.3,
+    // 一般武器進化的穿透力是「+1」（見 WeaponSystem._getEffectiveData），但飛刀
+    // 進化要求命中數直接跳到 10（pierce=9，命中數＝pierce+1），用這個欄位覆蓋掉
+    // 預設的 +1 規則。
+    pierceOverride: 9,
   },
   sawblade: {
     name: '狂暴鋸輪',
