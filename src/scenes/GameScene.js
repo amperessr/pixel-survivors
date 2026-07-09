@@ -22,6 +22,7 @@ const KILLS_PER_STAGE = 500;
 const BOSS_HIT_RADIUS = 46;   // 子彈命中 Boss 的判定半徑
 const BOSS_TOUCH_RADIUS = 76; // Boss 對玩家造成接觸傷害的判定半徑
 const BOSS_SAW_RADIUS = 76;   // 鋸片對 Boss 造成傷害的判定半徑
+const ELECTRO_KNIFE_CHAIN_MAX = 8; // 電擊飛刃命中後，連鎖閃電最多牽連的小怪數量
 
 export default class GameScene extends Phaser.Scene {
   constructor() { super('GameScene'); }
@@ -423,9 +424,10 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  // 電擊飛刃（融合武器）：命中判定跟一般飛刀完全一樣，差別是命中後會額外對
-  // 附近一名「這把刀還沒命中過」的敵人補一道連鎖閃電（傷害為本體 50%，不吃穿透）。
-  // 連鎖只找小怪（見 _findNearestExcluding 本來就只查 enemySystem），不會打到 Boss。
+  // 電擊飛刃（融合武器）：命中判定跟一般飛刀完全一樣，差別是命中後會對附近
+  // 「這把刀還沒命中過」的敵人一次補上多道連鎖閃電（每隻傷害為本體 50%、
+  // 不吃穿透，最多牽連 ELECTRO_KNIFE_CHAIN_MAX 隻），而不是只找一隻——範圍
+  // 內只找小怪，不會牽連到 Boss。
   _handleElectroKnifeHit(p, stats) {
     const hitSet = p.getData('hitSet');
     let target = null;
@@ -456,13 +458,23 @@ export default class GameScene extends Phaser.Scene {
     }
     this.spawnImpactFx(hitX, hitY, 'electroKnife', 0, false);
 
+    // 連鎖範圍內「這把刀還沒命中過」的敵人一次全部牽連（依距離近到遠取前 8 隻），
+    // 每隻都補一道明顯的電弧，而不是只挑最近的一隻——被電到的敵人也加進
+    // hitSet，避免同一把刀之後穿透命中下一個主目標時又重複電到同一批小怪。
     const chainRange = p.getData('chainRange');
-    const next = this._findNearestExcluding(hitX, hitY, hitSet, chainRange);
-    if (next) {
-      this.enemySystem.damageEnemy(next, dmg * 0.5, stats.critRate, stats.critDmg, null);
+    const chainCandidates = [];
+    this.enemySystem.queryNear(hitX, hitY, chainRange, (e) => {
+      if (hitSet.has(e)) return;
+      const d = dist(hitX, hitY, e.x, e.y);
+      if (d <= chainRange) chainCandidates.push({ e, d });
+    });
+    chainCandidates.sort((a, b) => a.d - b.d);
+    chainCandidates.slice(0, ELECTRO_KNIFE_CHAIN_MAX).forEach(({ e }) => {
+      hitSet.add(e);
+      this.enemySystem.damageEnemy(e, dmg * 0.5, stats.critRate, stats.critDmg, null);
       // 連鎖用「進化版」規格的電弧（更粗更亮），凸顯這是融合武器的額外加成
-      this.spawnChainLightningFx(hitX, hitY, next.x, next.y, true);
-    }
+      this.spawnChainLightningFx(hitX, hitY, e.x, e.y, true);
+    });
 
     const pierce = p.getData('pierce') || 0;
     if (pierce > 0) {
