@@ -162,32 +162,47 @@ export default class ShopScene extends Phaser.Scene {
     for (let i = 0; i < times; i++) results.push(rollGachaItem());
     results.forEach((id) => addItemToInventory(id));
     this.goldText.setText(`金幣：${getGold()}`);
-    this._showGachaReveal(results);
+    this._showGachaReveal(results, times, price);
   }
 
   // 開獎動畫：暗幕蓋住整個畫面擋掉底下互動。單抽是置中大卡片＋稀有度色光爆閃；
   // 十抽是 5x2 排列、依序滾出的小卡片牆。稀有度外框沿用商店卡片同一套 RarityFrame，
   // 讓抽到高階裝備時，畫面上的視覺份量跟商店展示一致。
-  _showGachaReveal(results) {
+  // times/price 記著這次是一抽還是十抽，讓「再來一次」按鈕能照原本的抽法直接再抽一次，
+  // 不用先關掉視窗再回去按原本的按鈕。
+  _showGachaReveal(results, times, price) {
     const w = this.scale.width, h = this.scale.height;
     const overlay = this.add.container(0, 0).setDepth(9000);
     overlay.add(this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.82).setInteractive());
 
-    const closeBtn = this.add.image(w / 2, h - 70, 'ui_button_parchment').setDisplaySize(200, 56)
+    const btnGap = 30, btnW = 200, btnH = 56, btnY = h - 70;
+    const closeBtn = this.add.image(w / 2 - btnW / 2 - btnGap / 2, btnY, 'ui_button_parchment').setDisplaySize(btnW, btnH)
       .setInteractive({ useHandCursor: true }).setAlpha(0);
-    const closeText = this.add.text(w / 2, h - 70, '關閉', textStyle({
+    const closeText = this.add.text(w / 2 - btnW / 2 - btnGap / 2, btnY, '關閉', textStyle({
       fontSize: '24px', color: '#3a2413',
     })).setOrigin(0.5).setAlpha(0);
-    overlay.add([closeBtn, closeText]);
+    const againBtn = this.add.image(w / 2 + btnW / 2 + btnGap / 2, btnY, 'ui_button_parchment').setDisplaySize(btnW, btnH)
+      .setInteractive({ useHandCursor: true }).setAlpha(0);
+    const againText = this.add.text(w / 2 + btnW / 2 + btnGap / 2, btnY, `再來一次（${times === 1 ? '一抽' : '十抽'}）`, textStyle({
+      fontSize: times === 1 ? '24px' : '20px', color: '#3a2413',
+    })).setOrigin(0.5).setAlpha(0);
+    overlay.add([closeBtn, closeText, againBtn, againText]);
     closeBtn.on('pointerover', () => closeBtn.setTint(0xfff3d0));
     closeBtn.on('pointerout', () => closeBtn.clearTint());
     closeBtn.on('pointerdown', () => overlay.destroy());
-    const revealCloseBtn = () => { closeBtn.setAlpha(1); closeText.setAlpha(1); };
+    againBtn.on('pointerover', () => againBtn.setTint(0xfff3d0));
+    againBtn.on('pointerout', () => againBtn.clearTint());
+    againBtn.on('pointerdown', () => {
+      overlay.destroy();
+      this._gachaPull(times, price);
+    });
+    const revealCloseBtn = () => { closeBtn.setAlpha(1); closeText.setAlpha(1); againBtn.setAlpha(1); againText.setAlpha(1); };
 
     if (results.length === 1) {
       this._revealSingleCard(overlay, w / 2, h / 2 - 20, results[0], revealCloseBtn);
     } else {
-      const cols = 5, rows = 2, cardW = 190, cardH = 230, gapX = 22, gapY = 30;
+      // 卡片放大一圈（190x230 → 230x280），十張排開還是裝得下 1920 寬的畫面。
+      const cols = 5, rows = 2, cardW = 230, cardH = 280, gapX = 24, gapY = 32;
       const totalW = cols * cardW + (cols - 1) * gapX;
       const startX = w / 2 - totalW / 2 + cardW / 2;
       const startY = h / 2 - (rows * cardH + (rows - 1) * gapY) / 2 + cardH / 2 - 30;
@@ -207,7 +222,7 @@ export default class ShopScene extends Phaser.Scene {
     const def = EQUIPMENT_DATA[id];
     const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
     const rarityHex = '#' + rarity.color.toString(16).padStart(6, '0');
-    const cardW = 300, cardH = 360;
+    const cardW = 380, cardH = 460; // 單抽卡片放大一圈，開獎瞬間份量感更足
 
     const flash = this.add.circle(cx, cy, 10, rarity.color, 0.9);
     overlay.add(flash);
@@ -218,21 +233,21 @@ export default class ShopScene extends Phaser.Scene {
 
     const card = this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH).setScale(0.3).setAlpha(0);
     const frame = createRarityFrame(this, cx, cy, cardW - 6, cardH - 6, def.rarity).setScale(0.3).setAlpha(0);
-    const icon = this.add.image(cx, cy - 90, def.icon).setScale(0).setAlpha(0);
-    const rarityLabel = this.add.text(cx, cy - 160, rarity.label, textStyle({
-      fontSize: '22px', color: rarityHex,
+    const icon = this.add.image(cx, cy - 115, def.icon).setScale(0).setAlpha(0);
+    const rarityLabel = this.add.text(cx, cy - 204, rarity.label, textStyle({
+      fontSize: '26px', color: rarityHex,
     })).setOrigin(0.5).setAlpha(0);
-    const nameText = this.add.text(cx, cy + 40, def.name, textStyle({
-      fontSize: '28px', color: '#fff',
+    const nameText = this.add.text(cx, cy + 51, def.name, textStyle({
+      fontSize: '34px', color: '#fff',
     })).setOrigin(0.5).setAlpha(0);
-    const descText = this.add.text(cx, cy + 90, def.desc, textStyle({
-      fontSize: '18px', color: '#9fd3ff', align: 'center',
+    const descText = this.add.text(cx, cy + 112, def.desc, textStyle({
+      fontSize: '21px', color: '#9fd3ff', align: 'center',
       wordWrap: { width: cardW - 30, useAdvancedWrap: true },
     })).setOrigin(0.5).setAlpha(0);
     overlay.add([card, frame, icon, rarityLabel, nameText, descText]);
 
     this.tweens.add({ targets: [card, frame], scale: 1, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 120 });
-    this.tweens.add({ targets: icon, scale: 0.68, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 200 });
+    this.tweens.add({ targets: icon, scale: 0.87, alpha: 1, duration: 420, ease: 'Back.easeOut', delay: 200 });
     this.tweens.add({
       targets: [rarityLabel, nameText, descText], alpha: 1, duration: 380, delay: 420,
       onComplete: onDone,
@@ -245,10 +260,10 @@ export default class ShopScene extends Phaser.Scene {
     const rarity = RARITY_DATA[def.rarity] || RARITY_DATA.common;
     const card = this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH).setScale(0.5).setAlpha(0);
     const frame = createRarityFrame(this, cx, cy, cardW - 6, cardH - 6, def.rarity).setScale(0.5).setAlpha(0);
-    const icon = this.add.image(cx, cy - cardH * 0.16, def.icon).setScale(0.42).setAlpha(0);
+    const icon = this.add.image(cx, cy - cardH * 0.16, def.icon).setScale(0.51).setAlpha(0);
     const rarityHex = '#' + rarity.color.toString(16).padStart(6, '0');
     const nameText = this.add.text(cx, cy + cardH * 0.24, def.name, textStyle({
-      fontSize: '15px', color: rarityHex, align: 'center',
+      fontSize: '18px', color: rarityHex, align: 'center',
       wordWrap: { width: cardW - 20, useAdvancedWrap: true },
     })).setOrigin(0.5).setAlpha(0);
     overlay.add([card, frame, icon, nameText]);
