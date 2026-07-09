@@ -32,7 +32,7 @@ export const MAIL_DATA = [
     rewards: { gold: 100000, items: [] },
   },
   {
-    id: 'gold_drop_2026_07_09',
+    id: 'gold_drop2_2026_07_09',
     title: '抽獎機率補償',
     date: '2026-07-09',
     message: '各位抽起來!!',
