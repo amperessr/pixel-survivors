@@ -117,7 +117,6 @@ export default class WeaponSystem {
     // 一般武器進化的穿透力預設是「+1」，飛刀進化要求命中數直接跳到 10，用
     // evo.pierceOverride 覆蓋掉預設規則（見 WeaponData.js 的 WEAPON_EVOLUTIONS.knife）。
     if (base.pierce != null) scaled.pierce = evo.pierceOverride != null ? evo.pierceOverride : base.pierce + 1;
-    if (base.slow != null) scaled.slow = Math.min(0.85, base.slow * 1.2);
     scaled.cooldown = base.cooldown / (evo.cooldownMult || evo.extraMult);
     return scaled;
   }
@@ -134,7 +133,7 @@ export default class WeaponSystem {
     knife: 1.0,
     sawblade: 1.0,
     lightning_knife: 0.6, // 電擊飛刃：飛刀+雷電混血，攻速權重介於兩者之間
-    fireball_frost: 0.2,  // 極端冰火：爆發系融合武器，維持火球/冰霜那種慢而重的手感
+    fireball_frost: 0.2,  // 世界末日：爆發系融合武器，維持火球/冰霜那種慢而重的手感
   };
 
   _scaledCooldown(id, base) {
@@ -237,7 +236,7 @@ export default class WeaponSystem {
       case 'knife': this._fireKnife(data, stats, enemy, ox, oy, dmgMult); break;
       case 'frost': this._fireFrost(data, stats, ox, oy, dmgMult); break;
       case 'lightning_knife': this._fireElectroKnife(data, stats, enemy, ox, oy, dmgMult); break;
-      case 'fireball_frost': this._fireIceFire(data, stats, enemy, ox, oy, dmgMult); break;
+      case 'fireball_frost': this._fireWorldEnd(data, stats, enemy, ox, oy, dmgMult); break;
     }
   }
 
@@ -346,7 +345,7 @@ export default class WeaponSystem {
           const x = px + Math.cos(ang) * pillarDist;
           const y = py + Math.sin(ang) * pillarDist;
           this.scene.time.delayedCall((s - 1) * 120, () => {
-            this.scene.spawnIcePillar(x, y, dmg, data.slow, data.slowDuration, stats.critRate, stats.critDmg, knockback, true);
+            this.scene.spawnIcePillar(x, y, dmg, data.slowDuration, stats.critRate, stats.critDmg, knockback, true);
           });
         }
       }
@@ -361,7 +360,7 @@ export default class WeaponSystem {
         const x = px + Math.cos(ang) * pillarDist;
         const y = py + Math.sin(ang) * pillarDist;
         this.scene.time.delayedCall((i - 1) * 120, () => {
-          this.scene.spawnIcePillar(x, y, dmg, data.slow, data.slowDuration, stats.critRate, stats.critDmg, knockback, false);
+          this.scene.spawnIcePillar(x, y, dmg, data.slowDuration, stats.critRate, stats.critDmg, knockback, false);
         });
       }
     }
@@ -393,26 +392,18 @@ export default class WeaponSystem {
     }
   }
 
-  // 灼熱冰彈（極端冰火）：飛行方式跟火球一樣，命中爆炸時同時造成範圍傷害＋減速
-  // （見 GameScene._handleIceFireHit）。
-  _fireIceFire(data, stats, enemy, px, py, dmgMult = 1) {
+  // 世界末日（原「極端冰火」改版）：不飛行、不經過投射物池，隕石跟冰塊分別鎖定
+  // 不同目標、各打各的（見 GameScene.spawnMeteorDrop()／spawnIceDrop()）——
+  // 隕石打這次開火瞄準的目標（跟其他武器一致的規則，通常是最近的敵人/魔王），
+  // 冰塊另外隨機挑一隻不同的敵人；找不到別的敵人時，退而求其次也打同一個目標。
+  _fireWorldEnd(data, stats, enemy, px, py, dmgMult = 1) {
     const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult;
-    const ang = angleTo(px, py, enemy.x, enemy.y);
-    const proj = this.projectilePool.spawn();
-    proj.setTexture('proj_frost');
-    proj.setPosition(px, py);
-    proj.setScale(3.4); // 極端冰火的冰彈再放大一圈，跟其他融合武器的視覺份量看齊
-    proj.clearTint();
-    proj.setData('dmg', dmg);
-    proj.setData('aoe', data.aoe);
-    proj.setData('slow', data.slow);
-    proj.setData('slowDuration', data.slowDuration);
-    proj.setData('exploded', false);
-    proj.setData('kind', 'iceFire');
-    proj.setData('evolved', false);
-    proj.setData('expireAt', this.scene.time.now + 2500);
-    proj.body.setVelocity(Math.cos(ang) * data.speed, Math.sin(ang) * data.speed);
-    this.scene.spawnCastFx(px, py, 'fireball', ang, 0, false);
+    const kb = WEAPON_KNOCKBACK.frost;
+    this.scene.spawnMeteorDrop(enemy.x, enemy.y, dmg, data.aoe, stats.critRate, stats.critDmg, {
+      force: kb.force, duration: kb.duration,
+    });
+    const iceTarget = this.enemySystem.findRandomOther(enemy) || enemy;
+    this.scene.spawnIceDrop(iceTarget.x, iceTarget.y, dmg, data.aoe, stats.critRate, stats.critDmg);
   }
 
   // 建立鋸片（或血肉風暴的雙層刀陣）的環繞 sprite。每個 sprite 用 'ring' 資料標記

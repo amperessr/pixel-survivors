@@ -378,7 +378,7 @@ export default class TextureFactory {
     }
   }
 
-  // ---------- 融合武器圖示（三組：電擊飛刃／血肉風暴／極端冰火）----------
+  // ---------- 融合武器圖示（三組：電擊飛刃／血肉風暴／世界末日）----------
   // 沿用武器圖示同一套「Canvas 動態繪製」手法，把兩個親代武器的造型/配色疊在
   // 同一張圖上，讓玩家一眼看出這是「這兩把融合出來的」，不用另外準備美術素材。
   generateFusionWeaponIcons() {
@@ -441,7 +441,7 @@ export default class TextureFactory {
       this._finish(tex);
     }
 
-    // 極端冰火：左半火（橘黃）、右半冰（冰藍）對半分色，中線用白光強調交融感
+    // 世界末日：左半火（橘黃）、右半冰（冰藍）對半分色，中線用白光強調交融感
     {
       const { tex, ctx } = this._canvas('weapon_fireball_frost_lv5', size, size);
       const cx = size / 2, cy = size / 2, r = size / 2 - 2;

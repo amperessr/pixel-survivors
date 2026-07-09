@@ -66,12 +66,14 @@ export const WEAPON_DATA = {
     desc: '定期從地面冒出冰柱，減速並傷害範圍內敵人。升級可提升傷害與範圍。',
     projectile: 'proj_frost',
     synergyStat: 'defense',
+    // 減速強度統一固定 50%（見 EnemySystem.applySlow），不再逐級增強，所以這裡
+    // 只留 slowDuration（減速能持續多久）隨等級提升，沒有 slow 欄位了。
     levels: [
-      { dmg: 8, cooldown: 2600, radius: 70, slow: 0.3, slowDuration: 1500 },
-      { dmg: 10, cooldown: 2400, radius: 82, slow: 0.35, slowDuration: 1700 },
-      { dmg: 13, cooldown: 2200, radius: 94, slow: 0.4, slowDuration: 1900 },
-      { dmg: 17, cooldown: 2000, radius: 108, slow: 0.45, slowDuration: 2100 },
-      { dmg: 22, cooldown: 1800, radius: 126, slow: 0.55, slowDuration: 2400 },
+      { dmg: 8, cooldown: 2600, radius: 70, slowDuration: 1500 },
+      { dmg: 10, cooldown: 2400, radius: 82, slowDuration: 1700 },
+      { dmg: 13, cooldown: 2200, radius: 94, slowDuration: 1900 },
+      { dmg: 17, cooldown: 2000, radius: 108, slowDuration: 2100 },
+      { dmg: 22, cooldown: 1800, radius: 126, slowDuration: 2400 },
     ],
   },
 };
@@ -100,11 +102,11 @@ export const WEAPON_FUSIONS = {
   },
   fireball_frost: {
     id: 'fireball_frost',
-    name: '極端冰火',
+    name: '世界末日',
     parents: ['fireball', 'frost'],
-    desc: '火球融合冰霜。發射灼熱冰彈，命中後爆炸造成範圍傷害，並使爆炸範圍內敵人大幅減速。',
+    desc: '火球融合冰霜。分別鎖定兩隻敵人，從天而降砸下隕石與大冰塊：隕石打中直接燃燒目標並留下燃燒地板，冰塊打中直接冰凍目標 1 秒並留下冰霜地板，經過地板的敵人會持續燃燒或減速。',
     icon: 'weapon_fireball_frost_lv5',
-    stats: { dmg: 48, cooldown: 935, aoe: 64, speed: 320, slow: 0.44, slowDuration: 1680 },
+    stats: { dmg: 48, cooldown: 935, aoe: 64 },
   },
 };
 

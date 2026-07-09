@@ -343,7 +343,6 @@ export default class GameScene extends Phaser.Scene {
       else if (kind === 'lightning') this._handleLightningHit(p, stats);
       else if (kind === 'knife') this._handleKnifeHit(p, stats);
       else if (kind === 'electroKnife') this._handleElectroKnifeHit(p, stats);
-      else if (kind === 'iceFire') this._handleIceFireHit(p, stats);
     });
 
     this._handleSawbladeHits(time, stats);
@@ -484,53 +483,75 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  // 灼熱冰彈（融合武器）：命中判定跟火球一樣一撞就炸，範圍內敵人除了照常吃傷害，
-  // 還會被完全冰凍一小段時間＋附加燃燒 DOT（見 EnemySystem.applyFreezeAndBurn）。
-  _handleIceFireHit(p, stats) {
-    if (p.getData('exploded')) return;
-    const aoe = p.getData('aoe');
-    let triggered = false;
-    this.enemySystem.queryNear(p.x, p.y, 14, (e) => {
-      if (!triggered && dist(p.x, p.y, e.x, e.y) <= 14) triggered = true;
+  // 隕石（世界末日左手，融合武器，原「極端冰火」改版一部分）：從天而降，落地
+  // 造成範圍傷害＋擊退，範圍內敵人直接燃燒，並留下 3 秒燃燒地板讓之後經過的
+  // 敵人也會持續中招（見 EnemySystem.applyBurn()／addHazardZone()）。跟冰塊各打
+  // 各的目標，不會疊在同一個點（見 WeaponSystem._fireWorldEnd()）。玩家自己的
+  // 攻擊技能、敵人不會閃避，所以不需要警示圈，按下去直接開始墜落，反應更快。
+  spawnMeteorDrop(x, y, dmg, aoe, critRate, critDmg, knockback) {
+    if (!this.player || !this.player.sprite.active) return;
+    const meteor = this.add.image(x, y - 620, 'proj_fireball')
+      .setDepth(30003).setScale(3.2).setTint(0xff6a2d).setRotation(0.4);
+    const trailTimer = this.time.addEvent({
+      delay: 40, loop: true,
+      callback: () => { if (meteor.active) this.spawnEmbersFx(meteor.x, meteor.y - 10, 2, 0xff8a3d); },
     });
-    if (!triggered && this.boss && this.boss.alive && dist(p.x, p.y, this.boss.sprite.x, this.boss.sprite.y) <= BOSS_HIT_RADIUS) {
-      triggered = true;
-    }
-    if (!triggered) return;
-
-    p.setData('exploded', true);
-    const kb = WEAPON_KNOCKBACK.frost;
-    const dmg = p.getData('dmg');
-    // 冰凍固定 900ms（跟原本的減速拆開，改成完全定住），燃燒 2 秒內燒掉命中傷害
-    // 40% 的總量，用命中傷害算而不是固定值，才會跟著武器等級/加成一起變強。
-    const frozenDuration = 900, burnDuration = 2000;
-    const burnDps = (dmg * 0.4) / (burnDuration / 1000);
-    this.enemySystem.queryNear(p.x, p.y, aoe, (e) => {
-      if (dist(p.x, p.y, e.x, e.y) > aoe) return;
-      this.enemySystem.damageEnemy(e, dmg, stats.critRate, stats.critDmg, {
-        fromX: p.x, fromY: p.y, force: kb.force, duration: kb.duration,
-      });
-      this.enemySystem.applyFreezeAndBurn(e, frozenDuration, burnDps, burnDuration);
+    this.tweens.add({
+      targets: meteor, y, duration: 430, ease: 'Cubic.easeIn',
+      onComplete: () => {
+        trailTimer.remove();
+        meteor.destroy();
+        this.spawnImpactFx(x, y, 'fireball', aoe, true);
+        this.enemySystem.queryNear(x, y, aoe, (e) => {
+          if (dist(x, y, e.x, e.y) > aoe) return;
+          this.enemySystem.damageEnemy(e, dmg, critRate, critDmg, knockback ? {
+            fromX: x, fromY: y, force: knockback.force, duration: knockback.duration,
+          } : null);
+          this.enemySystem.applyBurn(e, 3000);
+        });
+        if (this.boss && this.boss.alive && dist(x, y, this.boss.sprite.x, this.boss.sprite.y) <= aoe) {
+          this.boss.takeDamage(dmg, critRate, critDmg);
+        }
+        this.enemySystem.addHazardZone(x, y, aoe, 'fire', 3000);
+        this._spawnGroundPatchFx(x, y, aoe, 'fire');
+      },
     });
-    if (this.boss && this.boss.alive && dist(p.x, p.y, this.boss.sprite.x, this.boss.sprite.y) <= aoe) {
-      this.boss.takeDamage(dmg, stats.critRate, stats.critDmg);
-    }
-    // 原本這裡有 cameras.main.flash()，拿掉了：iceFire 常常一次炸中一大群敵人，
-    // 頻繁觸發的全螢幕閃光疊加起來就是玩家反應的「畫面閃爍」，改成只在命中點
-    // 本地播放更大、更明顯的特效＋地面冰火痕跡，不影響整個畫面。
-    this.spawnImpactFx(p.x, p.y, 'iceFire', aoe, false);
-    this.spawnIceFireGroundFx(p.x, p.y, aoe);
-    this.weaponSystem.projectilePool.free(p);
   }
 
-  // 極端冰火地面痕跡：命中點留一灘裂冰＋一灘火痕，疊在怪物腳下（深度用 y-2，
-  // 確保永遠畫在怪物/玩家下方），淡出前持續一小段時間，呼應「地板要有冰跟火焰」。
-  spawnIceFireGroundFx(x, y, aoe) {
-    const iceBase = Math.min(2.2, aoe / 60);
-    const firePatch = this.add.image(x, y, 'fx_flame').setDepth(y - 2).setAlpha(0.55).setScale(iceBase * 0.9).setTint(0xff8a3d);
-    const icePatch = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setAlpha(0.5).setScale(iceBase).setTint(0x8fe3ff);
-    this.tweens.add({ targets: firePatch, alpha: 0, duration: 900, delay: 150, onComplete: () => firePatch.destroy() });
-    this.tweens.add({ targets: icePatch, alpha: 0, duration: 900, delay: 150, onComplete: () => icePatch.destroy() });
+  // 大冰塊（世界末日右手）：從天而降，落地造成範圍傷害，範圍內敵人直接冰凍 1 秒
+  // （完全定住，見 EnemySystem.applyFreeze()），並留下 3 秒冰霜地板讓之後經過的
+  // 敵人持續減速（見 EnemySystem.applySlow()／addHazardZone()）。
+  spawnIceDrop(x, y, dmg, aoe, critRate, critDmg) {
+    if (!this.player || !this.player.sprite.active) return;
+    const ice = this.add.image(x, y - 620, 'proj_frost')
+      .setDepth(30003).setScale(3.4).setTint(0xcdefff).setRotation(-0.3);
+    this.tweens.add({
+      targets: ice, y, duration: 430, ease: 'Cubic.easeIn',
+      onComplete: () => {
+        ice.destroy();
+        this.spawnImpactFx(x, y, 'frost', aoe, true);
+        this.enemySystem.queryNear(x, y, aoe, (e) => {
+          if (dist(x, y, e.x, e.y) > aoe) return;
+          this.enemySystem.damageEnemy(e, dmg, critRate, critDmg, null);
+          this.enemySystem.applyFreeze(e, 1000);
+        });
+        if (this.boss && this.boss.alive && dist(x, y, this.boss.sprite.x, this.boss.sprite.y) <= aoe) {
+          this.boss.takeDamage(dmg, critRate, critDmg);
+        }
+        this.enemySystem.addHazardZone(x, y, aoe, 'frost', 3000);
+        this._spawnGroundPatchFx(x, y, aoe, 'frost');
+      },
+    });
+  }
+
+  // 地面殘留特效：燃燒地板／冰霜地板疊在怪物腳下（深度用 y-2，確保永遠畫在怪物/
+  // 玩家下方），淡入後持續、配合 3 秒地板持續時間淡出，呼應地板還在生效中。
+  _spawnGroundPatchFx(x, y, aoe, type) {
+    const texture = type === 'fire' ? 'fx_flame' : 'fx_frost';
+    const tint = type === 'fire' ? 0xff8a3d : 0x8fe3ff;
+    const patch = this.add.image(x, y, texture).setDepth(y - 2).setAlpha(0).setScale(aoe / 90).setTint(tint);
+    this.tweens.add({ targets: patch, alpha: 0.45, duration: 200 });
+    this.tweens.add({ targets: patch, alpha: 0, duration: 400, delay: 2600, onComplete: () => patch.destroy() });
   }
 
   // 雷電：用 hitSet 記錄已命中對象，命中後嘗試往附近尚未命中的目標跳躍
@@ -1232,19 +1253,6 @@ export default class GameScene extends Phaser.Scene {
         this.spawnBurstFx(x, y, 0xff8f8f, 9, 'fx_crit', 120);
         break;
       }
-      case 'iceFire': {
-        // 粒子量原本是 2 個發光圈 + 28 個爆裂碎片 + 10 個餘燼，一次爆炸就同時建立
-        // 約 40 個新物件+tween；iceFire 常常一次炸中一大群敵人，疊加起來的單幀
-        // 建立量比其他武器的命中特效重上不少，懷疑是玩家反應「打極端冰火角色會
-        // 不受控移動」的成因之一，這裡收斂到跟其他融合武器差不多的量級。
-        const fx = this.add.image(x, y, 'fx_flame').setDepth(29999).setScale(4.2 * 0.55);
-        this.tweens.add({ targets: fx, scale: 4.2, alpha: 0, duration: 320, onComplete: () => fx.destroy() });
-        this.spawnGlowRing(x, y, 'fx_flame', 0xff8a3d, 0.4, 5.0, 380);
-        this.spawnGlowRing(x, y, 'fx_frost', 0x8fe3ff, 0.3, 4.2, 440);
-        this.spawnBurstFx(x, y, 0xffdd55, 8, 'fx_flame', 190);
-        this.spawnBurstFx(x, y, 0x8fe3ff, 8, 'fx_frost', 210);
-        break;
-      }
       default: {
         this.spawnKillFx(x, y);
       }
@@ -1289,7 +1297,7 @@ export default class GameScene extends Phaser.Scene {
   // 冰柱特效：從地面冒出一根結晶冰柱，命中範圍內敵人並造成減速。
   // knockback 為 null 時不造成擊退；evolved 為 true 時換成進化版的專屬美術圖
   // （見下方 pillarTexture），不再跟一般版共用同一張貼圖疊色縮放。
-  spawnIcePillar(x, y, dmg, slow, slowDuration, critRate, critDmg, knockback, evolved = false) {
+  spawnIcePillar(x, y, dmg, slowDuration, critRate, critDmg, knockback, evolved = false) {
     // 地面裂痕／冰霜擴散提示，讓玩家注意到冰柱要冒出來的位置
     const crack = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setScale(evolved ? 0.4 : 0.25).setAlpha(0.6);
     crack.setTint(evolved ? 0x8fd6ff : 0x8fe3ff);
@@ -1333,8 +1341,7 @@ export default class GameScene extends Phaser.Scene {
           this.enemySystem.damageEnemy(e, dmg, critRate, critDmg, knockback ? {
             fromX: x, fromY: y, force: knockback.force, duration: knockback.duration,
           } : null);
-          e.setData('slowUntil', this.time.now + slowDuration);
-          e.setData('slowFactor', 1 - slow);
+          this.enemySystem.applySlow(e, slowDuration);
         });
         if (this.boss && this.boss.alive && dist(x, y, this.boss.sprite.x, this.boss.sprite.y) <= hitRadius + 20) {
           this.boss.takeDamage(dmg, critRate, critDmg);

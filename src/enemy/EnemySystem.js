@@ -6,6 +6,11 @@ import { audioManager } from '../managers/AudioManager.js';
 const MAX_ENEMIES = 800; // 原本 500 隻上限打起來太稀疏，拉高讓畫面塞得下更多小怪
 const GRID_SIZE = 96; // 空間網格邊長：把場上怪物依座標分桶，碰撞判定只需查附近幾個格子
 
+// 統一規則（2026-07-10 起）：不管哪個武器/地板效果觸發的減速或燃燒，強度都固定
+// 用這兩個數字，不再各自武器各自一套強度——見 applySlow()/applyBurn()。
+const SLOW_SPEED_FACTOR = 0.5; // 減速固定降到 50% 移動速度
+const BURN_DPS_PERCENT = 0.05; // 燃燒固定每秒造成目標「最大生命值」5% 的傷害
+
 export default class EnemySystem {
   constructor(scene, player) {
     this.scene = scene;
@@ -42,6 +47,8 @@ export default class EnemySystem {
       80
     );
 
+    // 地面持續效果區域（世界末日的燃燒地板／冰霜地板專用，見 addHazardZone()）
+    this.hazardZones = [];
   }
 
   // 磁鐵拾取物觸發：讓地圖上「目前所有」經驗寶石飛向玩家並被吸收。
@@ -91,7 +98,7 @@ export default class EnemySystem {
     sprite.setData('exp', Math.round(def.exp * tierDef.expMult));
     sprite.setData('slowUntil', 0);
     sprite.setData('slowFactor', 1);
-    sprite.setData('frozenUntil', 0); // 極端冰火：完全定住不能動也不能攻擊，跟一般減速（slowFactor）分開處理
+    sprite.setData('frozenUntil', 0);
     sprite.setData('burnUntil', 0);
     sprite.setData('burnDps', 0);
     sprite.setData('burnNextTick', 0);
@@ -164,6 +171,7 @@ export default class EnemySystem {
 
   update(time, delta) {
     this._rebuildGrid();
+    this._updateHazardZones(time);
 
     if (time - this.lastSpawn > this.spawnInterval && this.pool.activeCount < MAX_ENEMIES) {
       this.lastSpawn = time;
@@ -180,7 +188,7 @@ export default class EnemySystem {
       const frozen = now < e.getData('frozenUntil');
       const knockbackUntil = e.getData('knockbackUntil');
       if (frozen) {
-        // 極端冰火的冰凍：完全定住，連擊退慣性都不套用，直接停在原地
+        // 世界末日冰塊直接命中的冰凍：完全定住，連擊退慣性都不套用，直接停在原地
         e.body.setVelocity(0, 0);
       } else if (now < knockbackUntil) {
         // 擊退期間：直接套用擊退速度並隨時間衰減，暫時不追玩家，製造「被打飛」的手感
@@ -346,16 +354,60 @@ export default class EnemySystem {
     if (hp <= 0) this._killEnemy(enemy);
   }
 
-  // 極端冰火專用：套用冰凍（完全定住 frozenDuration 毫秒）＋燃燒（burnDuration 毫秒內
-  // 每 400ms 燒 burnDps*0.4 點傷害）。兩個狀態各自獨立計時，重複命中會刷新持續時間。
-  applyFreezeAndBurn(enemy, frozenDuration, burnDps, burnDuration) {
+  // 標準冰凍：完全定住（不能動也不能主動造成接觸傷害），世界末日的冰塊直接命中
+  // 敵人時用這個（跟冰霜地板的「減速」是兩回事，冰凍更強但通常持續時間短很多）。
+  applyFreeze(enemy, durationMs) {
+    if (!enemy.active || durationMs <= 0) return;
+    enemy.setData('frozenUntil', this.scene.time.now + durationMs);
+  }
+
+  // 找一隻跟 exclude 不同的隨機存活敵人，找不到就回傳 null。世界末日用這個讓
+  // 隕石跟冰塊分別打向不同目標，而不是兩者疊在同一個點上。
+  findRandomOther(exclude) {
+    const candidates = [];
+    this.pool.forEachActive((e) => { if (e !== exclude && e.active) candidates.push(e); });
+    if (candidates.length === 0) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  // 標準減速：不管哪個武器/地板效果觸發的，一律固定降到 50%（SLOW_SPEED_FACTOR）
+  // 移動速度，只有「還能再減速多久」會刷新，強度不會因為重複套用而疊加更低。
+  applySlow(enemy, durationMs) {
+    if (!enemy.active || durationMs <= 0) return;
+    enemy.setData('slowUntil', this.scene.time.now + durationMs);
+    enemy.setData('slowFactor', SLOW_SPEED_FACTOR);
+  }
+
+  // 標準燃燒：每 400ms 燒一次「目標最大生命值 x BURN_DPS_PERCENT」的傷害，
+  // 用最大生命值當基準是為了讓每一 tick 的傷害固定，不會因為血量被燒掉而遞減。
+  // 重複套用只刷新「還能再燒多久」，不會疊加燒更快。
+  applyBurn(enemy, durationMs) {
+    if (!enemy.active || durationMs <= 0) return;
     const now = this.scene.time.now;
-    if (frozenDuration > 0) enemy.setData('frozenUntil', now + frozenDuration);
-    if (burnDps > 0 && burnDuration > 0) {
-      enemy.setData('burnDps', burnDps);
-      enemy.setData('burnUntil', now + burnDuration);
-      if (enemy.getData('burnNextTick') < now) enemy.setData('burnNextTick', now + 400);
-    }
+    const maxHp = enemy.getData('maxHp') || enemy.getData('hp') || 0;
+    enemy.setData('burnDps', maxHp * BURN_DPS_PERCENT);
+    enemy.setData('burnUntil', now + durationMs);
+    if (enemy.getData('burnNextTick') < now) enemy.setData('burnNextTick', now + 400);
+  }
+
+  // 地面持續效果區域：世界末日的隕石／冰塊落地後各自留下的燃燒地板／冰霜地板
+  // （見 GameScene.spawnMeteorDrop()／spawnIceDrop()）。type='fire' 範圍內的怪物持續燃燒，
+  // type='frost' 範圍內的怪物持續減速；每幀重新套用一次效果，所以怪物一旦離開
+  // 範圍，燃燒/減速會在很短時間內自然消退，不用另外寫「離開範圍」的判斷。
+  addHazardZone(x, y, radius, type, durationMs) {
+    this.hazardZones.push({ x, y, radius, type, expireAt: this.scene.time.now + durationMs });
+  }
+
+  _updateHazardZones(now) {
+    if (this.hazardZones.length === 0) return;
+    this.hazardZones = this.hazardZones.filter((z) => z.expireAt > now);
+    this.hazardZones.forEach((zone) => {
+      this.queryNear(zone.x, zone.y, zone.radius, (e) => {
+        if (dist(zone.x, zone.y, e.x, e.y) > zone.radius) return;
+        if (zone.type === 'fire') this.applyBurn(e, 650);
+        else if (zone.type === 'frost') this.applySlow(e, 650);
+      });
+    });
   }
 
   _killEnemy(enemy) {
