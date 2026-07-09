@@ -297,14 +297,19 @@ export const GACHA_POOL_BY_RARITY = {};
 });
 
 // 抽一次：先依權重表隨機決定稀有度，再從該稀有度的池子裡均勻隨機選一件。
-export function rollGachaItem() {
-  const total = Object.values(GACHA_RARITY_WEIGHTS).reduce((a, b) => a + b, 0);
-  let roll = Math.random() * total;
-  let picked = 'common';
-  for (const rarity of Object.keys(GACHA_RARITY_WEIGHTS)) {
-    const w = GACHA_RARITY_WEIGHTS[rarity];
-    if (roll < w) { picked = rarity; break; }
-    roll -= w;
+// forceRarity 給保底機制用（見 ShopScene._gachaPull 的 100 抽保底邏輯）：
+// 有帶這個參數就跳過機率表，直接從指定稀有度的池子裡抽。
+export function rollGachaItem(forceRarity) {
+  let picked = forceRarity;
+  if (!picked) {
+    const total = Object.values(GACHA_RARITY_WEIGHTS).reduce((a, b) => a + b, 0);
+    let roll = Math.random() * total;
+    picked = 'common';
+    for (const rarity of Object.keys(GACHA_RARITY_WEIGHTS)) {
+      const w = GACHA_RARITY_WEIGHTS[rarity];
+      if (roll < w) { picked = rarity; break; }
+      roll -= w;
+    }
   }
   const pool = GACHA_POOL_BY_RARITY[picked] || GACHA_POOL_BY_RARITY.common;
   return pool[Math.floor(Math.random() * pool.length)];

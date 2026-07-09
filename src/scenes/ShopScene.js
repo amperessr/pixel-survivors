@@ -4,13 +4,14 @@ import {
 } from '../equipment/EquipmentData.js';
 import {
   getGold, spendGold, addGold, isItemOwned, upgradeEquipment, addItemToInventory, getInventory,
-  getAutoSellRarities, setAutoSellRarities,
+  getAutoSellRarities, setAutoSellRarities, getGachaPity, setGachaPity,
 } from '../managers/SaveManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 import { createRarityFrame } from '../utils/RarityFrame.js';
 
 const GACHA_SINGLE_PRICE = 1000;
 const GACHA_TEN_PRICE = 9000;
+const GACHA_PITY_LIMIT = 100; // 保底：連續抽這麼多次沒出傳說（或更高）以上，下一抽強制出一件傳說
 
 // 商店：五個裝備部位 x 三個階級（初心者/中階/高階）的 5x3 卡片牆。
 // 同一部位必須依序購買（先買初心者才能買中階，先買中階才能買高階），
@@ -82,6 +83,10 @@ export default class ShopScene extends Phaser.Scene {
     this.add.text(cx, panelTop + 467, '每次抽獎都有機會拿到豐厚獎勵！', textStyle({
       fontSize: '19px', color: '#cfe9ff',
     })).setOrigin(0.5);
+    this.pityText = this.add.text(cx, panelTop + 493, '', textStyle({
+      fontSize: '16px', color: '#ffd93d',
+    })).setOrigin(0.5);
+    this._refreshPityText();
 
     const btnW = panelW - 100;
     this._buildGachaButton(cx, panelTop + 521, btnW, `一抽　💰 ${GACHA_SINGLE_PRICE}`, () => this._gachaPull(1, GACHA_SINGLE_PRICE));
@@ -120,6 +125,14 @@ export default class ShopScene extends Phaser.Scene {
       });
     });
     this._refreshAutoSellBoxes();
+  }
+
+  // 更新保底進度顯示：目前連續多少抽沒出傳說（或更高）以上，滿 GACHA_PITY_LIMIT
+  // 下一抽就會強制出傳說（見 _gachaPull）。
+  _refreshPityText() {
+    if (!this.pityText) return;
+    const pity = getGachaPity();
+    this.pityText.setText(`保底進度：${pity}/${GACHA_PITY_LIMIT}（滿了下一抽必出傳說）`);
   }
 
   _refreshAutoSellBoxes() {
@@ -204,10 +217,17 @@ export default class ShopScene extends Phaser.Scene {
       return;
     }
     const autoSellSet = this.autoSellSet || new Set(getAutoSellRarities());
+    // 保底：每一抽都讓保底計數 +1，抽到傳說或神話就歸零；計數滿 GACHA_PITY_LIMIT
+    // 還沒歸零，這一抽直接強制出傳說（不再走機率表），確保連續衰運最多 100 抽
+    // 就一定能拿到一件傳說。
+    let pity = getGachaPity();
     const results = [];
     for (let i = 0; i < times; i++) {
-      const id = rollGachaItem();
+      pity += 1;
+      const forceLegendary = pity >= GACHA_PITY_LIMIT;
+      const id = rollGachaItem(forceLegendary ? 'legendary' : undefined);
       const rarity = EQUIPMENT_DATA[id].rarity;
+      if (rarity === 'legendary' || rarity === 'mythic') pity = 0;
       if (autoSellSet.has(rarity)) {
         const soldPrice = SELL_PRICES[rarity];
         addGold(soldPrice);
@@ -217,6 +237,8 @@ export default class ShopScene extends Phaser.Scene {
         results.push({ id, sold: false });
       }
     }
+    setGachaPity(pity);
+    this._refreshPityText();
     this.goldText.setText(`金幣：${getGold()}`);
     this._showGachaReveal(results, times, price);
   }
