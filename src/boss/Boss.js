@@ -172,6 +172,7 @@ export default class Boss {
     this.phaseTimer = 0;
     this.nextSkillAt = scene.time.now + 2500;
     this.chargeTarget = null;
+    this.paralyzedUntil = 0; // 雷霆套裝三件套：麻痺中無法選新技能（見 update()），見 GameScene._maybeThunderParalyze()
 
     // 血條 UI (畫面固定位置，右上方中央)
     this.barBg = scene.add.image(scene.scale.width / 2, 130, 'ui_bar_bg')
@@ -246,7 +247,9 @@ export default class Boss {
       return;
     }
 
-    if (time > this.nextSkillAt && this.phase === 'chase') {
+    // 雷霆套裝三件套：麻痺中的 Boss 選不了新技能（「無法施放技能」），過了
+    // paralyzedUntil 才會恢復正常選招——不影響正在前搖/執行中的技能，只擋「下一招」。
+    if (time > this.nextSkillAt && this.phase === 'chase' && time >= this.paralyzedUntil) {
       this._chooseSkill(time);
     }
 
@@ -571,6 +574,12 @@ export default class Boss {
     if (Math.random() * 100 < critRate) {
       dmg *= critDmg / 100;
       isCrit = true;
+    }
+    // 雷霆套裝五件套：打中麻痺中的 Boss 額外補上 10% 玩家攻擊力的傷害＋打雷特效
+    const setBonuses = this.scene.setBonuses;
+    if (setBonuses && setBonuses.thunder5 && this.scene.time.now < this.paralyzedUntil) {
+      dmg += this.player.stats.attack * 0.1;
+      this.scene.spawnThunderStrikeFx(this.sprite.x, this.sprite.y);
     }
     this.hp -= dmg;
     this.sprite.setTintFill(0xffffff);

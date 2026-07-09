@@ -250,20 +250,39 @@ const LEGENDARY_SERIES = [
 ];
 const LEGENDARY_SLOT_SUFFIX = { weapon: '劍', helmet: '盔', clothes: '鎧', pants: '護腿', shoes: '靴' };
 
+// 套裝效果：同一套主題裝（不分部位、戒指不算）湊滿 3 件／5 件會額外觸發，見
+// GameScene._computeSetBonuses() 怎麼統計件數、實際效果分別實作在
+// GameScene/EnemySystem/WeaponSystem 對應的傷害/狀態邏輯裡（搜尋 setBonuses）。
+export const LEGENDARY_SET_BONUS_TEXT = {
+  flame: { label: '烈焰套裝', three: '燃燒持續時間 +50%', five: '燃燒傷害額外 +10% 攻擊力' },
+  ice: { label: '寒冰套裝', three: '緩速持續時間 +50%', five: '冰凍結束時造成 10% 攻擊力傷害' },
+  wind: { label: '狂風套裝', three: '擊退效果 +100%', five: '所有技能大小 +100%' },
+  holy: { label: '聖光套裝', three: '攻擊速度 +30%', five: '攻擊速度額外 +100%' },
+  thunder: { label: '雷霆套裝', three: '雷電系技能 30% 機率造成 1 秒麻痺', five: '攻擊麻痺中的怪物額外造成 10% 攻擊力傷害' },
+};
+
 EQUIP_SLOTS.forEach((slot) => {
   const statKey = GACHA_STAT_KEY[slot];
   const [, hi] = RARITY_STAT_RANGES[statKey].legendary;
   LEGENDARY_SERIES.forEach(({ slug, label }) => {
     const id = `${slot}_legendary_${slug}`;
+    const setText = LEGENDARY_SET_BONUS_TEXT[slug];
     EQUIPMENT_DATA[id] = {
       id, slot, tier: null, tierIndex: 0, prevId: null, rarity: 'legendary',
       name: `${label}${LEGENDARY_SLOT_SUFFIX[slot]}`,
-      desc: `${GACHA_STAT_LABEL[statKey]} +${hi}（僅扭蛋機取得）`,
+      desc: `${GACHA_STAT_LABEL[statKey]} +${hi}（僅扭蛋機取得）\n${setText.label} 3件：${setText.three}\n5件：${setText.five}`,
       icon: `equip_legendary_${slot}_${slug}`, bonus: { [statKey]: hi },
+      setSlug: slug,
     };
     GACHA_EQUIPMENT_IDS.push(id);
   });
 });
+
+// 依裝備 id 找出它屬於哪一套傳說套裝的 slug（flame/ice/wind/holy/thunder），
+// 不是傳說套裝裝備（含戒指、非傳說裝備）一律回傳 null。
+export function getLegendarySeriesSlug(itemId) {
+  return (EQUIPMENT_DATA[itemId] && EQUIPMENT_DATA[itemId].setSlug) || null;
+}
 
 // 抽獎機率表：直接是百分比，加總剛好 100%。六個稀有度全部有對應的裝備可抽到：
 // 普通/優秀/稀有/史詩是編號式一般裝備（1-7/8-12/13-17/18-20），傳說是 5 部位

@@ -8,7 +8,7 @@ import Boss from '../boss/Boss.js';
 import { WEAPON_KNOCKBACK } from '../weapons/WeaponData.js';
 import { PASSIVE_IDS } from '../skills/PassiveData.js';
 import { RELICS } from '../relics/RelicData.js';
-import { EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
+import { EQUIPMENT_DATA, getLegendarySeriesSlug } from '../equipment/EquipmentData.js';
 import { getEquipped, addGold, setBestScore, setCheckpointStage, getStatBonus } from '../managers/SaveManager.js';
 import { dist } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
@@ -44,6 +44,7 @@ export default class GameScene extends Phaser.Scene {
 
     this.player = new Player(this, 0, 0, this.characterId);
     this._applyEquipmentBonuses();
+    this._computeSetBonuses();
     this._setupCloneRing();
     this.cameras.main.startFollow(this.player.sprite, true, 0.12, 0.12);
     this.cameras.main.setZoom(2.1); // 鏡頭拉近，讓角色與怪物看起來更清楚、不會太小太遠
@@ -219,6 +220,31 @@ export default class GameScene extends Phaser.Scene {
     stats.atkSpeed += getStatBonus('atkSpeed');
     stats.critRate += getStatBonus('critRate');
     stats.critDmg += getStatBonus('critDmg');
+  }
+
+  // 傳說套裝效果：同一套主題裝（烈焰/寒冰/狂風/聖光/雷霆，戒指不算）湊滿 3 件／
+  // 5 件時額外觸發，見 EquipmentData.LEGENDARY_SET_BONUS_TEXT 的效果說明。
+  // this.setBonuses 存成 { flame3, flame5, ice3, ice5, wind3, wind5, holy3, holy5,
+  // thunder3, thunder5 } 布林旗標，供 EnemySystem／WeaponSystem 讀取（讀 this.scene.setBonuses）。
+  // 5 件套一定同時滿足 3 件套的條件，兩個門檻的效果會疊加，不是互斥的兩選一。
+  _computeSetBonuses() {
+    const equipped = getEquipped();
+    const counts = {};
+    Object.values(equipped).forEach((itemId) => {
+      const slug = getLegendarySeriesSlug(itemId);
+      if (slug) counts[slug] = (counts[slug] || 0) + 1;
+    });
+    const flags = {};
+    ['flame', 'ice', 'wind', 'holy', 'thunder'].forEach((slug) => {
+      const n = counts[slug] || 0;
+      flags[`${slug}3`] = n >= 3;
+      flags[`${slug}5`] = n >= 5;
+    });
+    this.setBonuses = flags;
+
+    // 聖光套裝：攻速加成直接疊進玩家數值（3件 +30%／5件再疊 +100%，滿五件共 +130%）
+    if (flags.holy3) this.player.stats.atkSpeed += 30;
+    if (flags.holy5) this.player.stats.atkSpeed += 100;
   }
 
   // 分身戒：開局時召喚一個半透明的分身幻影。分身沒有物理實體（怪物打不到、
@@ -447,12 +473,14 @@ export default class GameScene extends Phaser.Scene {
     if (hitBoss) {
       hitSet.add(this.boss);
       this.boss.takeDamage(dmg, stats.critRate, stats.critDmg);
+      this._maybeThunderParalyze(this.boss, true);
       hitX = this.boss.sprite.x; hitY = this.boss.sprite.y;
     } else {
       hitSet.add(target);
       this.enemySystem.damageEnemy(target, dmg, stats.critRate, stats.critDmg, {
         fromX: p.x, fromY: p.y, force: kb.force, duration: kb.duration,
       });
+      this._maybeThunderParalyze(target, false);
       hitX = target.x; hitY = target.y;
     }
     this.spawnImpactFx(hitX, hitY, 'electroKnife', 0, false);
@@ -471,6 +499,7 @@ export default class GameScene extends Phaser.Scene {
     chainCandidates.slice(0, ELECTRO_KNIFE_CHAIN_MAX).forEach(({ e }) => {
       hitSet.add(e);
       this.enemySystem.damageEnemy(e, dmg * 0.5, stats.critRate, stats.critDmg, null);
+      this._maybeThunderParalyze(e, false);
       // 連鎖用「進化版」規格的電弧（更粗更亮），凸顯這是融合武器的額外加成
       this.spawnChainLightningFx(hitX, hitY, e.x, e.y, true);
     });
@@ -554,6 +583,19 @@ export default class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: patch, alpha: 0, duration: 400, delay: 2600, onComplete: () => patch.destroy() });
   }
 
+  // 雷霆套裝三件套：雷電系技能（雷電鎖鏈／電擊飛刃）命中敵人/魔王時 30% 機率
+  // 造成 1 秒麻痺（讓怪物「無法施放技能」，小怪本身沒有技能可放，主要影響 Boss——
+  // 見 Boss.update() 對 paralyzedUntil 的判斷），同時也是五件套額外傷害的觸發條件。
+  _maybeThunderParalyze(target, isBoss) {
+    if (!this.setBonuses || !this.setBonuses.thunder3) return;
+    if (Math.random() >= 0.3) return;
+    if (isBoss) {
+      target.paralyzedUntil = this.time.now + 1000;
+    } else {
+      this.enemySystem.applyParalyze(target, 1000);
+    }
+  }
+
   // 雷電：用 hitSet 記錄已命中對象，命中後嘗試往附近尚未命中的目標跳躍
   _handleLightningHit(p, stats) {
     const hitSet = p.getData('hitSet');
@@ -578,11 +620,13 @@ export default class GameScene extends Phaser.Scene {
     if (targetIsBoss) {
       hitSet.add(this.boss);
       this.boss.takeDamage(p.getData('dmg'), stats.critRate, stats.critDmg);
+      this._maybeThunderParalyze(this.boss, true);
     } else {
       hitSet.add(target);
       this.enemySystem.damageEnemy(target, p.getData('dmg'), stats.critRate, stats.critDmg, {
         fromX: p.x, fromY: p.y, force: kb.force, duration: kb.duration,
       });
+      this._maybeThunderParalyze(target, false);
     }
     this.spawnImpactFx(hitX, hitY, 'lightning', 0, evolved);
 
@@ -968,6 +1012,15 @@ export default class GameScene extends Phaser.Scene {
     const fx = this.add.image(x, y - 10, 'fx_crit').setDepth(30000).setScale(1.3);
     this.tweens.add({ targets: fx, y: y - 34, alpha: 0, scale: 1.9, duration: 380, onComplete: () => fx.destroy() });
     this.spawnBurstFx(x, y, 0xffe066, 5, 'fx_crit', 70);
+  }
+
+  // 雷霆套裝五件套專用：打中麻痺中的怪物時，從高空劈下一道閃電打雷特效
+  spawnThunderStrikeFx(x, y) {
+    const bolt = this.add.image(x, y - 260, 'fx_bolt').setDepth(30002).setOrigin(0.5, 0)
+      .setScale(1.4, 5.5).setTint(0xffe066).setAlpha(0.9).setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: bolt, alpha: 0, duration: 220, delay: 60, onComplete: () => bolt.destroy() });
+    this.spawnGlowRing(x, y, 'fx_bolt', 0xffe066, 0.3, 1.8, 260);
+    this.spawnBurstFx(x, y, 0xffe066, 8, 'fx_bolt', 130);
   }
 
   // 傷害數字：一般傷害白色，爆擊傷害黃色（字體也比較大），從敵人身上往上飄再淡出。

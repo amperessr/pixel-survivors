@@ -101,10 +101,10 @@ export default class WeaponSystem {
   // 進化倍率）；一般武器則是五級數值 + (若已進化) 進化倍率加成。
   _getEffectiveData(id) {
     const fusion = WEAPON_FUSIONS[id];
-    if (fusion) return { ...fusion.stats, isFusion: true };
+    if (fusion) return this._applyWindSizeBonus({ ...fusion.stats, isFusion: true });
 
     const base = getWeaponLevelData(id, this.owned[id]);
-    if (!this.evolved[id]) return base;
+    if (!this.evolved[id]) return this._applyWindSizeBonus({ ...base });
 
     const evo = WEAPON_EVOLUTIONS[id];
     const scaled = { ...base, evolved: true, evoName: evo.name };
@@ -118,7 +118,24 @@ export default class WeaponSystem {
     // evo.pierceOverride 覆蓋掉預設規則（見 WeaponData.js 的 WEAPON_EVOLUTIONS.knife）。
     if (base.pierce != null) scaled.pierce = evo.pierceOverride != null ? evo.pierceOverride : base.pierce + 1;
     scaled.cooldown = base.cooldown / (evo.cooldownMult || evo.extraMult);
-    return scaled;
+    return this._applyWindSizeBonus(scaled);
+  }
+
+  // 狂風套裝五件套：所有技能的「大小」+100%——這裡統一放大命中判定用的範圍/半徑
+  // 欄位，各 _fireXXX 方法再各自把對應的投射物/特效視覺縮放乘上同一個倍率
+  // （見 _windSizeMult()），確保「看起來變大」跟「打得到的範圍變大」是一致的。
+  _applyWindSizeBonus(data) {
+    const mult = this._windSizeMult();
+    if (mult === 1) return data;
+    ['aoe', 'radius', 'range', 'chainRange', 'innerRadius', 'outerRadius'].forEach((key) => {
+      if (data[key] != null) data[key] *= mult;
+    });
+    return data;
+  }
+
+  _windSizeMult() {
+    const sb = this.scene.setBonuses;
+    return sb && sb.wind5 ? 2 : 1;
   }
 
   // 攻速對各武器冷卻縮短的影響權重：飛刀/鋸片本來就是「攻速流」武器，攻速加成
@@ -262,7 +279,7 @@ export default class WeaponSystem {
     const proj = this.projectilePool.spawn();
     proj.setTexture('proj_fireball');
     proj.setPosition(px, py);
-    proj.setScale(scaleBonus);
+    proj.setScale(scaleBonus * this._windSizeMult());
     proj.clearTint();
     proj.setData('dmg', dmg);
     proj.setData('aoe', aoe);
