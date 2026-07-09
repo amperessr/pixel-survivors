@@ -380,7 +380,7 @@ export default class WeaponSystem {
       proj.setTexture('proj_knife');
       proj.setPosition(px, py);
       proj.setRotation(baseAng + off);
-      proj.setScale(1.8); // 電擊飛刃的飛刀比一般飛刀大一圈，讓玩家一眼認出是融合武器
+      proj.setScale(3.6); // 電擊飛刃的飛刀比一般飛刀大一圈，讓玩家一眼認出是融合武器（再放大兩倍）
       proj.setTint(0x7ef7ff);
       proj.setData('dmg', dmg);
       proj.setData('pierce', data.pierce);
@@ -401,7 +401,7 @@ export default class WeaponSystem {
     const proj = this.projectilePool.spawn();
     proj.setTexture('proj_frost');
     proj.setPosition(px, py);
-    proj.setScale(1.15);
+    proj.setScale(2.3); // 極端冰火的冰彈再放大兩倍
     proj.clearTint();
     proj.setData('dmg', dmg);
     proj.setData('aoe', data.aoe);
@@ -426,12 +426,13 @@ export default class WeaponSystem {
       const s = WEAPON_FUSIONS['knife_sawblade'].stats;
       for (let i = 0; i < s.innerCount; i++) {
         const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'proj_sawblade');
+        sp.setScale(2); // 內圈鋸片再放大兩倍，跟放大後的外圈飛鏢體型比較搭配
         sp.setDepth(6000).setData('kind', 'sawblade').setData('lastHit', new Map()).setData('ring', 0);
         this.sawbladeSprites.push(sp);
       }
       for (let i = 0; i < s.outerCount; i++) {
         const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'proj_knife');
-        sp.setScale(1.7); // 外圈飛鏢比一般飛刀大一圈，跟內圈鋸片的體型比較搭配
+        sp.setScale(3.4); // 外圈飛鏢再放大兩倍
         sp.setTint(0xff8f8f);
         sp.setDepth(6000).setData('kind', 'sawblade').setData('lastHit', new Map()).setData('ring', 1);
         this.sawbladeSprites.push(sp);
