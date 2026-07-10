@@ -147,8 +147,8 @@ export default class UIScene extends Phaser.Scene {
     this.setBonusPlaceholder = this.add.text(col2CenterX, bottomBarY, '尚無套裝效果', textStyle({
       fontSize: '18px', color: '#5a6172',
     })).setOrigin(0.5).setScrollFactor(0);
-    this.setBonusText = this.add.text(col2CenterX, gridTopY - 14, '', textStyle({
-      fontSize: '16px', color: '#ffe066', align: 'center',
+    this.setBonusText = this.add.text(col2CenterX, gridTopY - 12, '', textStyle({
+      fontSize: '18px', color: '#ffe066', align: 'center',
     })).setOrigin(0.5, 0).setScrollFactor(0).setWordWrapWidth(setBonusAreaW, true).setVisible(false);
 
     // ---------- 裝備（5 個裝備欄 + 第 6 格擠進兩個戒指小欄位，每格都加上
