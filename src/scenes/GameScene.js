@@ -994,8 +994,12 @@ export default class GameScene extends Phaser.Scene {
     if (this.healthPackSystem && bossX != null) {
       this.healthPackSystem.forceSpawn(bossX, bossY, true);
     }
-    // 慶祝特效一定會播放，不受任何選單開關影響
-    this.spawnSuperSaiyanAura();
+    // 慶祝特效一定會播放，不受任何選單開關影響。2026-07-10：延後 220ms 才觸發，
+    // 避免跟 Boss._die() 自己的死亡爆炸特效疊在同一幀一次建立太多物件，那是「擊敗
+    // 魔王時會卡頓」的主因——分散成兩個時間點，各自負擔小很多，肉眼幾乎感覺不到延遲。
+    this.time.delayedCall(220, () => {
+      if (!this.gameEnded && this.player && this.player.sprite.active) this.spawnSuperSaiyanAura();
+    });
 
     const relic = RELICS[relicId];
     // 每個遺物只能拿一次：如果玩家已經擁有這個遺物，就不用再跳出選擇視窗詢問了

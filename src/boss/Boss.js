@@ -631,10 +631,13 @@ export default class Boss {
     // + 一圈純白的內層閃光，讓爆炸有明暗層次而不是單一顏色的色塊
     this.scene.spawnGlowRing(dx, dy, 'fx_frost', themeColor, 0.6, 11, 950, 20002);
     this.scene.spawnGlowRing(dx, dy, 'fx_frost', 0xffffff, 0.5, 6, 650, 20003);
-    // 大量四散碎片分兩批噴發，做出「還沒完全炸完、殘骸持續飛濺」的層次感
-    this.scene.spawnBurstFx(dx, dy, themeColor, 30, 'fx_crit', 260);
+    // 大量四散碎片分兩批噴發，做出「還沒完全炸完、殘骸持續飛濺」的層次感。
+    // 2026-07-10：兩批數量原本是 30+20，跟擊敗魔王後緊接著的升級選單／慶祝特效
+    // （見 GameScene.onBossDefeated）疊在同一幀一次建立太多物件，會有感卡頓，
+    // 兩批各自減量，視覺份量仍然足夠、但不會一口氣塞爆同一幀。
+    this.scene.spawnBurstFx(dx, dy, themeColor, 18, 'fx_crit', 260);
     this.scene.time.delayedCall(160, () => {
-      if (this.scene && this.scene.spawnBurstFx) this.scene.spawnBurstFx(dx, dy, 0xffffff, 20, 'fx_bossdeath', 210);
+      if (this.scene && this.scene.spawnBurstFx) this.scene.spawnBurstFx(dx, dy, 0xffffff, 12, 'fx_bossdeath', 210);
     });
 
     this.sprite.destroy();
