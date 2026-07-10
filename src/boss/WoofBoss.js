@@ -237,7 +237,10 @@ export default class WoofBoss {
     const def = SKILLS.laser;
     const bx = this.sprite.x, by = this.sprite.y;
     this._laserAngle = this._lockedAngle;
-    this._laserLength = 1400;
+    // 汪汪本體施法期間完全不動（見 _executeLaser 呼叫前的 telegraph 已經定住），
+    // 玩家只要一路跑，5 秒的持續時間內很容易跑出原本 1400 的射程，讓光束看起來
+    // 明明對準玩家卻打不到——射程拉長到 3200，遠超玩家 5 秒內跑得到的距離。
+    this._laserLength = 3200;
     this._laserStartAt = time;
     this._laserLastTickAt = 0;
 
