@@ -239,7 +239,9 @@ export default class EnemySystem {
       // （水平速度接近 0）保留上一幀的朝向，避免原地抖動亂翻。
       const vx = e.body.velocity.x;
       if (Math.abs(vx) > 5) e.setData('facingLeft', vx < 0);
-      e.setFlipX(e.getData('facingLeft'));
+      // 貼圖原始美術本身是「面向左邊」，所以要往左走時反而不能翻轉（維持原圖），
+      // 要往右走才需要翻轉成鏡像——跟直覺相反，故意取反，不然會變成倒退著走。
+      e.setFlipX(!e.getData('facingLeft'));
 
       // 燃燒：持續時間內每 400ms 扣一次傷害，跟冰凍/減速互不影響、可以同時生效
       if (now < e.getData('burnUntil') && now >= e.getData('burnNextTick')) {
