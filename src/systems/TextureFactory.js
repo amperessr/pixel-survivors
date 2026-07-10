@@ -735,6 +735,17 @@ export default class TextureFactory {
       ctx.lineWidth = 3;
       ctx.stroke();
     });
+    // 底部狀態列（數值/裝備/技能）用的長條卡片底板：把「圖示+文字」框成一張
+    // 獨立卡片，取代原本整塊面板裡沒有分隔、字浮在大片空白上的排版方式。
+    mk('ui_stat_chip', 300, 60, (ctx) => {
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      TextureFactory.roundRect(ctx, 0, 0, 300, 60, 12);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+      ctx.lineWidth = 2;
+      TextureFactory.roundRect(ctx, 1, 1, 298, 58, 12);
+      ctx.stroke();
+    });
     // 背包格子：空格用的方形底板，5x10 格子共用同一張材質
     mk('ui_slot', 72, 72, (ctx) => {
       ctx.fillStyle = 'rgba(255,255,255,0.06)';

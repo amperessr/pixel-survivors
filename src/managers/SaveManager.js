@@ -271,7 +271,7 @@ const STAT_INVEST_DEFS = {
   critRate: { perPoint: 0.2, cap: 200 }, // 40% 上限
   critDmg: { perPoint: 1, cap: null },
 };
-const RESET_STAT_POINTS_COST = 100000;
+const RESET_STAT_POINTS_COST = 30000;
 
 // 從 level 升到 level+1 所需經驗值
 function expForLevel(level) {
