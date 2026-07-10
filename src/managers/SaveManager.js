@@ -488,23 +488,50 @@ function setInventoryRaw(arr) {
 
 // 推送到雲端做了 500ms 防抖：連續好幾個動作（例如商店裡連續買好幾件裝備）
 // 只會真的送出最後那一次的完整快照，不會每改一個欄位就發一次網路請求。
+//
+// _pushInFlight 額外記著「目前這次真正在跑的 saveAccount() 請求」，讓
+// _flushCloudPush() 可以在需要的時候等它做完——見下面 _flushCloudPush 的說明。
 let _pushTimer = null;
+let _pushInFlight = null;
+function _doCloudPush() {
+  const name = getPlayerName();
+  const passwordHash = localStorage.getItem(PASSWORD_HASH_KEY);
+  if (!name || !passwordHash) return Promise.resolve();
+  _pushInFlight = saveAccount(name, { passwordHash, ..._gatherLocalBundle() })
+    .catch((err) => {
+      console.warn('[SaveManager] 同步存檔到雲端失敗（可能離線），本機資料仍會正常保存：', err.message);
+    })
+    .finally(() => { _pushInFlight = null; });
+  return _pushInFlight;
+}
 function _scheduleCloudPush() {
   const name = getPlayerName();
   const passwordHash = localStorage.getItem(PASSWORD_HASH_KEY);
   if (!name || !passwordHash) return; // 還沒登入完成，不用推（正常流程一定會先登入才能玩）
   clearTimeout(_pushTimer);
-  _pushTimer = setTimeout(() => {
-    saveAccount(name, { passwordHash, ..._gatherLocalBundle() }).catch((err) => {
-      console.warn('[SaveManager] 同步存檔到雲端失敗（可能離線），本機資料仍會正常保存：', err.message);
-    });
-  }, 500);
+  _pushTimer = setTimeout(_doCloudPush, 500);
+}
+
+// 把「還在防抖計時器裡排隊、還沒真的送出」或「已經送出但還在飛」的雲端推送
+// 都等到真正完成——在 _trySilentResync() 拉雲端資料之前一定要先呼叫這個，
+// 不然像「打完一場遊戲加金幣→立刻按返回主選單」這種情境，金幣的推送還卡在
+// 500ms 防抖計時器裡，緊接著主選單的背景同步就把雲端「這筆金幣還沒送到」的
+// 舊資料拉回來蓋掉本機剛加好的金幣，變成「明明打了怪，金幣卻沒有增加」。
+async function _flushCloudPush() {
+  if (_pushTimer) {
+    clearTimeout(_pushTimer);
+    _pushTimer = null;
+    await _doCloudPush();
+  } else if (_pushInFlight) {
+    await _pushInFlight;
+  }
 }
 
 // 這台裝置先前已經登入過（本機有快取的名字＋密碼雜湊）：背景嘗試從雲端拉最新進度，
 // 拉取失敗（離線、密碼在別處被改過等）就沿用本機現有資料，不會擋住遊戲開始。
 async function _trySilentResync(name, passwordHash) {
   try {
+    await _flushCloudPush();
     const { exists, data } = await fetchAccount(name);
     if (exists && data && data.passwordHash === passwordHash) {
       _applyCloudBundle(data);
