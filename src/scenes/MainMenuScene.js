@@ -1,4 +1,4 @@
-import { promptPlayerName, getCheckpointStage, getPlayerName, logout, getStatLevel, isMailClaimed, isMailDeleted } from '../managers/SaveManager.js';
+import { promptPlayerName, getPlayerName, logout, getStatLevel, isMailClaimed, isMailDeleted } from '../managers/SaveManager.js';
 import { subscribeLeaderboard } from '../firebase/firebase.js';
 import { textStyle } from '../utils/TextStyle.js';
 import { MAIL_DATA } from '../mail/MailData.js';
@@ -33,11 +33,6 @@ export default class MainMenuScene extends Phaser.Scene {
 
     this.add.image(w / 2, 340, 'player_balanced').setScale(2.4);
 
-    // 存檔點：每 5 關會記錄一次目前最高關卡（見 GameScene._update()）。
-    // 「開始遊戲」有兩個選項：從存檔點當前關卡開始，或從第一關重新開始。
-    // 兩個選項都要在按鈕正上方標出實際的關卡數字。
-    const checkpointStage = getCheckpointStage();
-
     const btnW = 420, btnH = 88, gap = 24;
 
     // ---- 快捷功能列：背包／商店／信箱，三個並排的小按鈕 ----
@@ -66,13 +61,13 @@ export default class MainMenuScene extends Phaser.Scene {
       qx += bw + quickGap;
     });
 
-    // ---- 開始遊戲：當前關卡／第一關，維持原本的直向大按鈕堆疊 ----
+    // ---- 開始遊戲：活動關卡／第一關，維持原本的直向大按鈕堆疊 ----
+    // 「當前關卡」（從存檔點繼續）已移除，原本的位置改放「活動關卡」入口卡位
+    // （內容還沒做，點下去先提示尚未開放，見 _showToast）。
     const items = [
       {
-        label: '當前關卡', stageLabel: `第 ${checkpointStage} 關`,
-        // 除錯用：暫時印出玩家實際點了哪顆按鈕，方便排查「點第一關卻從別的關卡開始」的問題，
-        // 之後確認沒問題了可以把這行 console.log 拿掉。
-        onPick: () => { console.log(`[STAGE] 點了「當前關卡」，checkpointStage=${checkpointStage}`); this.scene.start('GameScene', { startStage: checkpointStage }); },
+        label: '活動關卡',
+        onPick: () => this._showToast('活動關卡尚未開放，敬請期待！'),
       },
       {
         label: '第一關', stageLabel: `第 1 關`,
@@ -124,11 +119,12 @@ export default class MainMenuScene extends Phaser.Scene {
     logoutBtn.on('pointerout', () => logoutBtn.clearTint());
     logoutBtn.on('pointerdown', () => logout());
 
-    // ---- 右側：排行榜 + 更新日誌，各自用面板框起來 ----
+    // ---- 左右兩側：更新日誌（左）＋ 排行榜（右），各自用面板框起來、左右對稱 ----
     // 面板高度原本是寫死的數字，內容一多（例如排行榜真的湊滿 10 筆、更新日誌又加了
     // 新項目）就會超出面板框。改成先把內文文字排好量出實際高度，面板框跟著內容大小
-    // 自動撐開，兩塊面板再依序往下疊，之後不管內容再怎麼增減都不會再超框。
+    // 自動撐開。兩塊面板改成左右並排（而不是同一側上下疊），面板頂端對齊同一個高度。
     const rightX = w - 260;
+    const leftX = w - rightX; // 跟排行榜以畫面中心鏡射對稱
     const panelW = 480;
     const HEADER_H = 68; // 標題文字＋分隔線，到內文開始畫的距離
     const BOTTOM_PAD = 24; // 內文結束到面板下緣的留白
@@ -172,15 +168,16 @@ export default class MainMenuScene extends Phaser.Scene {
     const logBodyH = logMeasure.height;
     logMeasure.destroy();
     const logPanelH = HEADER_H + logBodyH + BOTTOM_PAD;
-    const logPanelY = lbPanelY + lbPanelH / 2 + 30 + logPanelH / 2;
+    const logPanelTop = 170; // 跟排行榜面板頂端對齊同一個高度（lbPanelTop），左右對稱
+    const logPanelY = logPanelTop + logPanelH / 2;
 
-    this.add.image(rightX, logPanelY, 'ui_panel').setDisplaySize(panelW, logPanelH);
-    this.add.rectangle(rightX, logPanelY, panelW - 6, logPanelH - 6).setStrokeStyle(3, 0xffe066, 0.7).setFillStyle(0, 0);
-    this.add.text(rightX, logPanelY - logPanelH / 2 + 28, '📜 更新日誌', textStyle({
+    this.add.image(leftX, logPanelY, 'ui_panel').setDisplaySize(panelW, logPanelH);
+    this.add.rectangle(leftX, logPanelY, panelW - 6, logPanelH - 6).setStrokeStyle(3, 0xffe066, 0.7).setFillStyle(0, 0);
+    this.add.text(leftX, logPanelY - logPanelH / 2 + 28, '📜 更新日誌', textStyle({
       fontSize: '26px', color: '#ffe066',
     })).setOrigin(0.5);
-    this.add.rectangle(rightX, logPanelY - logPanelH / 2 + 52, panelW - 60, 2, 0xffe066, 0.4);
-    this.add.text(rightX, logPanelY - logPanelH / 2 + HEADER_H, CHANGELOG.join('\n'), textStyle(logBodyStyle)).setOrigin(0.5, 0);
+    this.add.rectangle(leftX, logPanelY - logPanelH / 2 + 52, panelW - 60, 2, 0xffe066, 0.4);
+    this.add.text(leftX, logPanelY - logPanelH / 2 + HEADER_H, CHANGELOG.join('\n'), textStyle(logBodyStyle)).setOrigin(0.5, 0);
 
     this._unsubLeaderboard = subscribeLeaderboard((rows) => {
       if (!this.lbText || !this.lbText.active) return;
@@ -190,5 +187,11 @@ export default class MainMenuScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       if (this._unsubLeaderboard) this._unsubLeaderboard();
     });
+  }
+
+  _showToast(msg) {
+    const w = this.scale.width, h = this.scale.height;
+    const t = this.add.text(w / 2, h - 100, msg, textStyle({ fontSize: '26px', color: '#ffe066' })).setOrigin(0.5);
+    this.tweens.add({ targets: t, alpha: 0, duration: 1200, delay: 500, onComplete: () => t.destroy() });
   }
 }
