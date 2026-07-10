@@ -1203,7 +1203,7 @@ export default class GameScene extends Phaser.Scene {
       const baseScale = 150 / tex.width;
       this._dragonAuraBaseScale = baseScale;
       this.dragonAuraRing = this.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_dragon_aura')
-        .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.6).setScale(baseScale).setDepth(9997);
+        .setOrigin(0.5, 0.5).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.6).setScale(baseScale).setDepth(9997);
       this.tweens.add({
         targets: this.dragonAuraRing,
         scale: { from: baseScale * 0.85, to: baseScale * 1.2 },
