@@ -106,79 +106,10 @@ export default class TextureFactory {
   }
 
   // ---------- 敵人四種一般怪 ----------
-  generateEnemies() {
-    // 史萊姆
-    {
-      const { tex, ctx } = this._canvas('enemy_slime', 24, 24);
-      ctx.fillStyle = 'rgba(0,0,0,0.2)';
-      ctx.beginPath(); ctx.ellipse(12, 21, 7, 2.5, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#7be36a';
-      ctx.beginPath();
-      ctx.ellipse(12, 15, 9, 7, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.beginPath(); ctx.ellipse(9, 11, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#233';
-      ctx.beginPath(); ctx.arc(9, 15, 1.3, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(15, 15, 1.3, 0, Math.PI * 2); ctx.fill();
-      this._finish(tex);
-    }
-    // 哥布林
-    {
-      const { tex, ctx } = this._canvas('enemy_goblin', 26, 26);
-      ctx.fillStyle = 'rgba(0,0,0,0.2)';
-      ctx.beginPath(); ctx.ellipse(13, 23, 8, 2.5, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#8fbf4a';
-      TextureFactory.roundRect(ctx, 5, 8, 16, 15, 6); ctx.fill();
-      ctx.fillStyle = '#5f8a2f';
-      ctx.beginPath(); ctx.moveTo(4, 9); ctx.lineTo(0, 3); ctx.lineTo(8, 8); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(18, 9); ctx.lineTo(24, 3); ctx.lineTo(16, 8); ctx.fill();
-      ctx.fillStyle = '#ffe14d';
-      ctx.beginPath(); ctx.arc(10, 16, 1.4, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(16, 16, 1.4, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#c4c4c4';
-      ctx.fillRect(19, 14, 6, 2);
-      this._finish(tex);
-    }
-    // 骷髏
-    {
-      const { tex, ctx } = this._canvas('enemy_skeleton', 24, 26);
-      ctx.fillStyle = 'rgba(0,0,0,0.2)';
-      ctx.beginPath(); ctx.ellipse(12, 24, 7, 2.5, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#f2f2e6';
-      ctx.beginPath(); ctx.arc(12, 11, 7, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#1c1c1c';
-      ctx.beginPath(); ctx.arc(9, 10, 1.6, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(15, 10, 1.6, 0, Math.PI * 2); ctx.fill();
-      ctx.fillRect(9, 14, 6, 1.5);
-      ctx.fillStyle = '#e8e8da';
-      ctx.fillRect(7, 17, 10, 8);
-      ctx.strokeStyle = '#b9b9a8';
-      for (let i = 0; i < 3; i++) {
-        ctx.beginPath(); ctx.moveTo(7, 19 + i * 2); ctx.lineTo(17, 19 + i * 2); ctx.stroke();
-      }
-      this._finish(tex);
-    }
-    // 獸人
-    {
-      const { tex, ctx } = this._canvas('enemy_orc', 30, 30);
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.beginPath(); ctx.ellipse(15, 27, 10, 3, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#4f7d3a';
-      TextureFactory.roundRect(ctx, 6, 9, 18, 17, 6); ctx.fill();
-      ctx.fillStyle = '#eaeaea';
-      ctx.beginPath(); ctx.moveTo(9, 18); ctx.lineTo(7, 23); ctx.lineTo(11, 19); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(21, 18); ctx.lineTo(23, 23); ctx.lineTo(19, 19); ctx.fill();
-      ctx.fillStyle = '#ff3d3d';
-      ctx.beginPath(); ctx.arc(11, 16, 1.6, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(19, 16, 1.6, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#7a5230';
-      ctx.fillRect(24, 6, 3, 20);
-      ctx.fillStyle = '#999';
-      ctx.beginPath(); ctx.moveTo(24, 6); ctx.lineTo(30, 2); ctx.lineTo(30, 10); ctx.fill();
-      this._finish(tex);
-    }
-  }
+  // 2026-07-10：四種怪物已全部換成玩家提供的正式美術圖（山豬/哥布林/骷髏/半獸人，
+  // 見 assets/enemy_*.png），這裡不再需要程式產生頂替貼圖，改到 BootScene.preload()
+  // 用 load.image() 載入即可。
+  generateEnemies() {}
 
   // ---------- Boss (大型、威嚴、發光) ----------
   // Boss：黑藍色系西方龍。用 128x128 高解析度繪製（原本只有 64x64 太模糊），

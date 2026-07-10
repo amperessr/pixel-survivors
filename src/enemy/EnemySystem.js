@@ -26,7 +26,7 @@ export default class EnemySystem {
 
     // 診斷用：若怪物材質不存在（例如素材產生階段出錯），直接在主控台報錯，
     // 方便之後排查「怪物看不到」是不是材質根本沒生出來
-    const requiredTextures = ['enemy_slime', 'enemy_goblin', 'enemy_skeleton', 'enemy_orc'];
+    const requiredTextures = ['enemy_boar', 'enemy_goblin', 'enemy_skeleton', 'enemy_orc'];
     for (const key of requiredTextures) {
       if (!scene.textures.exists(key)) {
         console.error(`[EnemySystem] 材質 "${key}" 不存在！怪物將無法正常顯示，請檢查 TextureFactory 是否成功執行。`);
@@ -36,7 +36,7 @@ export default class EnemySystem {
     this.pool = new ObjectPool(
       scene,
       () => {
-        const s = scene.physics.add.sprite(-200, -200, 'enemy_slime');
+        const s = scene.physics.add.sprite(-200, -200, 'enemy_goblin');
         s.body.setCircle(10, 4, 4);
         return s;
       },
@@ -316,9 +316,9 @@ export default class EnemySystem {
   }
 
   _pickTypeForDifficulty() {
-    if (this.difficultyMinutes < 1) return 'slime';
-    if (this.difficultyMinutes < 3) return choice(['slime', 'goblin']);
-    if (this.difficultyMinutes < 6) return choice(['slime', 'goblin', 'skeleton']);
+    if (this.difficultyMinutes < 1) return 'goblin';
+    if (this.difficultyMinutes < 3) return choice(['goblin', 'boar']);
+    if (this.difficultyMinutes < 6) return choice(['goblin', 'boar', 'skeleton']);
     return choice(ENEMY_IDS);
   }
 

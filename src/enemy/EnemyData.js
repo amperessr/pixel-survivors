@@ -1,11 +1,15 @@
-// 五種基礎敵人數值設定 (Boss 另見 boss/Boss.js)
+// 四種基礎敵人數值設定 (Boss 另見 boss/Boss.js)
+// 2026-07-10 換上正式美術圖後重新分配定位：哥布林最弱／山豬速度最快／
+// 骷髏攻擊力高／半獸人血量最厚(用高HP表現「防禦高」，敵人沒有獨立防禦數值)。
+// 沿用原本四組已調好的數值(舊史萊姆→哥布林、舊哥布林→山豬、骷髏/獸人不變)，
+// 只是重新對應到新的角色定位，不重新發明數字。
 export const ENEMY_TYPES = {
-  slime: {
-    id: 'slime', texture: 'enemy_slime', name: '史萊姆',
-    hp: 18, dmg: 6, speed: 60, exp: 2, scale: 1,
-  },
   goblin: {
     id: 'goblin', texture: 'enemy_goblin', name: '哥布林',
+    hp: 18, dmg: 6, speed: 60, exp: 2, scale: 1,
+  },
+  boar: {
+    id: 'boar', texture: 'enemy_boar', name: '山豬',
     hp: 26, dmg: 8, speed: 85, exp: 3, scale: 1,
   },
   skeleton: {
@@ -13,7 +17,7 @@ export const ENEMY_TYPES = {
     hp: 22, dmg: 10, speed: 75, exp: 3, scale: 1,
   },
   orc: {
-    id: 'orc', texture: 'enemy_orc', name: '獸人',
+    id: 'orc', texture: 'enemy_orc', name: '半獸人',
     hp: 46, dmg: 14, speed: 55, exp: 6, scale: 1.15,
   },
 };

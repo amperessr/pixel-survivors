@@ -21,6 +21,12 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('fx_ice_pillar_evo', 'assets/fx_ice_pillar_evo.png');
     // 玩家角色改用正式美術圖（藍色史萊姆），取代原本程式產生的簡易貼圖
     this.load.image('player_balanced', 'assets/player_slime.png');
+    // 四種小怪改用正式美術圖（山豬/哥布林/骷髏/半獸人），取代原本 TextureFactory
+    // 程式產生的簡易貼圖（見 EnemyData.js 的角色定位分配）。
+    this.load.image('enemy_boar', 'assets/enemy_boar.png');
+    this.load.image('enemy_goblin', 'assets/enemy_goblin.png');
+    this.load.image('enemy_skeleton', 'assets/enemy_skeleton.png');
+    this.load.image('enemy_orc', 'assets/enemy_orc.png');
     // 四種戒指改用正式美術圖，取代原本 TextureFactory.generateRingIcons() 畫的
     // 簡易戒環圖示（已裁切去背、置中塞進 128x128 透明畫布，跟其他裝備圖示同規格）。
     this.load.image('ring_heal', 'assets/ring_heal.png');
