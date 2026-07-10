@@ -223,11 +223,11 @@ export default class GameScene extends Phaser.Scene {
     this.physics.world.resume();
     this.player.clearBankedInput();
 
-    const warnText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2,
-      '⚠ 汪汪大作戰開始！盡全力輸出傷害吧！ ⚠', textStyle({
-        fontSize: '44px', color: '#ffb84d', fontStyle: 'bold', stroke: '#000000', strokeThickness: 8,
-      })).setOrigin(0.5).setScrollFactor(0).setDepth(40000);
-    this.tweens.add({ targets: warnText, alpha: 0, duration: 700, delay: 1800, onComplete: () => warnText.destroy() });
+    // 開場文字改畫在 UIScene（見 showWoofWarStartBanner）——這裡是 GameScene，
+    // 鏡頭有 2.1 倍縮放，而且 UIScene 是後掛載的疊加層，永遠畫在 GameScene 上面，
+    // 直接畫在這裡會被 UIScene 右側的技能面板擋住一部分，見畫面最上方那排。
+    const ui = this.scene.get('UIScene');
+    if (ui && ui.showWoofWarStartBanner) ui.showWoofWarStartBanner();
   }
 
   // 大招/衝撞等招式傷害不足以致命，但仍留一個安全網：血量真的歸零時原地滿血復活

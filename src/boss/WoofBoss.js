@@ -22,16 +22,26 @@ const SKILLS = {
   // 執行期間每 tickMs 判定一次傷害，光束角度會持續朝玩家目前位置轉向，但轉速
   // 有上限（turnDegPerSec，每秒最多轉幾度）——玩家平移閃避還是躲得掉，不是
   // 無腦鎖死的必中光束，只是不能傻站原地不動。
-  laser: { castMs: 3000, cd: 8000, beamMs: 5000, dmg: 100, tickMs: 500, turnDegPerSec: 20 },
+  // 2026-07-11 再調整：光束視覺＋命中判定半徑一起放大（HIT_RADIUS 是視覺寬度
+  // 換算出來的，兩者維持同比例，不然畫面看起來很粗、判定範圍卻沒跟著變寬）。
+  laser: { castMs: 3000, cd: 8000, beamMs: 5000, dmg: 100, tickMs: 500, turnDegPerSec: 20, hitRadius: 100 },
   shield: { castMs: 0, cd: 15000, durationMs: 5000 },
   // 隕石：警示圈先出現、停留 warnMs 再真正落下（跟舊版「警示跟落下同時播、
   // 260ms 就砸下來」比，反應時間拉長成看得到、躲得掉），落點間隔也拉開到
-  // 跟 warnMs+fallMs 差不多長，一顆一顆分明，不會疊成連續閃爍。
-  meteor: { castMs: 0, cd: 20000, durationMs: 10000, tickMs: 900, dmg: 600, aoe: 70, warnMs: 700, fallMs: 180 },
+  // 跟 warnMs+fallMs 差不多長，一顆一顆分明，不會疊成連續閃爍。aoe 同時是視覺
+  // 警示圈半徑跟實際命中判定範圍（同一個數字），2026-07-11 再放大一倍。
+  meteor: { castMs: 0, cd: 20000, durationMs: 10000, tickMs: 900, dmg: 600, aoe: 140, warnMs: 700, fallMs: 180 },
 };
-const SKILL_LABELS = {
-  charge: '⚠ 汪汪衝撞！', laser: '⚠ 汪汪雷射！', shield: '⚠ 汪汪護盾！', meteor: '⚠ 汪汪大災變！降下隕石！',
+// 放技能時汪汪會喊的台詞（跟安培談好的規格），取代原本純功能性的「⚠ 汪汪衝撞！」
+// 警示字——本身就有「宣告技能」的功能，不用兩套文字疊在一起。
+const SKILL_VOICE_LINES = {
+  meteor: '我不止霸凌你們我還霸凌老闆!',
+  charge: '媽的撞死你!',
+  laser: '跩跩你腳本寫完沒!!',
+  shield: '我覺得我現在強的可怕',
 };
+const VOICE_LINE_DISPLAY_MS = 1800; // 台詞固定顯示這麼久，跟前搖時間脫鉤——
+// 瞬發技（護盾/隕石）前搖是 0ms，不脫鉤的話台詞會跟舊版警示字一樣，根本來不及看到就被清掉了。
 
 export default class WoofBoss {
   constructor(scene, player, x, y) {
@@ -53,7 +63,7 @@ export default class WoofBoss {
     this.sprite.body.setCircle(bodyRadius, texW / 2 - bodyRadius, texH * 0.58 - bodyRadius);
     this.sprite.setDepth(y);
 
-    this.phase = 'chase'; // chase | telegraph | charge | laserBeam | meteorActive
+    this.phase = 'chase'; // chase | telegraph | charge | laserBeam | meteorActive | shieldActive（除了 chase／charge 的衝刺移動，其餘施法中都不會移動）
     this.shieldActive = false;
     this.nextReadyAt = { charge: 0, laser: 0, shield: 0, meteor: 0 };
     this._chooseAt = scene.time.now + 1200;
@@ -95,6 +105,10 @@ export default class WoofBoss {
       this.player.takeDamage(14, time);
     }
 
+    // 台詞跟著汪汪走，生命週期跟前搖/招式無關（見 _showVoiceLine），所以每幀都要
+    // 重新定位，不能只放在 telegraph 分支裡更新。
+    if (this._voiceLineLabel) this._voiceLineLabel.setPosition(bx, by - 150);
+
     this.sprite.setFlipX(px < bx);
     this.sprite.setDepth(by);
 
@@ -130,12 +144,7 @@ export default class WoofBoss {
     this._lockedAngle = angleTo(bx, by, px, py);
     this._lockedTarget = { x: px, y: py };
 
-    const label = this.scene.add.text(bx, by - 150, SKILL_LABELS[kind], textStyle({
-      fontSize: '30px', color: '#ff4444', fontStyle: 'bold',
-    })).setOrigin(0.5).setDepth(20010);
-    this.scene.tweens.add({ targets: label, scale: 1.18, duration: 260, yoyo: true, repeat: -1 });
-    this._telegraphLabel = label;
-    this._telegraphFx.push(label);
+    this._showVoiceLine(kind);
 
     if (kind === 'charge') {
       this._telegraphFx.push(this._telegraphLine(bx, by, this._lockedAngle, 700, 0xff8a3d));
@@ -161,11 +170,29 @@ export default class WoofBoss {
   _clearTelegraphFx() {
     (this._telegraphFx || []).forEach((fx) => { this.scene.tweens.killTweensOf(fx); fx.destroy(); });
     this._telegraphFx = [];
-    this._telegraphLabel = null;
+  }
+
+  // 台詞泡泡：跟前搖時間脫鉤，固定顯示 VOICE_LINE_DISPLAY_MS 就自己收掉（見
+  // update() 裡每幀重新定位），不進 _telegraphFx，瞬發技（護盾/隕石）呼叫
+  // _clearTelegraphFx() 時不會被連帶清掉、來不及被玩家看到。
+  _showVoiceLine(kind) {
+    if (this._voiceLineLabel) { this._voiceLineLabel.destroy(); this._voiceLineLabel = null; }
+    const bx = this.sprite.x, by = this.sprite.y;
+    const label = this.scene.add.text(bx, by - 150, `汪汪：${SKILL_VOICE_LINES[kind]}`, textStyle({
+      fontSize: '28px', color: '#ff4444', fontStyle: 'bold',
+    })).setOrigin(0.5).setDepth(20010);
+    this.scene.tweens.add({ targets: label, scale: 1.15, duration: 260, yoyo: true, repeat: -1 });
+    this._voiceLineLabel = label;
+    this.scene.time.delayedCall(VOICE_LINE_DISPLAY_MS, () => {
+      if (this._voiceLineLabel === label) {
+        this.scene.tweens.killTweensOf(label);
+        label.destroy();
+        this._voiceLineLabel = null;
+      }
+    });
   }
 
   _updateTelegraph(time) {
-    if (this._telegraphLabel) this._telegraphLabel.setPosition(this.sprite.x, this.sprite.y - 150);
     if (time < this._telegraphEndAt) return;
     this._clearTelegraphFx();
     if (this._kind === 'charge') this._executeCharge(time);
@@ -218,11 +245,13 @@ export default class WoofBoss {
     audioManager.bossRoar();
     this.scene.spawnGlowRing(bx, by, 'fx_bossdeath', 0xff3d3d, 0.3, 2.2, 300);
 
+    // 2026-07-11 放大很多：外層光暈 3.2→8、核心 1.3→3.5，跟命中判定
+    // def.hitRadius 保持同比例（見 _updateLaserBeam），視覺跟實際範圍對得上。
     this._laserBeam = this.scene.add.image(bx, by, 'fx_bolt').setOrigin(0, 0.5).setDepth(19998)
-      .setRotation(this._laserAngle).setScale(this._laserLength / 64, 3.2).setTint(0xff3d3d).setAlpha(0.85)
+      .setRotation(this._laserAngle).setScale(this._laserLength / 64, 8).setTint(0xff3d3d).setAlpha(0.85)
       .setBlendMode(Phaser.BlendModes.ADD);
     this._laserBeamCore = this.scene.add.image(bx, by, 'fx_bolt').setOrigin(0, 0.5).setDepth(19999)
-      .setRotation(this._laserAngle).setScale(this._laserLength / 64, 1.3).setTint(0xffffff).setAlpha(0.7)
+      .setRotation(this._laserAngle).setScale(this._laserLength / 64, 3.5).setTint(0xffffff).setAlpha(0.7)
       .setBlendMode(Phaser.BlendModes.ADD);
   }
 
@@ -245,7 +274,7 @@ export default class WoofBoss {
       const endX = bx + Math.cos(this._laserAngle) * this._laserLength;
       const endY = by + Math.sin(this._laserAngle) * this._laserLength;
       const d = this._distToSegment(this.player.sprite.x, this.player.sprite.y, bx, by, endX, endY);
-      if (d < 40) {
+      if (d < def.hitRadius) {
         this.player.takeDamage(def.dmg, time);
         this.scene.spawnBurstFx(this.player.sprite.x, this.player.sprite.y, 0xff3d3d, 6, 'fx_crit', 100);
       }
@@ -274,10 +303,12 @@ export default class WoofBoss {
   // 招式三：防護罩 —— 5 秒無敵（takeDamage 直接無視），身上疊一層金色透明光罩提示玩家
   // 現在打不進去，CD 從護盾結束那一刻開始算 15 秒。
   _executeShield(time) {
-    this.phase = 'chase';
+    // 施法（護盾持續期間）汪汪不能移動——'shieldActive' 不是 update() 會處理
+    // 移動邏輯的 phase，效果等同定住，時間到才回 chase。
+    this.phase = 'shieldActive';
+    this.sprite.body.setVelocity(0, 0);
     this.shieldActive = true;
     const def = SKILLS.shield;
-    this._chooseAt = time + 400;
 
     this.shieldBubble = this.scene.add.image(this.sprite.x, this.sprite.y, 'fx_bossdeath')
       .setTint(0xffd700).setAlpha(0.5).setScale(3.4).setDepth(this.sprite.depth + 1)
@@ -288,17 +319,20 @@ export default class WoofBoss {
     this.scene.time.delayedCall(def.durationMs, () => {
       this.shieldActive = false;
       if (this.shieldBubble) { this.shieldBubble.destroy(); this.shieldBubble = null; }
+      this.phase = 'chase';
       this.nextReadyAt.shield = this.scene.time.now + def.cd;
+      this._chooseAt = this.scene.time.now + 400;
     });
   }
 
   // 招式四（大招）：隕石 —— 10 秒內每 tickMs 在玩家附近降下一顆隕石，落點會追著
   // 玩家目前位置（帶一點隨機散佈）。tickMs 抓得跟「警示出現到砸落」的總時間差不多，
-  // 一顆一顆分明地逼玩家持續移動閃避，不會疊成連續閃爍。
+  // 一顆一顆分明地逼玩家持續移動閃避，不會疊成連續閃爍。施法（大招整個 10 秒）
+  // 期間汪汪本體不能移動——'meteorActive' 不是 update() 會處理移動邏輯的 phase。
   _executeMeteor(time) {
-    this.phase = 'chase'; // 大招期間魔王本體維持一般移動，隕石獨立運作，不佔用招式判斷
+    this.phase = 'meteorActive';
+    this.sprite.body.setVelocity(0, 0);
     const def = SKILLS.meteor;
-    this._chooseAt = time + 400;
     this.scene.cameras.main.flash(260, 255, 120, 60);
     audioManager.bossRoar();
 
@@ -315,7 +349,9 @@ export default class WoofBoss {
     });
 
     this.scene.time.delayedCall(def.durationMs, () => {
+      this.phase = 'chase';
       this.nextReadyAt.meteor = this.scene.time.now + def.cd;
+      this._chooseAt = this.scene.time.now + 400;
     });
   }
 
@@ -334,8 +370,9 @@ export default class WoofBoss {
     this.scene.time.delayedCall(warnMs, () => {
       warn.destroy();
       if (!this.alive) return;
+      // 2026-07-11 放大很多：2.2→4.2，跟 aoe 一起放大，視覺跟實際命中範圍成比例
       const meteor = this.scene.add.image(x, y - 420, 'proj_fireball').setDepth(30003)
-        .setScale(2.2).setTint(0xff6a2d).setRotation(0.4);
+        .setScale(4.2).setTint(0xff6a2d).setRotation(0.4);
       this.scene.tweens.add({
         targets: meteor, y, duration: fallMs, ease: 'Cubic.easeIn',
         onComplete: () => {

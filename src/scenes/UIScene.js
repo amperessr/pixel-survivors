@@ -525,6 +525,25 @@ export default class UIScene extends Phaser.Scene {
     });
   }
 
+  // 汪汪大作戰開場文字：由 GameScene._beginWoofWarBattle() 呼叫。畫在 UIScene
+  // 而不是 GameScene，是因為 GameScene 鏡頭有 2.1 倍縮放、而且是先掛載的底層，
+  // UIScene 這個無縮放疊加層永遠畫在它上面——直接畫在 GameScene 裡會被 UIScene
+  // 右側的技能面板擋住一部分。固定貼在畫面最上緣（不是螢幕正中央），深度給到
+  // 60000，比 UIScene 自己其他任何元素都高，保證不會被任何東西擋住。
+  showWoofWarStartBanner() {
+    const w = this.scale.width;
+    const y = 18;
+    const text = this.add.text(w / 2, y, '⚠ 汪汪大作戰開始！盡全力輸出傷害吧！ ⚠', textStyle({
+      fontSize: '36px', color: '#ffb84d', fontStyle: 'bold', stroke: '#000000', strokeThickness: 7,
+    })).setOrigin(0.5, 0).setScrollFactor(0).setDepth(60000);
+    const bg = this.add.rectangle(w / 2, y + text.height / 2, text.width + 70, text.height + 20, 0x0a0e16, 0.72)
+      .setScrollFactor(0).setDepth(59999);
+    this.tweens.add({
+      targets: [text, bg], alpha: 0, duration: 700, delay: 1800,
+      onComplete: () => { text.destroy(); bg.destroy(); },
+    });
+  }
+
   _buildWoofWarResultOverlay() {
     const w = this.scale.width, h = this.scale.height;
     const overlay = this.add.container(0, 0).setScrollFactor(0).setDepth(50200).setVisible(false);
