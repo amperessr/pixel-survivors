@@ -3,6 +3,11 @@ import { subscribeLeaderboard } from '../firebase/firebase.js';
 import { textStyle } from '../utils/TextStyle.js';
 import { MAIL_DATA } from '../mail/MailData.js';
 
+// 汪汪大作戰目前是封測階段，只有名單內的玩家點「活動關卡」才能真的進去，
+// 其餘玩家一律看到「尚未開放」提示——活動正式開放時把這個名單拿掉即可，
+// 不用動到其他任何程式碼。
+const WOOF_WAR_BETA_TESTERS = ['安培'];
+
 // 主選單：初始角色固定為「平衡型」，不再需要選角，
 // 改成「背包／商店／開始遊戲」三個入口（GameScene 沒帶 characterId 時預設就是 balanced）。
 export default class MainMenuScene extends Phaser.Scene {
@@ -62,12 +67,18 @@ export default class MainMenuScene extends Phaser.Scene {
     });
 
     // ---- 開始遊戲：活動關卡／第一關，維持原本的直向大按鈕堆疊 ----
-    // 「當前關卡」（從存檔點繼續）已移除，原本的位置改放「活動關卡」入口卡位
-    // （內容還沒做，點下去先提示尚未開放，見 _showToast）。
+    // 「當前關卡」（從存檔點繼續）已移除，原本的位置改放「活動關卡」入口，
+    // 目前活動是「汪汪大作戰」限時挑戰（見 GameScene 的 woofWarMode）。
     const items = [
       {
-        label: '活動關卡',
-        onPick: () => this._showToast('活動關卡尚未開放，敬請期待！'),
+        label: '活動關卡', stageLabel: '汪汪大作戰',
+        onPick: () => {
+          if (WOOF_WAR_BETA_TESTERS.includes(getPlayerName())) {
+            this.scene.start('GameScene', { woofWarMode: true });
+          } else {
+            this._showToast('活動關卡尚未開放，敬請期待！');
+          }
+        },
       },
       {
         label: '第一關', stageLabel: `第 1 關`,

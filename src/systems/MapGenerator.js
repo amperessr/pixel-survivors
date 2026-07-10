@@ -13,8 +13,11 @@ const FLOOR_DEPTH = -1e9;
 
 // 無限生成地圖器：以 chunk 為單位動態載入/卸載地板與裝飾物
 export default class MapGenerator {
-  constructor(scene) {
+  // opts.forest：汪汪大作戰限時挑戰場景用，把樹的生成機率大幅拉高（原本樹只有
+  // ~3.5% 機率，太稀疏配不上「很多樹的森林」的活動場景需求），石頭/花維持原本機率不變。
+  constructor(scene, opts = {}) {
     this.scene = scene;
+    this.forest = !!opts.forest;
     this.loadedChunks = new Map(); // key: "cx,cy" -> {tiles:[], decor:[]}
     this.floorGroup = scene.add.group();
     this.decorGroup = scene.add.group();
@@ -67,7 +70,8 @@ export default class MapGenerator {
         // 裝飾物（樹/石頭/花）機率放置，避開河流
         if (tileKey === 'tile_grass') {
           const dn = hashNoise(wx, wy, 4242);
-          if (dn > 0.965) {
+          const treeThreshold = this.forest ? 0.72 : 0.965; // 森林場景樹木機率大幅拉高
+          if (dn > treeThreshold) {
             const tree = this.scene.physics.add.staticImage(px, py - 6, 'obj_tree').setDepth(py);
             tree.body.setSize(16, 12).setOffset(-8, 24);
             decor.push(tree);

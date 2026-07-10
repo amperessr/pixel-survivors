@@ -87,6 +87,57 @@ export function subscribeLeaderboard(callback) {
   }
 }
 
+/**
+ * 汪汪大作戰（限時挑戰活動）專用排行榜：跟一般排行榜的 leaderboardBest 是完全
+ * 獨立的節點，存的是「對汪汪造成的實際減血量」（單次最高），規則跟 submitScore
+ * 一樣——每個玩家固定一筆最高紀錄，新紀錄比較高才覆蓋。
+ * @param {{name:string, damage:number, date:string}} entry
+ */
+export async function submitWoofWarScore(entry) {
+  try {
+    ensureInit();
+    const bestRef = ref(db, `woofWarLeaderboardBest/${sanitizeNameKey(entry.name || "???")}`);
+    const snapshot = await get(bestRef);
+    if (!snapshot.exists() || (entry.damage || 0) > (snapshot.val().damage || 0)) {
+      await set(bestRef, entry);
+    }
+    return true;
+  } catch (err) {
+    console.warn("[Firebase] 上傳汪汪大作戰分數失敗（可能離線或網路受限）：", err.message);
+    return false;
+  }
+}
+
+/**
+ * 訂閱汪汪大作戰排行榜 TOP10，依傷害排序，即時同步。
+ * @param {(list: Array) => void} callback
+ * @returns {Function} unsubscribe
+ */
+export function subscribeWoofWarLeaderboard(callback) {
+  try {
+    ensureInit();
+    const topQuery = query(ref(db, "woofWarLeaderboardBest"), orderByChild("damage"), limitToLast(10));
+    const unsubscribe = onValue(
+      topQuery,
+      (snapshot) => {
+        const rows = [];
+        snapshot.forEach((child) => { rows.push(child.val()); });
+        rows.sort((a, b) => (b.damage || 0) - (a.damage || 0));
+        callback(rows);
+      },
+      (err) => {
+        console.warn("[Firebase] 讀取汪汪大作戰排行榜失敗：", err.message);
+        callback([]);
+      }
+    );
+    return unsubscribe;
+  } catch (err) {
+    console.warn("[Firebase] 初始化失敗：", err.message);
+    callback([]);
+    return () => {};
+  }
+}
+
 // ---------- 帳號系統：用名字＋密碼把存檔（金幣/裝備/背包/關卡進度）同步到雲端， ----------
 // ---------- 讓同一個名字在不同電腦登入都能讀到最新進度。 ----------
 

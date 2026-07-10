@@ -76,6 +76,9 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('weapon_fireball_frost_lv5', 'assets/weapon_fireball_frost_lv5.png');
     this.load.image('proj_electroknife', 'assets/proj_electroknife.png');
     this.load.image('fx_bloodstorm', 'assets/fx_bloodstorm.png');
+
+    // 汪汪大作戰（限時挑戰活動）專用魔王美術圖，見 src/boss/WoofBoss.js
+    this.load.image('boss_woof', 'assets/boss_woof.png');
   }
 
   create() {

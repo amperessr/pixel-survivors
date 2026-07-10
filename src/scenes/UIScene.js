@@ -1,9 +1,10 @@
 import { WEAPON_DATA, WEAPON_EVOLUTIONS, WEAPON_FUSIONS } from '../weapons/WeaponData.js';
 import { EQUIP_SLOTS, RING_SLOTS, EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
 import { PASSIVE_IDS, PASSIVE_DATA } from '../skills/PassiveData.js';
-import { getEquipped, isLevelUpAutoMode, setLevelUpAutoMode } from '../managers/SaveManager.js';
+import { getEquipped, isLevelUpAutoMode, setLevelUpAutoMode, getPlayerName } from '../managers/SaveManager.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { textStyle } from '../utils/TextStyle.js';
+import { subscribeWoofWarLeaderboard } from '../firebase/firebase.js';
 
 // 底部數值狀態列的六個項目：圖示 + 中文標籤 + 數值，參考英雄聯盟角色面板
 // 「圖示搭配文字」的呈現方式，取代原本一整串英文縮寫（ATK/DEF/SPD...）的純文字。
@@ -320,14 +321,23 @@ export default class UIScene extends Phaser.Scene {
     const xpRatio = Math.max(0, Math.min(1, p.exp / p.expToNext));
     this.xpFill.setDisplaySize(278 * xpRatio, 19);
 
-    const stage = this.gs.getStage();
-    const isBossStage = this.gs.isBossStage(stage);
-    // 魔王關顯示「打死魔王才能過關」的提示；一般關顯示擊殺進度（目前/500），
-    // 讓玩家看得出關卡是靠擊殺數推進的，不用自己去猜門檻在哪
-    this.stageText.setText(isBossStage
-      ? `💀 第 ${stage} 關（擊敗魔王）`
-      : `第 ${stage} 關（${this.gs.stageKillCount}/500）`);
-    this.stageText.setColor(isBossStage ? '#ff4d4d' : '#ffffff');
+    if (this.gs.woofWarMode) {
+      // 汪汪大作戰：正上方改顯示倒數計時，不顯示一般模式的關卡進度
+      const remainMs = Math.max(0, (this.gs._woofWarEndAt || 0) - this.gs.time.now);
+      const mm = String(Math.floor(remainMs / 60000)).padStart(2, '0');
+      const ss = String(Math.floor((remainMs % 60000) / 1000)).padStart(2, '0');
+      this.stageText.setText(`⏱ ${mm}:${ss}`);
+      this.stageText.setColor(remainMs <= 10000 ? '#ff4d4d' : '#ffb84d');
+    } else {
+      const stage = this.gs.getStage();
+      const isBossStage = this.gs.isBossStage(stage);
+      // 魔王關顯示「打死魔王才能過關」的提示；一般關顯示擊殺進度（目前/500），
+      // 讓玩家看得出關卡是靠擊殺數推進的，不用自己去猜門檻在哪
+      this.stageText.setText(isBossStage
+        ? `💀 第 ${stage} 關（擊敗魔王）`
+        : `第 ${stage} 關（${this.gs.stageKillCount}/500）`);
+      this.stageText.setColor(isBossStage ? '#ff4d4d' : '#ffffff');
+    }
 
     // 魔王血條：魔王在場才顯示，同步名稱、血量比例與數字
     const boss = this.gs.boss;
@@ -343,11 +353,18 @@ export default class UIScene extends Phaser.Scene {
       this.bossHpText.setText(`${Math.ceil(Math.max(0, boss.hp))} / ${Math.round(boss.maxHp)}`);
     }
 
-    this.killText.setText(`💀 擊殺 ${this.gs.killCount}`);
-    const elapsed = this.gs.getElapsedSeconds();
-    const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
-    const ss = String(elapsed % 60).padStart(2, '0');
-    this.timeText.setText(`⏱ ${mm}:${ss}`);
+    if (this.gs.woofWarMode) {
+      // 右上角改顯示「對汪汪造成的總傷害」，取代擊殺數／存活時間（活動沒有小怪可殺）
+      const dmg = Math.round((boss && boss.totalDamageTaken) || 0);
+      this.killText.setText(`⚔ 造成傷害 ${dmg}`);
+      this.timeText.setText('');
+    } else {
+      this.killText.setText(`💀 擊殺 ${this.gs.killCount}`);
+      const elapsed = this.gs.getElapsedSeconds();
+      const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const ss = String(elapsed % 60).padStart(2, '0');
+      this.timeText.setText(`⏱ ${mm}:${ss}`);
+    }
     this.fpsText.setText(`FPS ${Math.round(this.game.loop.actualFps)}`);
 
     STAT_DEFS.forEach((def) => {
@@ -454,5 +471,67 @@ export default class UIScene extends Phaser.Scene {
       })).setOrigin(0, 0.5);
       this.weaponPanel.add([icon, label]);
     });
+  }
+
+  // ================= 汪汪大作戰：結果視窗 =================
+  // 時間到（或汪汪意外被打死）由 GameScene._endWoofWarChallenge() 呼叫。規格明確
+  // 要求「不要顯示獎勵預覽」，只顯示本次傷害＋目前排名；排名讀 TOP10 排行榜比對
+  // 玩家名字，找不到（沒進前10）就顯示「10名外」，不特別去查真實名次。
+  showWoofWarResult(totalDamage) {
+    if (!this.woofWarResultOverlay) this._buildWoofWarResultOverlay();
+    this.woofWarDamageText.setText(`本次傷害：${totalDamage}`);
+    this.woofWarRankText.setText('排名讀取中...');
+    this.woofWarResultOverlay.setVisible(true);
+
+    const name = getPlayerName() || '冒險者';
+    const unsub = subscribeWoofWarLeaderboard((rows) => {
+      const idx = rows.findIndex((r) => r.name === name);
+      this.woofWarRankText.setText(idx >= 0 ? `目前排名：第 ${idx + 1} 名` : '目前排名：10 名外');
+      if (unsub) unsub();
+    });
+  }
+
+  _buildWoofWarResultOverlay() {
+    const w = this.scale.width, h = this.scale.height;
+    const overlay = this.add.container(0, 0).setScrollFactor(0).setDepth(50200).setVisible(false);
+    const dim = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.75).setInteractive();
+    const panelW = 560, panelH = 340;
+    const panel = this.add.image(w / 2, h / 2, 'ui_panel').setDisplaySize(panelW, panelH);
+    const border = this.add.rectangle(w / 2, h / 2, panelW - 6, panelH - 6).setStrokeStyle(3, 0xffb84d, 0.8).setFillStyle(0, 0);
+    const title = this.add.text(w / 2, h / 2 - panelH / 2 + 46, '⚔ 汪汪大作戰結束 ⚔', textStyle({
+      fontSize: '32px', color: '#ffb84d', fontStyle: 'bold',
+    })).setOrigin(0.5);
+    this.woofWarDamageText = this.add.text(w / 2, h / 2 - 30, '', textStyle({
+      fontSize: '30px', color: '#ffffff',
+    })).setOrigin(0.5);
+    this.woofWarRankText = this.add.text(w / 2, h / 2 + 20, '', textStyle({
+      fontSize: '26px', color: '#6fd3ff',
+    })).setOrigin(0.5);
+
+    const retryBtn = this.add.image(w / 2 - 120, h / 2 + panelH / 2 - 50, 'ui_button_parchment')
+      .setDisplaySize(200, 62).setInteractive({ useHandCursor: true });
+    const retryText = this.add.text(w / 2 - 120, h / 2 + panelH / 2 - 50, '再次挑戰', textStyle({
+      fontSize: '24px', color: '#3a2413',
+    })).setOrigin(0.5);
+    const exitBtn = this.add.image(w / 2 + 120, h / 2 + panelH / 2 - 50, 'ui_button_parchment')
+      .setDisplaySize(200, 62).setInteractive({ useHandCursor: true });
+    const exitText = this.add.text(w / 2 + 120, h / 2 + panelH / 2 - 50, '返回主選單', textStyle({
+      fontSize: '24px', color: '#3a2413',
+    })).setOrigin(0.5);
+    retryBtn.on('pointerover', () => retryBtn.setTint(0xfff3d0));
+    retryBtn.on('pointerout', () => retryBtn.clearTint());
+    retryBtn.on('pointerdown', () => {
+      this.woofWarResultOverlay.setVisible(false);
+      this.gs.restartWoofWarChallenge();
+    });
+    exitBtn.on('pointerover', () => exitBtn.setTint(0xfff3d0));
+    exitBtn.on('pointerout', () => exitBtn.clearTint());
+    exitBtn.on('pointerdown', () => {
+      this.scene.stop('GameScene');
+      this.scene.start('MainMenuScene');
+    });
+
+    overlay.add([dim, panel, border, title, this.woofWarDamageText, this.woofWarRankText, retryBtn, retryText, exitBtn, exitText]);
+    this.woofWarResultOverlay = overlay;
   }
 }

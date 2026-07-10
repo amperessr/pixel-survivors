@@ -5,14 +5,15 @@ import HealthPackSystem from '../systems/HealthPackSystem.js';
 import MagnetSystem from '../systems/MagnetSystem.js';
 import WeaponSystem from '../weapons/WeaponSystem.js';
 import Boss from '../boss/Boss.js';
+import WoofBoss from '../boss/WoofBoss.js';
 import { WEAPON_KNOCKBACK } from '../weapons/WeaponData.js';
-import { PASSIVE_IDS } from '../skills/PassiveData.js';
 import { RELICS } from '../relics/RelicData.js';
 import { EQUIPMENT_DATA, getLegendarySeriesSlug } from '../equipment/EquipmentData.js';
-import { getEquipped, addGold, setBestScore, setCheckpointStage, getStatBonus } from '../managers/SaveManager.js';
+import { getEquipped, addGold, setBestScore, setCheckpointStage, getStatBonus, getPlayerName } from '../managers/SaveManager.js';
 import { dist } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { textStyle } from '../utils/TextStyle.js';
+import { submitWoofWarScore } from '../firebase/firebase.js';
 
 // 關卡推進規則：一般關（非 5 的倍數）擊殺滿 KILLS_PER_STAGE 隻小怪就進到下一關；
 // 魔王關（第 5、10、15...關）改成打死魔王才會進到下一關，見 registerKill()/onBossDefeated()。
@@ -36,6 +37,10 @@ export default class GameScene extends Phaser.Scene {
     // 除錯用：暫時印出主選單實際傳進來的 startStage，方便排查「點第一關卻從別的關卡開始」的問題，
     // 之後確認沒問題了可以整段拿掉。
     console.log(`[STAGE] init() 收到 data.startStage=${data.startStage}　最終 this.startStage=${this.startStage}`);
+    // 汪汪大作戰（限時挑戰活動）：同一個 GameScene 直接重用，用這個旗標切換一整套
+    // 不同的開局流程（森林場景、跳過選技能、直接生成汪汪、3分鐘倒數、傷害統計），
+    // 而不是另外整套複製一份場景——武器對 Boss 的命中/傷害判定完全共用同一套邏輯。
+    this.woofWarMode = !!data.woofWarMode;
   }
 
   create() {
@@ -49,8 +54,12 @@ export default class GameScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player.sprite, true, 0.12, 0.12);
     this.cameras.main.setZoom(2.1); // 鏡頭拉近，讓角色與怪物看起來更清楚、不會太小太遠
 
-    this.map = new MapGenerator(this);
+    this.map = new MapGenerator(this, { forest: this.woofWarMode });
     this.enemySystem = new EnemySystem(this, this.player);
+    // 汪汪大作戰沒有一般小怪，直接把出怪間隔設成無限大關掉自動出怪——
+    // EnemySystem 本身還是要正常建立，武器系統的 queryNear/findNearest 等呼叫
+    // 才不會因為找不到物件而出錯，只是池子裡永遠是空的。
+    if (this.woofWarMode) this.enemySystem.spawnInterval = Infinity;
     this.healthPackSystem = new HealthPackSystem(this, this.player);
     this.magnetSystem = new MagnetSystem(this, this.player);
     this.weaponSystem = new WeaponSystem(this, this.player, this.enemySystem);
@@ -164,6 +173,8 @@ export default class GameScene extends Phaser.Scene {
 
     // 開局不再固定送火球術，改成跳出選單讓玩家自己選一個起始技能——
     // 遊戲維持暫停狀態，直到玩家選好為止（見 resumeFromStartSkillChoice()）。
+    // 汪汪大作戰也走同一套流程（見 resumeFromStartSkillChoice 的分支），不特別跳過，
+    // 選完起始技能後接著手動選完 29 級升級卡，才會真的開始戰鬥。
     // `_awaitingStartSkill` 這面旗標是為了擋掉這段期間按 ESC：如果沒擋，_togglePause()
     // 會把 paused 誤解成一般 ESC 暫停而提早恢復運作，選單卻還蓋在畫面上、武器也還沒選。
     this._awaitingStartSkill = true;
@@ -172,10 +183,97 @@ export default class GameScene extends Phaser.Scene {
     this.scene.launch('StartSkillScene', { gameScene: this });
   }
 
+  // ================= 汪汪大作戰（限時挑戰活動） =================
+  // 玩家保留自己的裝備/戒指（_applyEquipmentBonuses 已經套用過），選完起始技能後
+  // 一口氣灌 29 級的經驗值（1級練到30級），但不是直接套用數值——照樣一張一張跳出
+  // LevelUpScene 讓玩家手動選完全部 29 張卡（跟一般玩法選卡邏輯完全共用，見
+  // resumeFromLevelUp 的 _woofWarBoostPending 分支），選完才會真的生成汪汪、開始倒數。
+  _beginWoofWarLevelUps() {
+    const totalExp = this._woofWarExpFor29Levels();
+    const leveledUp = this.player.gainExp(totalExp);
+    audioManager.levelUp();
+    this.spawnLevelUpFx(this.player.sprite.x, this.player.sprite.y);
+    this._pendingLevelUps = Math.max(0, leveledUp.length - 1);
+    this._woofWarBoostPending = true;
+    this._openLevelUp();
+  }
+
+  // 算出「從目前等級的 expToNext 開始，連續 29 次升級」總共需要多少經驗值——
+  // 跟 Player.gainExp() 內部 while 迴圈用同一套公式現算一次，確保灌下去的經驗值
+  // 剛好卡在第 29 次升級的門檻上（多一點會意外跳到 31 級，少一點會卡在 29 級選不完）。
+  _woofWarExpFor29Levels() {
+    let expToNext = this.player.expToNext;
+    let total = 0;
+    for (let i = 0; i < 29; i++) {
+      total += expToNext;
+      expToNext = Math.round(expToNext * 1.25 + 5);
+    }
+    return total;
+  }
+
+  // 29 張升級卡選完之後才真的開始戰鬥：生成汪汪、開始 3 分鐘倒數。
+  _beginWoofWarBattle() {
+    const px = this.player.sprite.x, py = this.player.sprite.y;
+    this.boss = new WoofBoss(this, this.player, px + 420, py);
+
+    this._woofWarEndAt = this.time.now + 3 * 60 * 1000;
+    this._woofWarEnded = false;
+
+    this.paused = false;
+    this.physics.world.resume();
+    this.player.clearBankedInput();
+
+    const warnText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2,
+      '⚠ 汪汪大作戰開始！盡全力輸出傷害吧！ ⚠', textStyle({
+        fontSize: '44px', color: '#ffb84d', fontStyle: 'bold', stroke: '#000000', strokeThickness: 8,
+      })).setOrigin(0.5).setScrollFactor(0).setDepth(40000);
+    this.tweens.add({ targets: warnText, alpha: 0, duration: 700, delay: 1800, onComplete: () => warnText.destroy() });
+  }
+
+  // 大招/衝撞等招式傷害不足以致命，但仍留一個安全網：血量真的歸零時原地滿血復活
+  // 並給 1 秒無敵，不中斷挑戰、不跳結算畫面，讓玩家能把剩下的時間都花在輸出上。
+  _woofWarRevivePlayer(time) {
+    this.player.hp = this.player.stats.maxHp;
+    this.player.invulnerableUntil = time + 1000;
+    this.cameras.main.flash(200, 255, 255, 255);
+    this.spawnBurstFx(this.player.sprite.x, this.player.sprite.y, 0x6fd3ff, 16, 'fx_crit', 160);
+  }
+
+  // 汪汪血量異常高，正常情況下 3 分鐘打不死；萬一真的被打死，當成直接提前結算。
+  onWoofBossDefeated() {
+    this._endWoofWarChallenge();
+  }
+
+  // 時間到（或汪汪意外被打死）：結算本次造成的總傷害，彈出結果視窗，不顯示獎勵預覽
+  // （獎勵是活動結束後由安培手動結算、發到信箱，見 MailData.js）。
+  _endWoofWarChallenge() {
+    if (this._woofWarEnded || this.gameEnded) return;
+    this._woofWarEnded = true;
+    this.paused = true;
+    this.physics.world.pause();
+
+    const totalDamage = Math.round((this.boss && this.boss.totalDamageTaken) || 0);
+    const name = getPlayerName() || '冒險者';
+    submitWoofWarScore({ name, damage: totalDamage, date: new Date().toISOString() });
+
+    const ui = this.scene.get('UIScene');
+    if (ui && ui.showWoofWarResult) ui.showWoofWarResult(totalDamage);
+  }
+
+  // 結果視窗「再次挑戰」：直接重新呼叫 init()/create()，跟主選單點「第一關」重開
+  // 一場遊戲是同一套機制，全部旗標會在 create() 開頭重新歸零，不會沿用上一場的狀態。
+  restartWoofWarChallenge() {
+    this.scene.stop('UIScene');
+    this.scene.start('GameScene', { woofWarMode: true });
+  }
+
   // 只存「只增不減」的進度（歷史最佳分數／存檔點關卡），不會加金幣，重複呼叫
   // 也不會造成任何重複計算——安全給分頁切背景等「可能不是真的要離開」的情境用。
   // 金幣只在真正離開（_saveOnExit）或正常死亡結算（GameOverScene）各自加一次。
   _syncProgress() {
+    // 汪汪大作戰的等級/關卡數都是活動限定的暫時數值（見 _beginWoofWarLevelUps
+    // 直接灌到 30 級），不該拿去覆蓋一般模式的歷史最佳分數／存檔點關卡。
+    if (this.woofWarMode) return;
     // 分數不再看存活時間，改用「目前關卡數」代表推進深度（關卡數越高代表打的
     // 怪越硬，比單純看擊殺數更能反映真實強度），跟 GameOverScene 的公式一致。
     const score = this.killCount * 10 + this.player.level * 50 + this.getStage() * 150
@@ -187,6 +285,12 @@ export default class GameScene extends Phaser.Scene {
   resumeFromStartSkillChoice() {
     if (this.gameEnded) return;
     this._awaitingStartSkill = false;
+    // 汪汪大作戰：選完起始技能後不直接恢復遊戲，接著跳出 29 張升級卡讓玩家手動選完
+    // （見 _beginWoofWarLevelUps），選完才會真的生成汪汪、開始倒數、恢復操作。
+    if (this.woofWarMode) {
+      this._beginWoofWarLevelUps();
+      return;
+    }
     this.paused = false;
     this.physics.world.resume();
     this.player.clearBankedInput();
@@ -324,6 +428,12 @@ export default class GameScene extends Phaser.Scene {
     // 這個呼叫本身也包 try/catch——萬一 onPlayerDeath() 內部真的有什麼漏網之魚，
     // 至少不會讓整個 update() 迴圈跟著掛掉，下一幀還有機會再試一次。
     if (this.player && this.player.hp <= 0) {
+      // 汪汪大作戰：血量歸零不是死亡結算，是原地滿血復活繼續拚傷害（見
+      // _woofWarRevivePlayer），不會走一般模式的死亡/結算流程。
+      if (this.woofWarMode) {
+        if (!this.gameEnded) this._woofWarRevivePlayer(time);
+        return;
+      }
       if (!this._hpZeroSince) this._hpZeroSince = time;
       if (!this.gameEnded) {
         try {
@@ -370,9 +480,14 @@ export default class GameScene extends Phaser.Scene {
 
     this._updateCollisions(time);
 
+    if (this.woofWarMode && !this._woofWarEnded && time >= this._woofWarEndAt) {
+      this._endWoofWarChallenge();
+      return;
+    }
+
     if (this.boss) {
       this.boss.update(time, delta);
-    } else if (this.isBossStage(this.stage)) {
+    } else if (!this.woofWarMode && this.isBossStage(this.stage)) {
       // 進到魔王關（第 5、10、15...關）立刻生成王，五種型態輪流出現：
       // 黑龍王 → 血色紅龍 → 惡魔王 → 樹王 → 獅鷲王 → 黑龍王……依序循環
       const BOSS_ROTATION = ['blue', 'red', 'demon', 'treant', 'griffin'];
@@ -847,6 +962,13 @@ export default class GameScene extends Phaser.Scene {
     if (this._pendingLevelUps > 0) {
       this._pendingLevelUps--;
       this._openLevelUp();
+      return;
+    }
+    // 汪汪大作戰：29 張升級卡全部選完，這裡才真的生成汪汪、開始倒數（見
+    // _beginWoofWarBattle），不會在這裡直接恢復成一般遊戲流程。
+    if (this._woofWarBoostPending) {
+      this._woofWarBoostPending = false;
+      this._beginWoofWarBattle();
       return;
     }
     this.paused = false;
