@@ -442,16 +442,27 @@ export default class Boss {
     this.scene.cameras.main.flash(220, (t.aoeColor >> 16) & 0xff, (t.aoeColor >> 8) & 0xff, t.aoeColor & 0xff);
     audioManager.bossRoar();
 
-    // 衝擊波本體：主題色大環＋內層白色亮環一起往外掃，這一圈就是實際的命中判定
-    const ring = this.scene.add.image(cx, cy, 'fx_bossdeath').setTint(t.aoeColor)
-      .setAlpha(0.9).setBlendMode(Phaser.BlendModes.ADD).setDepth(20006).setScale(0.2);
-    const ringCore = this.scene.add.image(cx, cy, 'fx_bossdeath').setTint(0xffffff)
-      .setAlpha(0.6).setBlendMode(Phaser.BlendModes.ADD).setDepth(20007).setScale(0.12);
-    // fx_bossdeath 貼圖在 scale 1 時半徑約 26px（跟 spawnGlowRing 的換算一致），
-    // 讓視覺大小跟命中判定的波前半徑同步放大。
-    this.scene.tweens.add({ targets: ring, scale: radius / 26, duration: EXPAND_MS, ease: 'Sine.easeOut' });
-    this.scene.tweens.add({ targets: ringCore, scale: radius / 30, duration: EXPAND_MS, ease: 'Sine.easeOut' });
-    this.scene.tweens.add({ targets: [ring, ringCore], alpha: 0, duration: 240, delay: EXPAND_MS, onComplete: () => { ring.destroy(); ringCore.destroy(); } });
+    // 衝擊波本體改用正式美術圖（見 BootScene.preload()）：主題色光環（fx_shockwave_ring）
+    // 當底＋白色同款疊一層當內層亮環＋尖刺狀爆裂圈（fx_shockwave_burst）疊在最外層
+    // 加強爆開的張力，三層一起往外掃，光環那一圈才是實際的命中判定。
+    // 兩張圖原生寬度不同（ring 1536／burst 1152，見素材裁切），各自除以自己的原生寬度
+    // 換算成「這個 scale 底下圖的直徑＝多少世界座標像素」，讓視覺外緣跟命中判定的
+    // 波前半徑同步放大，不會出現「看起來還沒掃到、其實已經打到」的誤差。
+    const ringScale = (radius * 2) / 1536;
+    const burstScale = (radius * 2) / 1152;
+    const ring = this.scene.add.image(cx, cy, 'fx_shockwave_ring').setTint(t.aoeColor)
+      .setAlpha(0.9).setBlendMode(Phaser.BlendModes.ADD).setDepth(20006).setScale(ringScale * 0.12);
+    const ringCore = this.scene.add.image(cx, cy, 'fx_shockwave_ring').setTint(0xffffff)
+      .setAlpha(0.6).setBlendMode(Phaser.BlendModes.ADD).setDepth(20007).setScale(ringScale * 0.08);
+    const burst = this.scene.add.image(cx, cy, 'fx_shockwave_burst').setTint(t.aoeColor)
+      .setAlpha(0.85).setBlendMode(Phaser.BlendModes.ADD).setDepth(20008).setScale(burstScale * 0.1);
+    this.scene.tweens.add({ targets: ring, scale: ringScale, duration: EXPAND_MS, ease: 'Sine.easeOut' });
+    this.scene.tweens.add({ targets: ringCore, scale: ringScale * 0.75, duration: EXPAND_MS, ease: 'Sine.easeOut' });
+    this.scene.tweens.add({ targets: burst, scale: burstScale * 0.9, duration: EXPAND_MS, delay: 50, ease: 'Sine.easeOut' });
+    this.scene.tweens.add({
+      targets: [ring, ringCore, burst], alpha: 0, duration: 240, delay: EXPAND_MS,
+      onComplete: () => { ring.destroy(); ringCore.destroy(); burst.destroy(); },
+    });
     this.scene.spawnBurstFx(cx, cy, t.aoeColor, 22, 'fx_crit', 210);
 
     // 波前命中判定：每 30ms 算一次目前衝擊波掃到的半徑，玩家跟中心的距離剛好

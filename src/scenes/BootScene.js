@@ -83,6 +83,11 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('fx_claw_slash_gold', 'assets/fx_claw_slash_gold.png');
     this.load.image('fx_claw_slash_amber', 'assets/fx_claw_slash_amber.png');
 
+    // 王魔「新星」衝擊波正式美術圖（惡魔王詛咒新星／樹王樹根衝擊／獅鷲王王者威壓，
+    // 見 Boss.js _executeNova）：金色光環為主體，尖刺狀爆裂圈疊在外層加強張力。
+    this.load.image('fx_shockwave_ring', 'assets/fx_shockwave_ring.png');
+    this.load.image('fx_shockwave_burst', 'assets/fx_shockwave_burst.png');
+
     // 汪汪大作戰（限時挑戰活動）專用魔王美術圖，見 src/boss/WoofBoss.js
     this.load.image('boss_woof', 'assets/boss_woof.png');
   }
