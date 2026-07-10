@@ -83,20 +83,20 @@ export default class UIScene extends Phaser.Scene {
     this._panelW = PANEL_W;
     this._titleH = TITLE_H;
 
-    // ---- 下方：狀態列，分成「數值／裝備／技能」三大塊，各自用 2 欄 x 3 列的
-    // 卡片式排版（每個項目都用 ui_stat_chip 包成一張獨立卡片）----
-    // 原本是 300px 高、3 欄 x 2 列鬆散排開，字級卻只有 22px，整塊面板看起來
-    // 「框超大、字超小、空白一大片」；改成 210px 高、每項目都框進卡片、字級
-    // 加大，內容跟面板大小成比例，也更容易一眼分辨每一項的邊界（排版感）。
+    // ---- 下方：狀態列，分成「數值／已發動能力／裝備／技能」四大塊，數值/裝備/
+    // 技能各自用 2 欄 x 3 列的卡片式排版（每個項目都用 ui_stat_chip 包成一張獨立
+    // 卡片）；已發動能力獨立一欄顯示套裝效果文字，不用卡片格（內容是長條說明文字，
+    // 硬塞進卡片格反而不好排版）----
     const bottomBarH = 210;
     const bottomBarY = h - bottomBarH / 2 - 10;
     const barLeft = 30, barWidth = w - 60;
     this.add.image(w / 2, bottomBarY, 'ui_panel').setDisplaySize(barWidth, bottomBarH).setScrollFactor(0).setDepth(-1);
 
-    const colW = barWidth / 3;
+    const colW = barWidth / 4;
     const col1CenterX = barLeft + colW * 0.5; // 數值
-    const col2CenterX = barLeft + colW * 1.5; // 裝備
-    const col3CenterX = barLeft + colW * 2.5; // 技能
+    const col2CenterX = barLeft + colW * 1.5; // 已發動能力
+    const col3CenterX = barLeft + colW * 2.5; // 裝備
+    const col4CenterX = barLeft + colW * 3.5; // 技能
 
     const barTop = bottomBarY - bottomBarH / 2;
     const titleY = barTop + 20;
@@ -104,15 +104,18 @@ export default class UIScene extends Phaser.Scene {
     const rowGap = 48;
 
     this.add.text(col1CenterX, titleY, '數值', textStyle({ fontSize: '26px', color: '#cfe9ff', fontStyle: 'bold' })).setOrigin(0.5).setScrollFactor(0);
-    this.add.text(col2CenterX, titleY, '裝備', textStyle({ fontSize: '26px', color: '#ffe066', fontStyle: 'bold' })).setOrigin(0.5).setScrollFactor(0);
-    this.add.text(col3CenterX, titleY, '技能', textStyle({ fontSize: '26px', color: '#6fd3ff', fontStyle: 'bold' })).setOrigin(0.5).setScrollFactor(0);
+    this.add.text(col2CenterX, titleY, '已發動能力', textStyle({ fontSize: '26px', color: '#ffd93d', fontStyle: 'bold' })).setOrigin(0.5).setScrollFactor(0);
+    this.add.text(col3CenterX, titleY, '裝備', textStyle({ fontSize: '26px', color: '#ffe066', fontStyle: 'bold' })).setOrigin(0.5).setScrollFactor(0);
+    this.add.text(col4CenterX, titleY, '技能', textStyle({ fontSize: '26px', color: '#6fd3ff', fontStyle: 'bold' })).setOrigin(0.5).setScrollFactor(0);
     this.add.rectangle(col1CenterX, titleY + 22, colW - 50, 2, 0xcfe9ff, 0.25).setScrollFactor(0);
-    this.add.rectangle(col2CenterX, titleY + 22, colW - 50, 2, 0xffe066, 0.25).setScrollFactor(0);
-    this.add.rectangle(col3CenterX, titleY + 22, colW - 50, 2, 0x6fd3ff, 0.25).setScrollFactor(0);
+    this.add.rectangle(col2CenterX, titleY + 22, colW - 50, 2, 0xffd93d, 0.25).setScrollFactor(0);
+    this.add.rectangle(col3CenterX, titleY + 22, colW - 50, 2, 0xffe066, 0.25).setScrollFactor(0);
+    this.add.rectangle(col4CenterX, titleY + 22, colW - 50, 2, 0x6fd3ff, 0.25).setScrollFactor(0);
 
-    // 直向分隔線，讓三大塊視覺上更清楚地分開
+    // 直向分隔線，讓四大塊視覺上更清楚地分開
     this.add.rectangle(barLeft + colW, bottomBarY, 2, bottomBarH - 20, 0xffffff, 0.12).setScrollFactor(0);
     this.add.rectangle(barLeft + colW * 2, bottomBarY, 2, bottomBarH - 20, 0xffffff, 0.12).setScrollFactor(0);
+    this.add.rectangle(barLeft + colW * 3, bottomBarY, 2, bottomBarH - 20, 0xffffff, 0.12).setScrollFactor(0);
 
     // 通用排版：給定該欄中心 X，回傳 2 欄 x 3 列共 6 張卡片的座標（由左到右、由上到下）
     const chipW = colW * 0.44, chipH = 44;
@@ -124,7 +127,7 @@ export default class UIScene extends Phaser.Scene {
       return pos; // [row0-col0, row0-col1, row1-col0, row1-col1, row2-col0, row2-col1]
     };
 
-    // ---------- 左：數值（6 個，STAT_DEFS 剛好 6 項，滿版 2x3）----------
+    // ---------- 數值（6 個，STAT_DEFS 剛好 6 項，滿版 2x3）----------
     const statPos = cellPositions(col1CenterX);
     this.statChips = {};
     STAT_DEFS.forEach((def, i) => {
@@ -137,20 +140,20 @@ export default class UIScene extends Phaser.Scene {
       this.statChips[def.key] = valueText;
     });
 
-    // 傳說套裝效果（見 EquipmentData.LEGENDARY_SET_BONUS_TEXT）：湊滿 3/5 件時才顯示，
-    // 平時整個隱藏。新版底部面板已經被 2x3 卡片填滿、沒有多餘空間再塞一塊提示區，
-    // 改成浮在面板正上方（貼著「裝備」欄，語意上也更相關），只在啟動時才佔用畫面空間。
-    const setBonusY = barTop - 8;
-    this.setBonusTitle = this.add.text(col2CenterX, setBonusY, '✅ 已發動能力', textStyle({
-      fontSize: '17px', color: '#ffd93d', fontStyle: 'bold',
-    })).setOrigin(0.5, 1).setScrollFactor(0).setVisible(false);
-    this.setBonusText = this.add.text(col2CenterX, setBonusY - 22, '', textStyle({
-      fontSize: '14px', color: '#ffe066', align: 'center',
-    })).setOrigin(0.5, 1).setScrollFactor(0);
+    // ---------- 已發動能力（見 EquipmentData.LEGENDARY_SET_BONUS_TEXT）：湊滿 3/5 件
+    // 傳說套裝才會有內容，平時顯示置中的灰色提示字；有內容時兩者互相切換顯示
+    // （見 _refreshSetBonusText），文字長度不固定用 wordWrap 讓長效果說明自動換行。----------
+    const setBonusAreaW = colW - 50;
+    this.setBonusPlaceholder = this.add.text(col2CenterX, bottomBarY, '尚無套裝效果', textStyle({
+      fontSize: '18px', color: '#5a6172',
+    })).setOrigin(0.5).setScrollFactor(0);
+    this.setBonusText = this.add.text(col2CenterX, gridTopY - 14, '', textStyle({
+      fontSize: '16px', color: '#ffe066', align: 'center',
+    })).setOrigin(0.5, 0).setScrollFactor(0).setWordWrapWidth(setBonusAreaW, true).setVisible(false);
 
-    // ---------- 中：裝備（5 個裝備欄 + 第 6 格擠進兩個戒指小欄位，每格都加上
+    // ---------- 裝備（5 個裝備欄 + 第 6 格擠進兩個戒指小欄位，每格都加上
     // 部位名稱小字——原本只靠圖示分辨，沒裝備時整格是空的完全看不出是哪個部位）----------
-    const equipPos = cellPositions(col2CenterX);
+    const equipPos = cellPositions(col3CenterX);
     const equipped = getEquipped();
     const EQUIP_SLOT_LABELS = { weapon: '武器', helmet: '頭盔', clothes: '衣服', pants: '褲子', shoes: '鞋子' };
     EQUIP_SLOTS.forEach((slot, i) => {
@@ -172,26 +175,29 @@ export default class UIScene extends Phaser.Scene {
     {
       // 第 6 格改成兩個戒指小欄位並排（戒指目前只能從扭蛋機取得，扭蛋機制還沒
       // 實作，所以這兩格暫時一定是空的，但一旦拿到戒指就會直接顯示圖示）。
+      // 戒指圖示原本只有 30x30／scale 0.18，跟旁邊主裝備欄的 40x40／0.24 比起來
+      // 明顯過小；這裡放大到跟主裝備欄一致的視覺尺寸，兩顆戒指靠右並排。
       const { x, y } = equipPos[5];
+      const ringSize = 40, ringGap = 8;
       this.add.image(x, y, 'ui_stat_chip').setDisplaySize(chipW, chipH).setScrollFactor(0);
       this.add.text(x - chipW / 2 + 18, y, '戒指', textStyle({
         fontSize: '19px', color: '#8a8f9c',
       })).setOrigin(0, 0.5).setScrollFactor(0);
       RING_SLOTS.forEach((slot, i) => {
-        const rx = x + chipW / 2 - 46 + i * 32;
+        const rx = x + chipW / 2 - 8 - ringSize / 2 - (RING_SLOTS.length - 1 - i) * (ringSize + ringGap);
         const itemId = equipped[slot];
-        const ringBg = this.add.image(rx, y, 'ui_equip_slot').setDisplaySize(30, 30).setScrollFactor(0);
+        const ringBg = this.add.image(rx, y, 'ui_equip_slot').setDisplaySize(ringSize, ringSize).setScrollFactor(0);
         if (itemId && EQUIPMENT_DATA[itemId]) {
-          this.add.image(rx, y, EQUIPMENT_DATA[itemId].icon).setScale(0.18).setScrollFactor(0);
+          this.add.image(rx, y, EQUIPMENT_DATA[itemId].icon).setScale(0.28).setScrollFactor(0);
         } else {
           ringBg.setAlpha(0.3);
         }
       });
     }
 
-    // ---------- 右：技能（5 個被動 + 1 個保留格；武器已經在右上角的技能面板顯示過，
+    // ---------- 技能（5 個被動 + 1 個保留格；武器已經在右上角的技能面板顯示過，
     // 這裡改顯示被動等級，避免跟上面重複）----------
-    const skillPos = cellPositions(col3CenterX);
+    const skillPos = cellPositions(col4CenterX);
     this.passiveChips = {};
     PASSIVE_IDS.forEach((id, i) => {
       const { x, y } = skillPos[i];
@@ -420,11 +426,12 @@ export default class UIScene extends Phaser.Scene {
     const lines = [];
     Object.keys(LEGENDARY_SET_BONUS_TEXT).forEach((slug) => {
       const def = LEGENDARY_SET_BONUS_TEXT[slug];
-      if (sb[`${slug}3`]) lines.push(`${def.label}：${def.three}`);
-      if (sb[`${slug}5`]) lines.push(`${def.label}：${def.five}`);
+      if (sb[`${slug}3`]) lines.push(`✅ ${def.label} 3件\n${def.three}`);
+      if (sb[`${slug}5`]) lines.push(`✅ ${def.label} 5件\n${def.five}`);
     });
-    this.setBonusTitle.setVisible(lines.length > 0);
-    this.setBonusText.setText(lines.join('\n'));
+    const active = lines.length > 0;
+    this.setBonusText.setVisible(active).setText(lines.join('\n\n'));
+    this.setBonusPlaceholder.setVisible(!active);
   }
 
   // 血包／磁鐵不在目前畫面範圍內時，在畫面邊緣顯示一個指向它的箭頭；
