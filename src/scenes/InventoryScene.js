@@ -1,4 +1,7 @@
-import { EQUIPMENT_DATA, EQUIP_SLOTS, RING_SLOTS, SLOT_LABELS, RARITY_DATA, RARITY_IDS, SELL_PRICES } from '../equipment/EquipmentData.js';
+import {
+  EQUIPMENT_DATA, EQUIP_SLOTS, RING_SLOTS, SLOT_LABELS, RARITY_DATA, RARITY_IDS, SELL_PRICES,
+  LEGENDARY_SET_BONUS_TEXT, getLegendarySeriesSlug,
+} from '../equipment/EquipmentData.js';
 import { createRarityFrame } from '../utils/RarityFrame.js';
 import {
   getInventory, setInventory, getEquipped, setEquipped, getGold, addGold,
@@ -202,7 +205,8 @@ export default class InventoryScene extends Phaser.Scene {
   // 「+1」只是先累積待確認的點數，按「確認」才會真的扣點數寫入存檔——這樣
   // 點錯了在確認前都還能反悔（離開背包畫面不按確認，待加點數就直接作廢）。
   _buildStatsPanel(cx, panelTop) {
-    const panelW = 420, panelH = 480;
+    // +110 是多留給面板最下面「已發動能力」那一小塊的空間（見下面 setBonusTitle）。
+    const panelW = 420, panelH = 590;
     const cy = panelTop + panelH / 2;
     this.add.image(cx, cy, 'ui_panel').setDisplaySize(panelW, panelH);
     this.add.rectangle(cx, cy, panelW - 6, panelH - 6).setStrokeStyle(3, 0x6fd3ff, 0.6).setFillStyle(0, 0);
@@ -253,6 +257,18 @@ export default class InventoryScene extends Phaser.Scene {
     resetBtn.on('pointerover', () => resetBtn.setTint(0xfff3d0));
     resetBtn.on('pointerout', () => resetBtn.clearTint());
     resetBtn.on('pointerdown', () => this._onResetStatPoints());
+
+    // 傳說套裝效果（見 EquipmentData.LEGENDARY_SET_BONUS_TEXT）：湊滿 3/5 件才顯示，
+    // 平時整塊隱藏，避免沒穿滿套的玩家看到一堆空白提示。內容由 _refreshStatsPanel()
+    // 根據 this.equipped 即時算，穿脫裝備時（呼叫 _refresh()）就會跟著更新。
+    const setBonusTop = footerTop + 155;
+    this.setBonusDivider = this.add.rectangle(cx, setBonusTop, panelW - 40, 2, 0xffd93d, 0.3).setVisible(false);
+    this.setBonusTitle = this.add.text(cx, setBonusTop + 22, '✅ 已發動能力', textStyle({
+      fontSize: '19px', color: '#ffd93d', fontStyle: 'bold',
+    })).setOrigin(0.5).setVisible(false);
+    this.setBonusText = this.add.text(cx, setBonusTop + 48, '', textStyle({
+      fontSize: '15px', color: '#ffe066', align: 'center',
+    })).setOrigin(0.5, 0);
   }
 
   _addPendingStat(key) {
@@ -325,6 +341,24 @@ export default class InventoryScene extends Phaser.Scene {
       const invested = invest[def.investKey] + this._pendingInvest[def.investKey];
       this.statsValueTexts[def.label].setText(`${def.get(stats)} (${invested})`);
     });
+
+    // 傳說套裝效果：同一套主題裝（不分部位、戒指不算）湊滿 3／5 件時才顯示，
+    // 跟 GameScene._computeSetBonuses() 用同一套判定邏輯。
+    const setCounts = {};
+    Object.values(this.equipped).forEach((itemId) => {
+      const slug = getLegendarySeriesSlug(itemId);
+      if (slug) setCounts[slug] = (setCounts[slug] || 0) + 1;
+    });
+    const setLines = [];
+    Object.keys(LEGENDARY_SET_BONUS_TEXT).forEach((slug) => {
+      const n = setCounts[slug] || 0;
+      const def = LEGENDARY_SET_BONUS_TEXT[slug];
+      if (n >= 3) setLines.push(`${def.label}：${def.three}`);
+      if (n >= 5) setLines.push(`${def.label}：${def.five}`);
+    });
+    this.setBonusDivider.setVisible(setLines.length > 0);
+    this.setBonusTitle.setVisible(setLines.length > 0);
+    this.setBonusText.setText(setLines.join('\n'));
   }
 
   // 稀有度外框顏色（十六進位色碼字串），見 EquipmentData.js 的 RARITY_DATA

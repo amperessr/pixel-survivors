@@ -1,5 +1,5 @@
 import { WEAPON_DATA, WEAPON_EVOLUTIONS, WEAPON_FUSIONS } from '../weapons/WeaponData.js';
-import { EQUIP_SLOTS, RING_SLOTS, EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
+import { EQUIP_SLOTS, RING_SLOTS, EQUIPMENT_DATA, LEGENDARY_SET_BONUS_TEXT } from '../equipment/EquipmentData.js';
 import { PASSIVE_IDS, PASSIVE_DATA } from '../skills/PassiveData.js';
 import { getEquipped, isLevelUpAutoMode, setLevelUpAutoMode, getPlayerName } from '../managers/SaveManager.js';
 import { audioManager } from '../managers/AudioManager.js';
@@ -86,7 +86,10 @@ export default class UIScene extends Phaser.Scene {
     // ---- 下方：狀態列，分成「數值／裝備／技能」三大塊，各自 3 欄 x 2 列 ----
     // 整塊狀態列的文字/圖示原本偏小，跟這麼寬的底板不成比例，這裡統一放大
     // （底板本身也加高一點，才裝得下放大後的內容，不會擠在一起）。
-    const bottomBarH = 230;
+    // +70 是多留給「數值」欄下方「已發動能力」那一小塊的空間（見下面 setBonusTitle）——
+    // 底板中心 bottomBarY 是用 h 反推的，長高只會往上長（下緣永遠釘在 h-10），
+    // 所以這裡加高，實際上是把 gridTopY／row1 往上推，讓 row1 到面板下緣多出可用空間。
+    const bottomBarH = 300;
     const bottomBarY = h - bottomBarH / 2 - 10;
     const barLeft = 30, barWidth = w - 60;
     this.add.image(w / 2, bottomBarY, 'ui_panel').setDisplaySize(barWidth, bottomBarH).setScrollFactor(0).setDepth(-1);
@@ -128,6 +131,19 @@ export default class UIScene extends Phaser.Scene {
       })).setOrigin(0, 0.5).setScrollFactor(0);
       this.statChips[def.key] = valueText;
     });
+
+    // 傳說套裝效果（見 EquipmentData.LEGENDARY_SET_BONUS_TEXT）：湊滿 3/5 件時才顯示，
+    // 平時整塊隱藏，避免沒穿滿套的玩家看到一堆空白提示。內容在 update() 裡只算一次
+    // ——裝備只會在背包場景更動，進了 GameScene 之後 setBonuses 就不會再變。
+    // y 座標接在「數值」欄最後一列（gridTopY + rowGap）下面，不是再加一整個 rowGap
+    // ——面板下緣固定釘在 h-10，加一整個 rowGap 會直接把文字推出面板／螢幕外。
+    const setBonusY = gridTopY + rowGap + 40;
+    this.setBonusTitle = this.add.text(col1CenterX, setBonusY, '✅ 已發動能力', textStyle({
+      fontSize: '17px', color: '#ffd93d', fontStyle: 'bold',
+    })).setOrigin(0.5, 0).setScrollFactor(0).setVisible(false);
+    this.setBonusText = this.add.text(col1CenterX, setBonusY + 24, '', textStyle({
+      fontSize: '14px', color: '#ffe066', align: 'center',
+    })).setOrigin(0.5, 0).setScrollFactor(0);
 
     // ---------- 中：裝備（5 個裝備欄 + 第 6 格擠進兩個戒指小欄位）----------
     const equipPos = cellPositions(col2CenterX);
@@ -370,6 +386,7 @@ export default class UIScene extends Phaser.Scene {
     STAT_DEFS.forEach((def) => {
       this.statChips[def.key].setText(`${def.label} ${def.get(p)}`);
     });
+    this._refreshSetBonusText();
     PASSIVE_IDS.forEach((id) => {
       const lvl = this.gs.player.passiveLevels[id] || 0;
       this.passiveChips[id].setText(`${PASSIVE_DATA[id].name.slice(0, 2)} Lv${lvl}`);
@@ -377,6 +394,23 @@ export default class UIScene extends Phaser.Scene {
 
     this._refreshWeaponPanel();
     this._updatePickupArrows();
+  }
+
+  // 傳說套裝效果：每幀都重算，不快取——GameScene 是同一個場景實例跨對局重複使用
+  // （scene.launch／scene.start 不會重新 new 一個 GameScene），沒辦法用「算過一次
+  // 就跳過」的旗標判斷是不是新的一局，用旗標反而會在下一局沿用上一局的舊資料。
+  // 只是比對幾個布林值、組幾行字，開銷小到可以忽略，不需要額外快取機制。
+  _refreshSetBonusText() {
+    if (!this.gs.setBonuses) return;
+    const sb = this.gs.setBonuses;
+    const lines = [];
+    Object.keys(LEGENDARY_SET_BONUS_TEXT).forEach((slug) => {
+      const def = LEGENDARY_SET_BONUS_TEXT[slug];
+      if (sb[`${slug}3`]) lines.push(`${def.label}：${def.three}`);
+      if (sb[`${slug}5`]) lines.push(`${def.label}：${def.five}`);
+    });
+    this.setBonusTitle.setVisible(lines.length > 0);
+    this.setBonusText.setText(lines.join('\n'));
   }
 
   // 血包／磁鐵不在目前畫面範圍內時，在畫面邊緣顯示一個指向它的箭頭；
