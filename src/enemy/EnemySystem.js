@@ -116,6 +116,7 @@ export default class EnemySystem {
     sprite.setData('lastHitAt', 0);
     sprite.setData('flashToken', 0); // 用來讓「閃白後恢復顏色」的計時器只認得最新一次的傷害
     sprite.setData('flashUntil', 0); // 受擊閃白的持續期間，狀態染色（燃燒/冰凍/緩速）先讓路
+    sprite.setData('facingLeft', this.player.sprite.x < x); // 出生當下先面向玩家，之後每幀依實際移動速度更新（見 update()）
     if (tierDef.tint) sprite.setTint(tierDef.tint); else sprite.clearTint();
   }
 
@@ -194,7 +195,6 @@ export default class EnemySystem {
       if (!e.active) return;
       const now = time;
       e.setDepth(e.y);
-      e.setFlipX(px < e.x);
 
       const frozen = now < e.getData('frozenUntil');
       const knockbackUntil = e.getData('knockbackUntil');
@@ -233,6 +233,13 @@ export default class EnemySystem {
           Math.sin(ang) * spd + sepY * SEPARATION_FORCE
         );
       }
+
+      // 朝向：改成依實際速度方向翻轉，而不是永遠面向玩家——被擊退往後飛的時候
+      // 才會正確轉向背對玩家，而不是明明在往後飛卻還臉朝玩家。純垂直移動時
+      // （水平速度接近 0）保留上一幀的朝向，避免原地抖動亂翻。
+      const vx = e.body.velocity.x;
+      if (Math.abs(vx) > 5) e.setData('facingLeft', vx < 0);
+      e.setFlipX(e.getData('facingLeft'));
 
       // 燃燒：持續時間內每 400ms 扣一次傷害，跟冰凍/減速互不影響、可以同時生效
       if (now < e.getData('burnUntil') && now >= e.getData('burnNextTick')) {
@@ -512,7 +519,15 @@ export default class EnemySystem {
   _killEnemy(enemy) {
     const exp = enemy.getData('exp');
     this.expGemPool.spawn(enemy.x, enemy.y, exp);
-    this.scene.spawnKillFx(enemy.x, enemy.y);
+    // 物件池 free() 會讓怪物瞬間隱形供下一隻重用，本體不能拿來播死亡動畫；
+    // 把貼圖/朝向/縮放/階級染色這些「當下的樣子」交給 spawnKillFx 另外複製一份
+    // 獨立的屍體圖片播放倒地動畫，兩者互不干擾物件池的重用時機。
+    this.scene.spawnKillFx(enemy.x, enemy.y, {
+      texture: enemy.texture.key,
+      flipX: enemy.flipX,
+      scale: enemy.getData('baseScale') || enemy.scaleX,
+      tint: enemy.getData('tierTint') || null,
+    });
     this.scene.registerKill();
     // 音效放在核心規則（掉經驗寶石／計入擊殺數）之後單獨包起來，就算播放出狀況
     // 也不會連帶讓下面的擊殺獎勵、回收敵人物件都沒執行到。

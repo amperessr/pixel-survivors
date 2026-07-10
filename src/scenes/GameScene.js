@@ -1118,9 +1118,32 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  spawnKillFx(x, y) {
+  // corpse：擊殺當下那隻怪物的貼圖/朝向/縮放/階級染色（見 EnemySystem._killEnemy）。
+  // 原本這裡只有一個小光暈爆閃，怪物本體被物件池瞬間隱藏去重用，玩家看起來就是
+  // 「憑空消失」。現在額外複製一份獨立的屍體圖片，播放倒地+縮扁+淡出動畫再銷毀，
+  // 跟物件池的重用時機完全分開，不會互相干擾。
+  spawnKillFx(x, y, corpse = null) {
     const fx = this.add.image(x, y, 'fx_kill').setDepth(29999).setScale(0.5);
     this.tweens.add({ targets: fx, scale: 1.4, alpha: 0, duration: 300, onComplete: () => fx.destroy() });
+
+    if (corpse && corpse.texture && this.textures.exists(corpse.texture)) {
+      const scale = corpse.scale || 1;
+      const body = this.add.image(x, y, corpse.texture)
+        .setDepth(y - 1).setFlipX(!!corpse.flipX).setScale(scale);
+      if (corpse.tint) body.setTint(corpse.tint);
+      this.tweens.add({
+        targets: body,
+        angle: (Math.random() < 0.5 ? -1 : 1) * (75 + Math.random() * 20),
+        scaleY: scale * 0.45,
+        y: y + 6,
+        alpha: 0,
+        duration: 400,
+        ease: 'Cubic.easeIn',
+        onComplete: () => body.destroy(),
+      });
+    }
+
+    this.spawnBurstFx(x, y, corpse && corpse.tint ? corpse.tint : 0xd0d0d0, 6, 'fx_kill', 70);
   }
   // 血包拾取特效：綠色系爆裂碎片 + 浮動的「+HP」數字
   spawnHealFx(x, y, amount) {
