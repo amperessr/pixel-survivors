@@ -19,14 +19,17 @@ index.html / style.css
 src/
   scenes/       BootScene(素材preload+TextureFactory生成) → MainMenuScene → GameScene
                 ⇄ UIScene / LevelUpScene / RelicChoiceScene → GameOverScene
-                另有 InventoryScene／ShopScene／MailboxScene／StartSkillScene
+                另有 InventoryScene／ShopScene／MailboxScene／StartSkillScene／
+                ActivitySelectScene（活動關卡選擇）／LootBallOpenScene（開自選神話/傳說球）
   player/       Player.js：設定與數值、移動/衝刺
   enemy/        EnemyData.js（怪物資料）／EnemySystem.js（AI、物件池、空間網格）
-  boss/         Boss.js：五種 Boss 型態與招式
+  boss/         Boss.js：五種常駐 Boss 型態與招式／WoofBoss.js：汪汪大作戰限定魔王（四招各自CD）
   weapons/      WeaponData.js（數值/進化/擊退設定）／WeaponSystem.js（開火邏輯）
   skills/       PassiveData.js：被動能力
-  equipment/    EquipmentData.js：裝備與戒指資料（商店/扭蛋/傳說）
+  equipment/    EquipmentData.js：裝備與戒指資料（商店/扭蛋/傳說/活動自選球）
   relics/       RelicData.js：擊敗 Boss 後的遺物二選一
+  activities/   ActivityData.js（活動開放/結束時間、封測名單、活動清單）／
+                WoofWarRewardSystem.js（活動結束後個人化結算獎勵，動態產生信件）
   managers/     ObjectPool.js／AudioManager.js／SaveManager.js（localStorage存檔+帳號同步）
   systems/      TextureFactory.js（Canvas程式生成美術，尚未換正式圖的素材）／
                 MapGenerator.js（無限地圖）／HealthPackSystem.js／MagnetSystem.js
@@ -70,7 +73,7 @@ assets/         正式美術圖，見下方「美術資產規範」
 ## 協作規則
 
 - 協作者：安培
-- 動作流程：先確認要怎麼修改，我確認後才動手；只有我說「上傳」才執行 git push
+- 動作流程：先確認要怎麼修改，詢問是否要上傳(git push)，我確認後才動手；只有我說「上傳」才執行 git push
 - 本機驗證：`npm start` 後開 `http://localhost:8080` 手動測試（純前端，沒有自動化測試）
 
 ## 省 Token 協作建議

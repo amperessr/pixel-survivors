@@ -52,6 +52,7 @@ export default class TextureFactory {
       ['generatePickups', () => this.generatePickups()],
       ['generateUI', () => this.generateUI()],
       ['generateGachaMachine', () => this.generateGachaMachine()],
+      ['generateLootBalls', () => this.generateLootBalls()],
     ];
     for (const [name, fn] of steps) {
       try {
@@ -621,6 +622,48 @@ export default class TextureFactory {
     ctx.fillRect(4.5, 9, 3.5, 1.4);
     ctx.restore();
     this._finish(tex);
+  }
+
+  // ---------- 活動獎勵球（紅球=神話自選／金球=傳說自選）：128x128 跟正式裝備圖示
+  // 同尺寸，才能塞進背包格不會忽大忽小。還沒有正式美術圖，先用 Canvas 畫一顆
+  // 立體感光澤球＋問號（自選/未開啟的意象），之後有正式圖再依 CLAUDE.md 的慣例
+  // 換成 BootScene.preload() 載入即可。----------
+  generateLootBalls() {
+    const mkBall = (key, rgbMain, rgbDark, rgbShine) => {
+      const { tex, ctx } = this._canvas(key, 128, 128);
+      const cx = 64, cy = 64, r = 50;
+      const glow = ctx.createRadialGradient(cx, cy, r * 0.5, cx, cy, r * 1.4);
+      glow.addColorStop(0, `rgba(${rgbMain},0.5)`);
+      glow.addColorStop(1, `rgba(${rgbMain},0)`);
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, 128, 128);
+
+      const body = ctx.createRadialGradient(cx - 16, cy - 18, 6, cx, cy, r);
+      body.addColorStop(0, `rgb(${rgbShine})`);
+      body.addColorStop(0.45, `rgb(${rgbMain})`);
+      body.addColorStop(1, `rgb(${rgbDark})`);
+      ctx.fillStyle = body;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgb(${rgbDark})`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.beginPath();
+      ctx.ellipse(cx - 18, cy - 20, 12, 8, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.font = 'bold 46px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('?', cx, cy + 3);
+      this._finish(tex);
+    };
+    mkBall('ball_mythic', '255,60,60', '150,20,20', '255,190,190');
+    mkBall('ball_legendary', '255,185,55', '170,110,10', '255,238,190');
   }
 
   // ---------- UI 元件 (血條框、經驗條框、按鈕背景) ----------

@@ -1,9 +1,11 @@
 import BootScene from './src/scenes/BootScene.js';
 import MainMenuScene from './src/scenes/MainMenuScene.js';
 import InventoryScene from './src/scenes/InventoryScene.js';
+import LootBallOpenScene from './src/scenes/LootBallOpenScene.js';
 import ShopScene from './src/scenes/ShopScene.js';
 import MailboxScene from './src/scenes/MailboxScene.js';
 import GameScene from './src/scenes/GameScene.js';
+import ActivitySelectScene from './src/scenes/ActivitySelectScene.js';
 import StartSkillScene from './src/scenes/StartSkillScene.js';
 import UIScene from './src/scenes/UIScene.js';
 import LevelUpScene from './src/scenes/LevelUpScene.js';
@@ -29,7 +31,7 @@ const config = {
   // 最多只會補算更小一段時間。分頁背景造成的瞬移另外由 GameScene 的
   // visibilitychange 監聽器直接暫停物理世界處理，兩邊互補。
   fps: { min: 45 },
-  scene: [BootScene, MainMenuScene, InventoryScene, ShopScene, MailboxScene, GameScene, StartSkillScene, UIScene, LevelUpScene, RelicChoiceScene, GameOverScene],
+  scene: [BootScene, MainMenuScene, InventoryScene, LootBallOpenScene, ShopScene, MailboxScene, GameScene, ActivitySelectScene, StartSkillScene, UIScene, LevelUpScene, RelicChoiceScene, GameOverScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

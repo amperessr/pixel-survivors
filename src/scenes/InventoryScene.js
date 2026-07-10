@@ -508,14 +508,20 @@ export default class InventoryScene extends Phaser.Scene {
   }
 
   // 背包格點擊：單擊顯示「穿上／出售」小選單；400ms 內在同一格再點一次（雙擊）
-  // 則跳過選單直接穿上——防止誤穿，同時保留快速穿裝的手感。
+  // 則跳過選單直接穿上——防止誤穿，同時保留快速穿裝的手感。活動獎勵球
+  // （kind === 'lootBall'，見 EquipmentData.js）不能穿，單擊/雙擊都改成走
+  // 「開啟」確認流程，不會誤觸一般裝備的穿上邏輯。
   _handleSlotClick(idx) {
     if (!this.inventory[idx]) { this._hideActionMenu(); return; }
+    const itemId = this.inventory[idx];
+    const def = EQUIPMENT_DATA[itemId];
+    const isBall = def && def.kind === 'lootBall';
     const now = this.time.now;
     if (this._lastClickIdx === idx && now - (this._lastClickAt || 0) < 400) {
       this._lastClickIdx = null;
       this._hideActionMenu();
-      this._equipFromInventory(idx);
+      if (isBall) this._confirmOpenLootBall(idx);
+      else this._equipFromInventory(idx);
     } else {
       this._lastClickIdx = idx;
       this._lastClickAt = now;
@@ -523,13 +529,15 @@ export default class InventoryScene extends Phaser.Scene {
     }
   }
 
-  // 單擊裝備彈出的「穿上／出售」小選單，畫在該格正上方
+  // 單擊裝備彈出的「穿上／出售」小選單，畫在該格正上方（活動獎勵球顯示「開啟」
+  // 取代「穿上」）
   _showActionMenu(idx) {
     this._hideActionMenu();
     this._hideTooltip();
     const itemId = this.inventory[idx];
     const def = EQUIPMENT_DATA[itemId];
     if (!def) return;
+    const isBall = def.kind === 'lootBall';
     const bg = this.slotBgs[idx];
     const price = SELL_PRICES[def.rarity] || 0;
     const menuW = 150, btnH = 40;
@@ -537,19 +545,54 @@ export default class InventoryScene extends Phaser.Scene {
 
     const container = this.add.container(0, 0).setDepth(950);
     const wearBtn = this.add.image(cx, cy - btnH / 2 - 2, 'ui_button_parchment').setDisplaySize(menuW, btnH).setInteractive({ useHandCursor: true });
-    const wearText = this.add.text(cx, cy - btnH / 2 - 2, '穿上', textStyle({ fontSize: '18px', color: '#3a2413' })).setOrigin(0.5);
+    const wearText = this.add.text(cx, cy - btnH / 2 - 2, isBall ? '開啟' : '穿上', textStyle({ fontSize: '18px', color: '#3a2413' })).setOrigin(0.5);
     const sellBtn = this.add.image(cx, cy + btnH / 2 + 2, 'ui_button_parchment').setDisplaySize(menuW, btnH).setInteractive({ useHandCursor: true });
     const sellText = this.add.text(cx, cy + btnH / 2 + 2, `出售（${price.toLocaleString()}）`, textStyle({ fontSize: '16px', color: '#3a2413' })).setOrigin(0.5);
     container.add([wearBtn, wearText, sellBtn, sellText]);
 
     wearBtn.on('pointerover', () => wearBtn.setTint(0xfff3d0));
     wearBtn.on('pointerout', () => wearBtn.clearTint());
-    wearBtn.on('pointerdown', () => { this._hideActionMenu(); this._equipFromInventory(idx); });
+    wearBtn.on('pointerdown', () => { this._hideActionMenu(); if (isBall) this._confirmOpenLootBall(idx); else this._equipFromInventory(idx); });
     sellBtn.on('pointerover', () => sellBtn.setTint(0xfff3d0));
     sellBtn.on('pointerout', () => sellBtn.clearTint());
     sellBtn.on('pointerdown', () => { this._hideActionMenu(); this._sellSingle(idx); });
 
     this._actionMenu = container;
+  }
+
+  // 開球前先跳確認彈窗（球是稀有獎勵，怕手滑誤開），確定後才真的切到
+  // LootBallOpenScene 播抽獎動畫＋讓玩家自選裝備。
+  _confirmOpenLootBall(idx) {
+    const itemId = this.inventory[idx];
+    const def = EQUIPMENT_DATA[itemId];
+    if (!def) return;
+    const w = this.scale.width, h = this.scale.height;
+    const overlay = this.add.container(0, 0).setDepth(2000);
+    const dim = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.7).setInteractive();
+    const panel = this.add.image(w / 2, h / 2, 'ui_panel').setDisplaySize(520, 260);
+    const border = this.add.rectangle(w / 2, h / 2, 514, 254).setStrokeStyle(3, 0xffd700, 0.8).setFillStyle(0, 0);
+    const title = this.add.text(w / 2, h / 2 - 70, `是否開啟「${def.name}」？`, textStyle({
+      fontSize: '26px', color: '#ffe066',
+    })).setOrigin(0.5);
+    const msg = this.add.text(w / 2, h / 2 - 20, def.desc, textStyle({
+      fontSize: '18px', color: '#cfe9ff', align: 'center',
+      wordWrap: { width: 460, useAdvancedWrap: true },
+    })).setOrigin(0.5);
+    const yesBtn = this.add.image(w / 2 - 90, h / 2 + 70, 'ui_button_parchment').setDisplaySize(160, 50).setInteractive({ useHandCursor: true });
+    const yesText = this.add.text(w / 2 - 90, h / 2 + 70, '開啟', textStyle({ fontSize: '22px', color: '#3a2413' })).setOrigin(0.5);
+    const noBtn = this.add.image(w / 2 + 90, h / 2 + 70, 'ui_button_parchment').setDisplaySize(160, 50).setInteractive({ useHandCursor: true });
+    const noText = this.add.text(w / 2 + 90, h / 2 + 70, '取消', textStyle({ fontSize: '22px', color: '#3a2413' })).setOrigin(0.5);
+    overlay.add([dim, panel, border, title, msg, yesBtn, yesText, noBtn, noText]);
+
+    yesBtn.on('pointerover', () => yesBtn.setTint(0xfff3d0));
+    yesBtn.on('pointerout', () => yesBtn.clearTint());
+    yesBtn.on('pointerdown', () => {
+      overlay.destroy();
+      this.scene.start('LootBallOpenScene', { itemId, invIdx: idx });
+    });
+    noBtn.on('pointerover', () => noBtn.setTint(0xff9a9a));
+    noBtn.on('pointerout', () => noBtn.clearTint());
+    noBtn.on('pointerdown', () => overlay.destroy());
   }
 
   _hideActionMenu() {

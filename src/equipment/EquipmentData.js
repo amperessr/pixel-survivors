@@ -335,3 +335,26 @@ export function rollGachaItem(forceRarity) {
   const pool = GACHA_POOL_BY_RARITY[picked] || GACHA_POOL_BY_RARITY.common;
   return pool[Math.floor(Math.random() * pool.length)];
 }
+
+// ---------- 活動獎勵球：汪汪大作戰 TOP1／TOP2 信件獎勵 ----------
+// 「紅球」「金球」是背包裡的特殊道具，不能穿（slot: null），單擊/雙擊不會走一般
+// 裝備的穿上流程，而是由 InventoryScene 檢查 kind === 'lootBall' 另外導去
+// LootBallOpenScene 開球＋自選裝備（見該檔案）。故意不放進 GACHA_EQUIPMENT_IDS /
+// GACHA_RING_IDS，扭蛋機抽不到，只能靠活動信件獲得。
+export const LOOT_BALL_IDS = { mythic: 'ball_mythic', legendary: 'ball_legendary' };
+EQUIPMENT_DATA[LOOT_BALL_IDS.mythic] = {
+  id: LOOT_BALL_IDS.mythic, slot: null, tier: null, tierIndex: 0, prevId: null, rarity: 'mythic',
+  name: '紅球（神話自選）', desc: '雙擊開啟——可從神話裝備中自選一件帶走。',
+  icon: 'ball_mythic', bonus: {}, kind: 'lootBall', ballTier: 'mythic',
+};
+EQUIPMENT_DATA[LOOT_BALL_IDS.legendary] = {
+  id: LOOT_BALL_IDS.legendary, slot: null, tier: null, tierIndex: 0, prevId: null, rarity: 'legendary',
+  name: '金球（傳說自選）', desc: '雙擊開啟——可從傳說裝備中自選一件帶走。',
+  icon: 'ball_legendary', bonus: {}, kind: 'lootBall', ballTier: 'legendary',
+};
+
+// 自選裝備池：依稀有度從 EQUIPMENT_DATA 動態篩出（排除球本身），LootBallOpenScene
+// 用這個產生可選清單——之後新增神話/傳說裝備會自動被納入池子，不用手動維護清單。
+export function getSelfPickPool(ballTier) {
+  return Object.values(EQUIPMENT_DATA).filter((d) => d.rarity === ballTier && d.kind !== 'lootBall');
+}

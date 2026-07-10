@@ -138,6 +138,28 @@ export function subscribeWoofWarLeaderboard(callback) {
   }
 }
 
+/**
+ * 撈「完整」汪汪大作戰排行榜（不像 subscribeWoofWarLeaderboard 卡在 TOP10），
+ * 依傷害由高到低排序，供活動結束後結算 TOP1~3／參加獎用——需要知道每個玩家
+ * 的實際名次，也需要知道「有沒有參加過」（陣列裡有沒有這個名字），只抓 TOP10
+ * 沒辦法回答這兩個問題。只在活動結束後、每個玩家自己的帳號只需要撈一次
+ * （見 WoofWarRewardSystem.resolveWoofWarRewardIfNeeded 的快取判斷），不會頻繁呼叫。
+ * @returns {Promise<Array<{name:string, damage:number, date:string}>>}
+ */
+export async function fetchFullWoofWarLeaderboard() {
+  try {
+    ensureInit();
+    const snapshot = await get(ref(db, 'woofWarLeaderboardBest'));
+    const rows = [];
+    snapshot.forEach((child) => { rows.push(child.val()); });
+    rows.sort((a, b) => (b.damage || 0) - (a.damage || 0));
+    return rows;
+  } catch (err) {
+    console.warn('[Firebase] 讀取完整汪汪排行榜失敗：', err.message);
+    return [];
+  }
+}
+
 // ---------- 帳號系統：用名字＋密碼把存檔（金幣/裝備/背包/關卡進度）同步到雲端， ----------
 // ---------- 讓同一個名字在不同電腦登入都能讀到最新進度。 ----------
 

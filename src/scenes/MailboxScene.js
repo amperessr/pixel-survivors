@@ -2,18 +2,21 @@ import { MAIL_DATA } from '../mail/MailData.js';
 import { EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
 import {
   getMailStatus, isMailClaimed, isMailDeleted, claimMail, deleteMail,
-  addGold, addItemToInventory, getGold,
+  addGold, addItemToInventory, getGold, getWoofWarReward,
 } from '../managers/SaveManager.js';
+import { resolveWoofWarRewardIfNeeded, WOOF_WAR_REWARD_MAIL_ID } from '../activities/WoofWarRewardSystem.js';
 import { textStyle } from '../utils/TextStyle.js';
 
-// 信箱：MailData.js 裡定義的信件列表（新的排最上面）。點一封信會在右側開啟
-// 內容＋留言，可以選擇「領取」（金幣/道具直接發放進帳號）或「刪除」。
-// 這個功能是給開發者手動發獎勵用的——想發新的獎勵信，直接在 MailData.js
+// 信箱：MailData.js 裡定義的信件列表（新的排最上面）＋汪汪大作戰活動結束後
+// 動態產生的一封「個人化」結算信（見 _buildWoofWarRewardMail，內容依這個玩家
+// 自己的名次而不同，不是寫死在 MailData.js 裡給所有人看一樣內容的信）。
+// 點一封信會在右側開啟內容＋留言，可以選擇「領取」（金幣/道具直接發放進帳號）
+// 或「刪除」。想發新的（給所有玩家看一樣內容的）獎勵信，直接在 MailData.js
 // 的陣列加一筆新物件即可，不用改這個場景的程式碼。
 export default class MailboxScene extends Phaser.Scene {
   constructor() { super('MailboxScene'); }
 
-  create() {
+  async create() {
     const w = this.scale.width, h = this.scale.height;
     this.add.rectangle(w / 2, h / 2, w, h, 0x10131a);
     this.add.text(w / 2, 50, '📬 信箱', textStyle({ fontSize: '48px', color: '#6fd3ff' })).setOrigin(0.5);
@@ -22,8 +25,17 @@ export default class MailboxScene extends Phaser.Scene {
       fontSize: '26px', color: '#ffd93d',
     })).setOrigin(1, 0.5);
 
-    // 新的信排最上面；已刪除的信直接不顯示
-    this.mails = [...MAIL_DATA].reverse().filter((m) => !isMailDeleted(m.id));
+    // 進信箱前先確保活動獎勵已經結算過——大部分時候這裡會立刻回傳（已經在
+    // MainMenuScene 結算過、有快取），只有活動剛結束後第一次點進信箱才會真的
+    // 打一次 API，等它跑完才畫信件列表，確保這裡看到的資料是準的。
+    await resolveWoofWarRewardIfNeeded().catch((err) => {
+      console.warn('[MailboxScene] 汪汪大作戰獎勵結算失敗（可能離線）：', err.message);
+    });
+
+    // 新的信排最上面；已刪除的信直接不顯示。動態的活動結算信疊在最上面。
+    const woofWarMail = this._buildWoofWarRewardMail();
+    this.mails = [...(woofWarMail ? [woofWarMail] : []), ...[...MAIL_DATA].reverse()]
+      .filter((m) => !isMailDeleted(m.id));
     this.selectedId = this.mails.length > 0 ? this.mails[0].id : null;
 
     // ---------- 左側：信件列表 ----------
@@ -221,5 +233,22 @@ export default class MailboxScene extends Phaser.Scene {
     const w = this.scale.width, h = this.scale.height;
     const t = this.add.text(w / 2, h - 130, msg, textStyle({ fontSize: '24px', color: '#5bff8f' })).setOrigin(0.5);
     this.tweens.add({ targets: t, alpha: 0, duration: 1400, delay: 500, onComplete: () => t.destroy() });
+  }
+
+  // 依這個玩家自己結算出的名次（見 WoofWarRewardSystem.resolveWoofWarRewardIfNeeded）
+  // 動態組出一封「長得像普通信件」的物件，套進跟 MAIL_DATA 完全一樣的領取/刪除
+  // 流程——沒結算過或結算出「沒參加」就不產生信件（回傳 null）。
+  _buildWoofWarRewardMail() {
+    const reward = getWoofWarReward();
+    if (!reward || !reward.participated) return null;
+    return {
+      id: WOOF_WAR_REWARD_MAIL_ID,
+      title: `🐾 汪汪大作戰結算：第 ${reward.rank} 名`,
+      date: '2026-07-16',
+      message: `活動已經結束囉，恭喜你在汪汪大作戰拿下第 ${reward.rank} 名！這是你的獎勵——${reward.label}，感謝參與～`,
+      rewards: reward.prizeType === 'gold'
+        ? { gold: reward.gold, items: [] }
+        : { gold: 0, items: [reward.itemId] },
+    };
   }
 }

@@ -23,6 +23,7 @@ const MAIL_STATUS_KEY = 'pixelSurvivors_mailStatus'; // JSON：{ [郵件id]: 'cl
 const LEVEL_UP_AUTO_KEY = 'pixelSurvivors_levelUpAutoMode'; // '1' = 全自動（升級自動選最左邊的卡片），其餘/沒有 = 半自動
 const AUTO_SELL_KEY = 'pixelSurvivors_autoSellRarities'; // JSON 陣列：扭蛋抽到這些稀有度的裝備會自動賣掉換金幣，不進背包
 const GACHA_PITY_KEY = 'pixelSurvivors_gachaPity'; // 目前連續多少抽沒抽到傳說（或更高）以上，滿 100 強制出一件傳說
+const WOOF_WAR_REWARD_KEY = 'pixelSurvivors_woofWarReward'; // JSON：活動結束後結算出的個人獎勵快取，見 WoofWarRewardSystem.js
 
 // 背包格數要跟 InventoryScene.js 的 COLS(12) x ROWS(6) 格子數對齊——這裡原本寫死 50，
 // 但畫面早就改成 12x6=72 格了，兩邊對不上導致背包畫面明明還有一堆空格、抽獎/購買
@@ -390,6 +391,26 @@ export function resetStatPoints() {
 export const RESET_STAT_POINTS_GOLD_COST = RESET_STAT_POINTS_COST;
 export { STAT_INVEST_DEFS };
 
+// ---------- 汪汪大作戰活動獎勵結算快取 ----------
+// 活動結束（07/15 24:00）後，玩家開主選單時 WoofWarRewardSystem 會撈一次完整排行榜、
+// 算出這個玩家的名次/獎勵，存起來——存過之後就不會再重撈，MailboxScene 也是讀這裡
+// 的資料動態產生一封「個人化」的結算信（見 MailboxScene._buildWoofWarRewardMail）。
+// { participated: false } 代表「已經結算過、但這個玩家沒參加，沒有獎勵」；
+// { participated: true, rank, prizeType: 'gold'|'item', gold?, itemId?, label } 代表中獎內容。
+export function getWoofWarReward() {
+  try {
+    const raw = localStorage.getItem(WOOF_WAR_REWARD_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setWoofWarReward(data) {
+  localStorage.setItem(WOOF_WAR_REWARD_KEY, JSON.stringify(data));
+  _scheduleCloudPush();
+}
+
 // ---------- 帳號雲端同步 ----------
 
 // 把目前本機的存檔內容打包成一個物件，用來上傳／覆蓋雲端帳號資料
@@ -408,6 +429,7 @@ function _gatherLocalBundle() {
     levelUpAutoMode: isLevelUpAutoMode(),
     autoSellRarities: getAutoSellRarities(),
     gachaPity: getGachaPity(),
+    woofWarReward: getWoofWarReward(),
   };
 }
 
@@ -453,6 +475,9 @@ function _applyCloudBundle(data) {
   }
   if (typeof data.gachaPity === 'number') {
     localStorage.setItem(GACHA_PITY_KEY, String(Math.max(0, Math.floor(data.gachaPity))));
+  }
+  if (data.woofWarReward && typeof data.woofWarReward === 'object') {
+    localStorage.setItem(WOOF_WAR_REWARD_KEY, JSON.stringify(data.woofWarReward));
   }
 }
 
@@ -580,5 +605,6 @@ export function logout() {
   localStorage.removeItem(LEVEL_UP_AUTO_KEY);
   localStorage.removeItem(AUTO_SELL_KEY);
   localStorage.removeItem(GACHA_PITY_KEY);
+  localStorage.removeItem(WOOF_WAR_REWARD_KEY);
   location.reload();
 }

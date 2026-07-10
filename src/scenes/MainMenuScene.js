@@ -1,12 +1,9 @@
-import { promptPlayerName, getPlayerName, logout, getStatLevel, isMailClaimed, isMailDeleted } from '../managers/SaveManager.js';
-import { subscribeLeaderboard } from '../firebase/firebase.js';
+import { promptPlayerName, getPlayerName, logout, getStatLevel, isMailClaimed, isMailDeleted, getWoofWarReward } from '../managers/SaveManager.js';
+import { subscribeLeaderboard, subscribeWoofWarLeaderboard } from '../firebase/firebase.js';
 import { textStyle } from '../utils/TextStyle.js';
 import { MAIL_DATA } from '../mail/MailData.js';
-
-// 汪汪大作戰目前是封測階段，只有名單內的玩家點「活動關卡」才能真的進去，
-// 其餘玩家一律看到「尚未開放」提示——活動正式開放時把這個名單拿掉即可，
-// 不用動到其他任何程式碼。
-const WOOF_WAR_BETA_TESTERS = ['安培'];
+import { getWoofWarEffectivePhase, formatWoofWarTime, WOOF_WAR_OPEN_AT, WOOF_WAR_CLOSE_LABEL } from '../activities/ActivityData.js';
+import { resolveWoofWarRewardIfNeeded, WOOF_WAR_REWARD_MAIL_ID } from '../activities/WoofWarRewardSystem.js';
 
 // 主選單：初始角色固定為「平衡型」，不再需要選角，
 // 改成「背包／商店／開始遊戲」三個入口（GameScene 沒帶 characterId 時預設就是 balanced）。
@@ -36,14 +33,28 @@ export default class MainMenuScene extends Phaser.Scene {
 
     await promptPlayerName();
 
+    // 汪汪大作戰活動結束後的個人獎勵結算：不 await，避免因為網路請求拖慢主選單
+    // 開啟速度——結算完成後 mailStatus 面板的紅點跟信箱列表下次重新整理時自然會
+    // 反映出來，不需要卡在這裡等結果（見 WoofWarRewardSystem.js）。
+    resolveWoofWarRewardIfNeeded().catch((err) => {
+      console.warn('[MainMenuScene] 汪汪大作戰獎勵結算失敗（可能離線）：', err.message);
+    });
+
     this.add.image(w / 2, 340, 'player_balanced').setScale(2.4);
 
     const btnW = 420, btnH = 88, gap = 24;
 
     // ---- 快捷功能列：背包／商店／信箱，三個並排的小按鈕 ----
     // 信箱是給開發者手動發獎勵用的入口（見 MailboxScene／MailData.js），
-    // 有還沒領取/刪除的信時右上角會冒出一個紅點提醒玩家去看。
-    const hasUnreadMail = MAIL_DATA.some((m) => !isMailClaimed(m.id) && !isMailDeleted(m.id));
+    // 有還沒領取/刪除的信時右上角會冒出一個紅點提醒玩家去看——順便檢查一下
+    // 汪汪大作戰的個人化結算信（見上面 resolveWoofWarRewardIfNeeded）。這裡讀的是
+    // 「上一次」結算出的快取，剛結束活動、這台裝置第一次開主選單那一次還沒結算完，
+    // 紅點會等下一次開主選單才出現，是可以接受的小延遲。
+    const woofWarReward = getWoofWarReward();
+    const hasUnclaimedWoofWarReward = !!(woofWarReward && woofWarReward.participated
+      && !isMailClaimed(WOOF_WAR_REWARD_MAIL_ID) && !isMailDeleted(WOOF_WAR_REWARD_MAIL_ID));
+    const hasUnreadMail = hasUnclaimedWoofWarReward
+      || MAIL_DATA.some((m) => !isMailClaimed(m.id) && !isMailDeleted(m.id));
     const quickItems = [
       { label: '背包', onPick: () => this.scene.start('InventoryScene') },
       { label: '商店', onPick: () => this.scene.start('ShopScene') },
@@ -72,13 +83,7 @@ export default class MainMenuScene extends Phaser.Scene {
     const items = [
       {
         label: '活動關卡', stageLabel: '汪汪大作戰',
-        onPick: () => {
-          if (WOOF_WAR_BETA_TESTERS.includes(getPlayerName())) {
-            this.scene.start('GameScene', { woofWarMode: true });
-          } else {
-            this._showToast('活動關卡尚未開放，敬請期待！');
-          }
-        },
+        onPick: () => this.scene.start('ActivitySelectScene'),
       },
       {
         label: '第一關', stageLabel: `第 1 關`,
@@ -198,6 +203,51 @@ export default class MainMenuScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       if (this._unsubLeaderboard) this._unsubLeaderboard();
     });
+
+    // ---- 活動關卡排行 TOP5（汪汪大作戰傷害排行＋獎品）：疊在排行榜 TOP10 面板下方，
+    // 開放前只顯示「開放時間」不接排行榜；開放後（含活動結束後）都接排行榜即時顯示，
+    // 只是標題下面那行狀態文字換成「結束時間」或「活動已結束」。----
+    const woofPhase = getWoofWarEffectivePhase(getPlayerName());
+    const WOOF_PRIZES = ['🎁 自選神話裝備', '🎁 自選傳說裝備', '💰 10 萬金幣', '💰 3 萬金幣', '💰 3 萬金幣'];
+    const activityBodyStyle = { fontSize: '19px', color: '#cfe9ff', align: 'center', lineSpacing: 9 };
+    const activityMeasure = this.add.text(0, 0, Array(5).fill('讀取排行榜中...').join('\n'), textStyle(activityBodyStyle)).setVisible(false);
+    const activityBodyH = activityMeasure.height;
+    activityMeasure.destroy();
+    const ACTIVITY_STATUS_ROW_H = 30; // 標題下面那行開放/結束時間狀態文字多佔的高度
+    const activityPanelH = HEADER_H + ACTIVITY_STATUS_ROW_H + activityBodyH + BOTTOM_PAD;
+    const activityPanelTop = lbPanelY + lbPanelH / 2 + 24; // 疊在排行榜 TOP10 面板下方，留一點間距
+    const activityPanelY = activityPanelTop + activityPanelH / 2;
+
+    this.add.image(rightX, activityPanelY, 'ui_panel').setDisplaySize(panelW, activityPanelH);
+    this.add.rectangle(rightX, activityPanelY, panelW - 6, activityPanelH - 6).setStrokeStyle(3, 0xffb84d, 0.7).setFillStyle(0, 0);
+    this.add.text(rightX, activityPanelY - activityPanelH / 2 + 26, '🐾 活動關卡排行 TOP5', textStyle({
+      fontSize: '23px', color: '#ffb84d',
+    })).setOrigin(0.5);
+    const activityStatusText = woofPhase === 'before'
+      ? `開放時間：${formatWoofWarTime(WOOF_WAR_OPEN_AT)}`
+      : woofPhase === 'live'
+        ? `結束時間：${WOOF_WAR_CLOSE_LABEL}`
+        : '活動已結束';
+    this.add.text(rightX, activityPanelY - activityPanelH / 2 + 50, activityStatusText, textStyle({
+      fontSize: '16px', color: woofPhase === 'live' ? '#5bff8f' : '#ff9a9a',
+    })).setOrigin(0.5);
+    this.add.rectangle(rightX, activityPanelY - activityPanelH / 2 + 68, panelW - 60, 2, 0xffb84d, 0.4);
+
+    this.activityLbText = this.add.text(rightX, activityPanelY - activityPanelH / 2 + HEADER_H + ACTIVITY_STATUS_ROW_H, '', textStyle(activityBodyStyle)).setOrigin(0.5, 0);
+
+    if (woofPhase === 'before') {
+      // 開放前不接排行榜訂閱，避免玩家在活動還沒開始就看到別人測試打出來的傷害數字
+      this.activityLbText.setText('活動尚未開始，敬請期待！');
+    } else {
+      this._unsubWoofLeaderboard = subscribeWoofWarLeaderboard((rows) => {
+        if (!this.activityLbText || !this.activityLbText.active) return;
+        const lines = rows.slice(0, 5).map((r, i) => `${i + 1}. ${r.name || '???'} — ${r.damage || 0}　${WOOF_PRIZES[i]}`);
+        this.activityLbText.setText(lines.length ? lines.join('\n') : '目前尚無紀錄');
+      });
+      this.events.once('shutdown', () => {
+        if (this._unsubWoofLeaderboard) this._unsubWoofLeaderboard();
+      });
+    }
   }
 
   _showToast(msg) {

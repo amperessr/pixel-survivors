@@ -177,7 +177,13 @@ export default class LevelUpScene extends Phaser.Scene {
       p.hp = Math.min(p.stats.maxHp, p.hp + healAmount);
       this.gs.spawnHealFx(p.sprite.x, p.sprite.y, healAmount);
     }
-    this.gs.resumeFromLevelUp();
+    // 順序很重要：一定要先 stop() 自己，才呼叫 resumeFromLevelUp()——如果反過來，
+    // resumeFromLevelUp() 在還有排隊中的升級時會立刻 launch 下一張 LevelUpScene，
+    // 而這裡緊接著的 stop() 是對「同一個」LevelUpScene key 操作，Phaser 場景管理器
+    // 會把兩個動作視為同一批次處理，後面的 stop() 直接把剛 launch 的新卡片關掉，
+    // 新卡片停在 SHUTDOWN、畫面上看不到也點不到，但計數器照樣往下扣——玩家會覺得
+    // 「只有第一張選得到，後面都被隨機分掉了」（汪汪大作戰一次要選 29 張，最明顯）。
     this.scene.stop();
+    this.gs.resumeFromLevelUp();
   }
 }

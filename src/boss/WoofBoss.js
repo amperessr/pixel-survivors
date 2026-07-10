@@ -5,8 +5,10 @@ import { textStyle } from '../utils/TextStyle.js';
 // 汪汪大作戰專用魔王：跟 Boss.js 的五種常駐魔王是完全獨立的系統——那邊是「三招
 // 隨機輪流選」，這邊是「四招各自獨立 CD」，招式內容也完全不同（雷射掃射／防護罩
 // 無敵／持續追人的隕石大招），共用一套邏輯反而會讓 Boss.js 變得更難懂，所以另外
-// 獨立一個檔案。傷害刻意壓得很低（見 SKILLS 各招的 dmg），因為這隻魔王的定位是
-// 「防禦血量異常高、讓玩家盡量拚傷害輸出」的活動關卡，不是要打死玩家的一般魔王。
+// 獨立一個檔案。2026-07-11 平衡調整：四招傷害全面拉高到「不閃真的會死」的程度
+// （見 SKILLS 各招的 dmg）——「死」在汪汪大作戰裡不是遊戲結束，只是觸發
+// _woofWarRevivePlayer() 原地滿血復活＋1 秒無敵，所以傷害可以放到接近/超過玩家
+// 血量上限，逼玩家認真閃招，不會真的把挑戰打斷。
 const MAX_HP = 2_000_000;
 const DEFENSE = 300; // 百分比減傷公式跟 Player.takeDamage 一致：100/(100+defense)
 const TOUCH_RADIUS = 90;
@@ -15,10 +17,17 @@ const BOSS_SCALE = 0.55;
 // 四招各自的施放/持續時間與 CD（單位 ms）。CD 從「這招真正結束」那一刻開始算，
 // 不是從前搖開始算——避免快 CD 的招式因為前搖時間長被拖累。
 const SKILLS = {
-  charge: { castMs: 2000, cd: 4000, dashMs: 400, dmg: 40 },
-  laser: { castMs: 3000, cd: 5000, beamMs: 600, dmg: 16, tickMs: 150 },
+  charge: { castMs: 2000, cd: 4000, dashMs: 400, dmg: 400 },
+  // 雷射改成「持續 5 秒的追蹤光束」：不再是前搖鎖定方向就打完的一次性直線，
+  // 執行期間每 tickMs 判定一次傷害，光束角度會持續朝玩家目前位置轉向，但轉速
+  // 有上限（turnDegPerSec，每秒最多轉幾度）——玩家平移閃避還是躲得掉，不是
+  // 無腦鎖死的必中光束，只是不能傻站原地不動。
+  laser: { castMs: 3000, cd: 8000, beamMs: 5000, dmg: 100, tickMs: 500, turnDegPerSec: 20 },
   shield: { castMs: 0, cd: 15000, durationMs: 5000 },
-  meteor: { castMs: 0, cd: 20000, durationMs: 10000, tickMs: 300, dmg: 18, aoe: 70 },
+  // 隕石：警示圈先出現、停留 warnMs 再真正落下（跟舊版「警示跟落下同時播、
+  // 260ms 就砸下來」比，反應時間拉長成看得到、躲得掉），落點間隔也拉開到
+  // 跟 warnMs+fallMs 差不多長，一顆一顆分明，不會疊成連續閃爍。
+  meteor: { castMs: 0, cd: 20000, durationMs: 10000, tickMs: 900, dmg: 600, aoe: 70, warnMs: 700, fallMs: 180 },
 };
 const SKILL_LABELS = {
   charge: '⚠ 汪汪衝撞！', laser: '⚠ 汪汪雷射！', shield: '⚠ 汪汪護盾！', meteor: '⚠ 汪汪大災變！降下隕石！',
@@ -76,6 +85,8 @@ export default class WoofBoss {
       this._updateTelegraph(time);
     } else if (this.phase === 'charge') {
       this._updateCharge(time);
+    } else if (this.phase === 'laserBeam') {
+      this._updateLaserBeam(time);
     }
 
     // 接觸傷害：護盾期間一樣會撞人，但傷害維持很低，純粹是移動中的擦撞
@@ -190,50 +201,65 @@ export default class WoofBoss {
     }
   }
 
-  // 招式二：雷射 —— 前搖鎖定方向後，射出一道沿線的實體光束，命中判定用「玩家到
-  // 直線的距離」計算，而不是投射物，因為光束是瞬間打穿全長，不是飛行過去的。
+  // 招式二：雷射 —— 前搖先鎖定初始方向給玩家一個瞄準預告，實際發射後改成
+  // 持續 beamMs 的追蹤光束：每幀把光束角度朝玩家目前位置轉一點（轉速上限
+  // turnDegPerSec，見 _updateLaserBeam），不是焊死角度打完就收，玩家不能
+  // 站著不動硬吃，但平移閃避還是躲得掉，不是無腦必中。
   _executeLaser(time) {
     this.phase = 'laserBeam';
     const def = SKILLS.laser;
     const bx = this.sprite.x, by = this.sprite.y;
-    const ang = this._lockedAngle;
-    const length = 1400;
+    this._laserAngle = this._lockedAngle;
+    this._laserLength = 1400;
+    this._laserStartAt = time;
+    this._laserLastTickAt = 0;
 
     this.scene.cameras.main.flash(200, 255, 80, 80);
     audioManager.bossRoar();
     this.scene.spawnGlowRing(bx, by, 'fx_bossdeath', 0xff3d3d, 0.3, 2.2, 300);
 
-    const beam = this.scene.add.image(bx, by, 'fx_bolt').setOrigin(0, 0.5).setDepth(19998)
-      .setRotation(ang).setScale(length / 64, 3.2).setTint(0xff3d3d).setAlpha(0.85)
+    this._laserBeam = this.scene.add.image(bx, by, 'fx_bolt').setOrigin(0, 0.5).setDepth(19998)
+      .setRotation(this._laserAngle).setScale(this._laserLength / 64, 3.2).setTint(0xff3d3d).setAlpha(0.85)
       .setBlendMode(Phaser.BlendModes.ADD);
-    const beamCore = this.scene.add.image(bx, by, 'fx_bolt').setOrigin(0, 0.5).setDepth(19999)
-      .setRotation(ang).setScale(length / 64, 1.3).setTint(0xffffff).setAlpha(0.7)
+    this._laserBeamCore = this.scene.add.image(bx, by, 'fx_bolt').setOrigin(0, 0.5).setDepth(19999)
+      .setRotation(this._laserAngle).setScale(this._laserLength / 64, 1.3).setTint(0xffffff).setAlpha(0.7)
       .setBlendMode(Phaser.BlendModes.ADD);
-    this.scene.time.delayedCall(def.beamMs, () => { beam.destroy(); beamCore.destroy(); });
+  }
 
-    const endX = bx + Math.cos(ang) * length, endY = by + Math.sin(ang) * length;
-    const startAt = time;
-    let lastTickAt = 0;
-    const tickTimer = this.scene.time.addEvent({
-      delay: 40, loop: true,
-      callback: () => {
-        const now = this.scene.time.now;
-        if (now - startAt > def.beamMs) { tickTimer.remove(); return; }
-        if (now - lastTickAt < def.tickMs) return;
-        const d = this._distToSegment(this.player.sprite.x, this.player.sprite.y, bx, by, endX, endY);
-        if (d < 40) {
-          lastTickAt = now;
-          this.player.takeDamage(def.dmg, now);
-          this.scene.spawnBurstFx(this.player.sprite.x, this.player.sprite.y, 0xff3d3d, 6, 'fx_crit', 100);
-        }
-      },
-    });
+  // 每幀更新一次：光束角度朝玩家現在的位置緩緩轉向（有轉速上限，不是瞬間鎖死），
+  // 位置固定在魔王身上；每 tickMs 判定一次「玩家到光束線段的距離」造成傷害，
+  // 時間到 beamMs 就收尾、進 CD。
+  _updateLaserBeam(time) {
+    const def = SKILLS.laser;
+    const bx = this.sprite.x, by = this.sprite.y;
+    const targetAngle = angleTo(bx, by, this.player.sprite.x, this.player.sprite.y);
+    const delta = this.scene.game.loop.delta || 16;
+    const maxTurn = Phaser.Math.DegToRad(def.turnDegPerSec) * (delta / 1000);
+    this._laserAngle = Phaser.Math.Angle.RotateTo(this._laserAngle, targetAngle, maxTurn);
 
-    this.scene.time.delayedCall(def.beamMs, () => {
+    this._laserBeam.setPosition(bx, by).setRotation(this._laserAngle);
+    this._laserBeamCore.setPosition(bx, by).setRotation(this._laserAngle);
+
+    if (time - this._laserLastTickAt >= def.tickMs) {
+      this._laserLastTickAt = time;
+      const endX = bx + Math.cos(this._laserAngle) * this._laserLength;
+      const endY = by + Math.sin(this._laserAngle) * this._laserLength;
+      const d = this._distToSegment(this.player.sprite.x, this.player.sprite.y, bx, by, endX, endY);
+      if (d < 40) {
+        this.player.takeDamage(def.dmg, time);
+        this.scene.spawnBurstFx(this.player.sprite.x, this.player.sprite.y, 0xff3d3d, 6, 'fx_crit', 100);
+      }
+    }
+
+    if (time - this._laserStartAt >= def.beamMs) {
+      this._laserBeam.destroy();
+      this._laserBeamCore.destroy();
+      this._laserBeam = null;
+      this._laserBeamCore = null;
       this.phase = 'chase';
-      this.nextReadyAt.laser = this.scene.time.now + def.cd;
-      this._chooseAt = this.scene.time.now + 400;
-    });
+      this.nextReadyAt.laser = time + def.cd;
+      this._chooseAt = time + 400;
+    }
   }
 
   _distToSegment(px, py, ax, ay, bx, by) {
@@ -245,7 +271,7 @@ export default class WoofBoss {
     return dist(px, py, cx, cy);
   }
 
-  // 招式三：防護罩 —— 5 秒無敵（takeDamage 直接無視），身上疊一層發光泡泡提示玩家
+  // 招式三：防護罩 —— 5 秒無敵（takeDamage 直接無視），身上疊一層金色透明光罩提示玩家
   // 現在打不進去，CD 從護盾結束那一刻開始算 15 秒。
   _executeShield(time) {
     this.phase = 'chase';
@@ -254,9 +280,9 @@ export default class WoofBoss {
     this._chooseAt = time + 400;
 
     this.shieldBubble = this.scene.add.image(this.sprite.x, this.sprite.y, 'fx_bossdeath')
-      .setTint(0x6fd3ff).setAlpha(0.45).setScale(3.4).setDepth(this.sprite.depth + 1)
+      .setTint(0xffd700).setAlpha(0.5).setScale(3.4).setDepth(this.sprite.depth + 1)
       .setBlendMode(Phaser.BlendModes.ADD);
-    this.scene.tweens.add({ targets: this.shieldBubble, alpha: 0.65, duration: 400, yoyo: true, repeat: -1 });
+    this.scene.tweens.add({ targets: this.shieldBubble, alpha: 0.75, duration: 400, yoyo: true, repeat: -1 });
     audioManager.bossRoar();
 
     this.scene.time.delayedCall(def.durationMs, () => {
@@ -266,8 +292,9 @@ export default class WoofBoss {
     });
   }
 
-  // 招式四（大招）：隕石 —— 10 秒內每 0.3 秒在玩家附近降下一顆隕石，落點會追著玩家
-  // 目前位置（帶一點隨機散佈），逼玩家持續移動閃避，非常密集華麗。
+  // 招式四（大招）：隕石 —— 10 秒內每 tickMs 在玩家附近降下一顆隕石，落點會追著
+  // 玩家目前位置（帶一點隨機散佈）。tickMs 抓得跟「警示出現到砸落」的總時間差不多，
+  // 一顆一顆分明地逼玩家持續移動閃避，不會疊成連續閃爍。
   _executeMeteor(time) {
     this.phase = 'chase'; // 大招期間魔王本體維持一般移動，隕石獨立運作，不佔用招式判斷
     const def = SKILLS.meteor;
@@ -283,7 +310,7 @@ export default class WoofBoss {
         if (!this.player.sprite.active) return;
         const px = this.player.sprite.x + (Math.random() - 0.5) * 160;
         const py = this.player.sprite.y + (Math.random() - 0.5) * 160;
-        this._spawnMeteor(px, py, def.dmg, def.aoe);
+        this._spawnMeteor(px, py, def.dmg, def.aoe, def.warnMs, def.fallMs);
       },
     });
 
@@ -292,24 +319,34 @@ export default class WoofBoss {
     });
   }
 
-  _spawnMeteor(x, y, dmg, aoe) {
-    // 落點警示圈：短暫預告，給玩家一點反應時間
+  // 警示圈先快速長到全尺寸、停留 warnMs 給玩家看清楚並閃開，時間到才真的召喚隕石
+  // 落下（fallMs，短促有衝擊感）——跟舊版「警示跟砸落同時播、0.26 秒就打中」比，
+  // 是完全不同的節奏：看得到、來得及反應，而不是一片連續閃爍的警示圈。
+  _spawnMeteor(x, y, dmg, aoe, warnMs, fallMs) {
     const warn = this.scene.add.circle(x, y, 6, 0xff6a2d, 0.3).setStrokeStyle(3, 0xff6a2d, 0.85).setDepth(20008);
-    this.scene.tweens.add({ targets: warn, radius: aoe, duration: 260, ease: 'Sine.easeIn' });
-
-    const meteor = this.scene.add.image(x, y - 420, 'proj_fireball').setDepth(30003)
-      .setScale(2.2).setTint(0xff6a2d).setRotation(0.4);
+    const growMs = Math.min(200, warnMs);
+    this.scene.tweens.add({ targets: warn, radius: aoe, duration: growMs, ease: 'Sine.easeOut' });
     this.scene.tweens.add({
-      targets: meteor, y, duration: 260, ease: 'Cubic.easeIn',
-      onComplete: () => {
-        meteor.destroy();
-        warn.destroy();
-        this.scene.spawnGlowRing(x, y, 'fx_flame', 0xff8a3d, 0.4, aoe / 26, 260);
-        this.scene.spawnBurstFx(x, y, 0xff8a3d, 8, 'fx_flame', 140);
-        if (dist(x, y, this.player.sprite.x, this.player.sprite.y) <= aoe) {
-          this.player.takeDamage(dmg, this.scene.time.now);
-        }
-      },
+      targets: warn, alpha: 0.7, duration: 200, delay: growMs, yoyo: true,
+      repeat: Math.max(0, Math.floor((warnMs - growMs) / 400)),
+    });
+
+    this.scene.time.delayedCall(warnMs, () => {
+      warn.destroy();
+      if (!this.alive) return;
+      const meteor = this.scene.add.image(x, y - 420, 'proj_fireball').setDepth(30003)
+        .setScale(2.2).setTint(0xff6a2d).setRotation(0.4);
+      this.scene.tweens.add({
+        targets: meteor, y, duration: fallMs, ease: 'Cubic.easeIn',
+        onComplete: () => {
+          meteor.destroy();
+          this.scene.spawnGlowRing(x, y, 'fx_flame', 0xff8a3d, 0.4, aoe / 26, 260);
+          this.scene.spawnBurstFx(x, y, 0xff8a3d, 8, 'fx_flame', 140);
+          if (this.player.sprite.active && dist(x, y, this.player.sprite.x, this.player.sprite.y) <= aoe) {
+            this.player.takeDamage(dmg, this.scene.time.now);
+          }
+        },
+      });
     });
   }
 
@@ -363,6 +400,7 @@ export default class WoofBoss {
     this.headBarBg.destroy();
     this.headBarFill.destroy();
     if (this.shieldBubble) this.shieldBubble.destroy();
+    if (this._laserBeam) { this._laserBeam.destroy(); this._laserBeamCore.destroy(); }
     if (this.scene.onWoofBossDefeated) this.scene.onWoofBossDefeated();
   }
 
@@ -372,5 +410,6 @@ export default class WoofBoss {
     this.headBarBg.destroy();
     this.headBarFill.destroy();
     if (this.shieldBubble) this.shieldBubble.destroy();
+    if (this._laserBeam) { this._laserBeam.destroy(); this._laserBeamCore.destroy(); }
   }
 }
