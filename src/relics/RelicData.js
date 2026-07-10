@@ -5,11 +5,11 @@ export const RELICS = {
     id: 'dragonAura',
     name: '龍之光環',
     subtitle: '擊敗黑龍王的獎賞',
-    desc: '生命上限與攻擊力\n永久提升 2 倍！\n身上會持續纏繞金色龍息氣場',
-    // 用真正的黑龍美術圖（574x320，橫向構圖），iconScale 另外調過比例，
-    // 不能沿用舊的方形貼圖縮放倍率，不然會爆版蓋住整張卡片。
-    icon: 'boss_black',
-    iconScale: 0.38,
+    desc: '生命上限與攻擊力\n永久提升 2 倍！\n身上會持續纏繞蒼藍龍息氣場',
+    // 改用正式美術圖 fx_dragon_aura_icon（去背版，1189x1024 近似方形構圖），
+    // iconScale 另外調過比例，不能沿用舊的方形貼圖縮放倍率，不然會爆版蓋住整張卡片。
+    icon: 'fx_dragon_aura_icon',
+    iconScale: 0.15,
     // 實際套用效果：呼叫 Player.applyDragonAura()
     apply(gameScene) {
       gameScene.player.applyDragonAura();

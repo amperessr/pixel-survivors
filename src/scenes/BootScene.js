@@ -9,6 +9,10 @@ export default class BootScene extends Phaser.Scene {
     // 裝備圖示（商店三階 15 張／扭蛋一般裝備 100 張／扭蛋傳說裝備 25 張／四種戒指），
     // 其餘材質還是 TextureFactory 產生。
     this.load.image('fx_dragon_wing_pair', 'assets/dragon_wing.png');
+    // 龍之光環遺物的正式美術圖：持續氣場特效用黑底原圖（搭配 ADD 疊加模式，
+    // 黑色部分視覺上等於透明），卡片圖示則另外去背成有 alpha 的版本（一般疊加模式用）。
+    this.load.image('fx_dragon_aura', 'assets/fx_dragon_aura.png');
+    this.load.image('fx_dragon_aura_icon', 'assets/fx_dragon_aura_icon.png');
     this.load.image('menu_bg', 'assets/menu_bg.jpg');
     this.load.image('boss_red', 'assets/boss_red.png');
     this.load.image('boss_black', 'assets/boss_black.png');

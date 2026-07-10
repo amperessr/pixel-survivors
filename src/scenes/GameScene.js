@@ -1168,18 +1168,23 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // 龍之光環（永久版）：玩家在 RelicChoiceScene 選擇拿取「龍之光環」後呼叫，
-  // 建立一個「持續跟著玩家」的金色氣場光環，每一幀都重新對齊玩家座標，
-  // 而不是只靠間歇性的粒子噴發假裝跟隨——這是這次要修正的重點。
+  // 建立一個「持續跟著玩家」的蒼藍氣場光環，每一幀都重新對齊玩家座標，
+  // 而不是只靠間歇性的粒子噴發假裝跟隨。改用玩家提供的正式美術圖 fx_dragon_aura
+  // （黑底＋ADD 疊加模式，黑色部分視覺上等於透明），不再沿用共用的 fx_levelup 佔位圖，
+  // 也不額外 setTint——原圖本身就是藍/青色調，硬染金色只會把光暈蓋暗。
   enableDragonAuraVisual() {
     this.dragonAuraActive = true;
     this._nextDragonEmberAt = 0;
     if (!this.dragonAuraRing) {
-      this.dragonAuraRing = this.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_levelup')
-        .setBlendMode(Phaser.BlendModes.ADD).setTint(0xffe066).setAlpha(0.5).setScale(1.5).setDepth(9997);
+      const tex = this.textures.get('fx_dragon_aura').getSourceImage();
+      const baseScale = 150 / tex.width;
+      this._dragonAuraBaseScale = baseScale;
+      this.dragonAuraRing = this.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_dragon_aura')
+        .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.6).setScale(baseScale).setDepth(9997);
       this.tweens.add({
         targets: this.dragonAuraRing,
-        scale: { from: 1.3, to: 1.9 },
-        alpha: { from: 0.35, to: 0.6 },
+        scale: { from: baseScale * 0.85, to: baseScale * 1.2 },
+        alpha: { from: 0.45, to: 0.75 },
         duration: 900,
         yoyo: true,
         repeat: -1,
@@ -1190,7 +1195,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // 每幀更新：把光環釘在玩家目前座標上（永遠跟著玩家跑），
-  // 並每隔一小段時間補幾顆往上竄的金色能量粒子，強化「持續繚繞」的感覺
+  // 並每隔一小段時間補幾顆往上竄的藍色能量粒子，強化「持續繚繞」的感覺
   _updateDragonAura(time) {
     if (!this.dragonAuraActive) return;
     const p = this.player.sprite;
@@ -1198,7 +1203,7 @@ export default class GameScene extends Phaser.Scene {
     this.dragonAuraRing.setDepth(p.depth - 1);
     if (time >= this._nextDragonEmberAt) {
       this._nextDragonEmberAt = time + 220;
-      this.spawnEmbersFx(p.x, p.y, 2, 0xffe066);
+      this.spawnEmbersFx(p.x, p.y, 2, 0x66e0ff);
     }
   }
 
