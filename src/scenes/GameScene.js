@@ -262,7 +262,17 @@ export default class GameScene extends Phaser.Scene {
   applyLifesteal(dmg) {
     if (!this._hasLifestealRing || !this.player || this.gameEnded) return;
     const now = this.time.now;
+    let isNewSecond = false;
     if (now - this._lifestealWindowAt >= 1000) {
+      isNewSecond = true;
+      // 秒數跨越：顯示上一秒恢復的總量，再重設計數器
+      if (this._lifestealHealed > 0) {
+        const p = this.player.sprite;
+        const text = this.add.text(p.x, p.y - 30, `+${Math.round(this._lifestealHealed)} HP`, textStyle({
+          fontSize: '18px', color: '#5bff8f',
+        })).setOrigin(0.5).setDepth(30001);
+        this.tweens.add({ targets: text, y: p.y - 60, alpha: 0, duration: 600, onComplete: () => text.destroy() });
+      }
       this._lifestealWindowAt = now;
       this._lifestealHealed = 0;
     }

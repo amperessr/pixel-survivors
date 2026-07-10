@@ -37,5 +37,5 @@ const config = {
 };
 
 window.addEventListener('load', () => {
-  new Phaser.Game(config);
+  window.game = new Phaser.Game(config);
 });

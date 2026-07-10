@@ -447,9 +447,10 @@ export default class WeaponSystem {
         this.sawbladeSprites.push(sp);
       }
       for (let i = 0; i < s.outerCount; i++) {
-        const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'proj_knife');
-        sp.setScale(3.4); // 外圈飛鏢再放大兩倍
-        sp.setTint(0xff8f8f);
+        // 外圈改用跟內圈同一張血肉風暴美術圖（本身已有完整配色，不用染色），
+        // 只是外圈半徑比較大，稍微放大一點跟內圈做出區隔。
+        const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_bloodstorm');
+        sp.setScale(0.65);
         sp.setDepth(6000).setData('kind', 'sawblade').setData('lastHit', new Map()).setData('ring', 1);
         this.sawbladeSprites.push(sp);
       }

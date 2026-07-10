@@ -20,7 +20,7 @@ src/
   scenes/       BootScene(素材preload+TextureFactory生成) → MainMenuScene → GameScene
                 ⇄ UIScene / LevelUpScene / RelicChoiceScene → GameOverScene
                 另有 InventoryScene／ShopScene／MailboxScene／StartSkillScene
-  player/       Player.js：四職業設定與數值、移動/衝刺
+  player/       Player.js：設定與數值、移動/衝刺
   enemy/        EnemyData.js（怪物資料）／EnemySystem.js（AI、物件池、空間網格）
   boss/         Boss.js：五種 Boss 型態與招式
   weapons/      WeaponData.js（數值/進化/擊退設定）／WeaponSystem.js（開火邏輯）
