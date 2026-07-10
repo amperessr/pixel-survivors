@@ -361,8 +361,11 @@ export default class WeaponSystem {
           const ang = (d / directions) * Math.PI * 2;
           const x = px + Math.cos(ang) * pillarDist;
           const y = py + Math.sin(ang) * pillarDist;
+          // 最外圈（離玩家最遠的那一階）冰柱標記 outermost，spawnIcePillar 會把它
+          // 做得更大並直接冰凍命中的敵人，而不只是緩速——進化後的收尾一擊更有份量感。
+          const outermost = s === steps;
           this.scene.time.delayedCall((s - 1) * 120, () => {
-            this.scene.spawnIcePillar(x, y, dmg, data.slowDuration, stats.critRate, stats.critDmg, knockback, true);
+            this.scene.spawnIcePillar(x, y, dmg, data.slowDuration, stats.critRate, stats.critDmg, knockback, true, outermost);
           });
         }
       }

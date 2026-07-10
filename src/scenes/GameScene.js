@@ -1433,11 +1433,13 @@ export default class GameScene extends Phaser.Scene {
   // 冰柱特效：從地面冒出一根結晶冰柱，命中範圍內敵人並造成減速。
   // knockback 為 null 時不造成擊退；evolved 為 true 時換成進化版的專屬美術圖
   // （見下方 pillarTexture），不再跟一般版共用同一張貼圖疊色縮放。
-  spawnIcePillar(x, y, dmg, slowDuration, critRate, critDmg, knockback, evolved = false) {
+  // outermost：進化版六方向冰柱中「離玩家最遠那一圈」——做得比其他冰柱更大，
+  // 命中時直接冰凍（而不只是緩速），當作進化冰霜新星收尾的重擊。
+  spawnIcePillar(x, y, dmg, slowDuration, critRate, critDmg, knockback, evolved = false, outermost = false) {
     // 地面裂痕／冰霜擴散提示，讓玩家注意到冰柱要冒出來的位置
-    const crack = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setScale(evolved ? 0.4 : 0.25).setAlpha(0.6);
+    const crack = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setScale(evolved ? (outermost ? 0.55 : 0.4) : 0.25).setAlpha(0.6);
     crack.setTint(evolved ? 0x8fd6ff : 0x8fe3ff);
-    this.tweens.add({ targets: crack, scale: evolved ? 1.9 : 1.3, alpha: 0, duration: 260, onComplete: () => crack.destroy() });
+    this.tweens.add({ targets: crack, scale: evolved ? (outermost ? 2.4 : 1.9) : 1.3, alpha: 0, duration: 260, onComplete: () => crack.destroy() });
 
     // 進化版限定：地面額外噴出幾道放射狀碎冰，堆疊出比一般版更華麗的地面特效
     if (evolved) {
@@ -1459,8 +1461,9 @@ export default class GameScene extends Phaser.Scene {
     const pillarTexture = evolved ? 'fx_ice_pillar_evo' : 'fx_ice_pillar_normal';
     // 進化版原圖是 283x420 的高聳冰柱（跟一般版 160x190 的瘦長冰柱同款畫風，只是
     // 更高更尖），縮放倍率調到讓它比一般版高上約 1.4 倍，跟命中半徑（evolved 50 /
-    // 一般 36）的比例搭起來，視覺上有「進化後更巨大」的份量感。
-    const pillarScale = evolved ? 0.35 : 0.55;
+    // 一般 36）的比例搭起來，視覺上有「進化後更巨大」的份量感。outermost 再放大
+    // 一截，跟「直接冰凍」的效果份量對上。
+    const pillarScale = evolved ? (outermost ? 0.35 * 1.4 : 0.35) : 0.55;
     const pillar = this.add.image(x, y, pillarTexture).setOrigin(0.5, 1).setDepth(y + 1).setScale(pillarScale, pillarScale * 0.05).setAlpha(0.95);
 
     this.tweens.add({
@@ -1470,14 +1473,15 @@ export default class GameScene extends Phaser.Scene {
       ease: 'Back.easeOut',
       onComplete: () => {
         if (!pillar.active) return;
-        // 冰柱冒出的瞬間造成傷害＋減速＋擊退
-        const hitRadius = evolved ? 50 : 36;
+        // 冰柱冒出的瞬間造成傷害＋減速（outermost 額外直接冰凍）＋擊退
+        const hitRadius = evolved ? (outermost ? 65 : 50) : 36;
         this.enemySystem.queryNear(x, y, hitRadius, (e) => {
           if (dist(x, y, e.x, e.y) > hitRadius) return;
           this.enemySystem.damageEnemy(e, dmg, critRate, critDmg, knockback ? {
             fromX: x, fromY: y, force: knockback.force, duration: knockback.duration,
           } : null);
           this.enemySystem.applySlow(e, slowDuration);
+          if (outermost) this.enemySystem.applyFreeze(e, 1200);
         });
         if (this.boss && this.boss.alive && dist(x, y, this.boss.sprite.x, this.boss.sprite.y) <= hitRadius + 20) {
           this.boss.takeDamage(dmg, critRate, critDmg);

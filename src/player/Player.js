@@ -298,7 +298,11 @@ export default class Player {
 
   takeDamage(amount, time) {
     if (time < this.invulnerableUntil || this.hp <= 0) return false;
-    const mitigated = Math.max(1, amount - this.stats.defense * 0.5);
+    // 改用百分比減傷（防禦100＝減傷50%，200＝66%，遞減收斂但不會到100%）——
+    // 原本的固定值減免（amount - defense*0.5）在敵人傷害隨時間倍率成長後，
+    // 防禦力的固定減免會被稀釋到幾乎歸零，後期防禦類裝備/角色形同虛設；
+    // 百分比公式讓防禦力的「相對」防禦力始終有意義，不受時間倍率稀釋。
+    const mitigated = Math.max(1, amount * (100 / (100 + this.stats.defense)));
     this.hp = clamp(this.hp - mitigated, 0, this.stats.maxHp);
     this.invulnerableUntil = time + 500;
     this.sprite.setTintFill(0xffffff);

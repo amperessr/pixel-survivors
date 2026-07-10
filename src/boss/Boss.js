@@ -123,18 +123,24 @@ const TELEGRAPH_MS = 2000;
 // Boss 強度倍率：依「這是第幾隻王」(bossIndex，從 1 開始，每 5 分鐘一隻)決定，
 // 不再用存活分鐘數線性計算。數列從 1, 2 開始，之後每項是前兩項相加（費氏數列變體）：
 // 第1隻(5分鐘) 1x／第2隻(10分鐘) 2x／第3隻(15分鐘) 3x／第4隻(20分鐘) 5x／
-// 第5隻(25分鐘) 8x／第6隻(30分鐘) 13x……以此類推，越後面成長越快。
+// 第5隻(25分鐘) 8x／第6隻(30分鐘) 13x。
+// 第6隻之後改成固定線性遞增（每隻 +5x，即轉換點費氏數列最後一次的差值：13-8=5）——
+// 費氏數列成長率後期會趨近黃金比例（約1.618倍/隻），一直延續下去會讓更後面的王
+// 直接變成打不過的門檻，改線性成長避免無限爆炸，同時轉換點數值(13x)保持連續不跳動。
+const FIB_LINEAR_CAP = 6;
 function bossStrengthMultiplier(bossIndex) {
   const n = Math.max(1, Math.floor(bossIndex));
   if (n === 1) return 1;
   if (n === 2) return 2;
   let a = 1, b = 2;
-  for (let i = 3; i <= n; i++) {
+  for (let i = 3; i <= Math.min(n, FIB_LINEAR_CAP); i++) {
     const c = a + b;
     a = b;
     b = c;
   }
-  return b;
+  if (n <= FIB_LINEAR_CAP) return b;
+  const step = b - a;
+  return b + step * (n - FIB_LINEAR_CAP);
 }
 
 // Boss 系統：目前有五種型態（黑龍王／血色紅龍／惡魔王／樹王／獅鷲王），各自三招技能、
