@@ -172,27 +172,33 @@ export default class UIScene extends Phaser.Scene {
         fontSize: '19px', color: itemId ? '#ffe066' : '#8a8f9c',
       })).setOrigin(0, 0.5).setScrollFactor(0);
     });
+    // ---------- 戒指（2 個獨立卡片，上下堆疊，比主裝備欄寬敞）----------
+    // 原本把戒指塞在第 6 格卡片裡（跟文字並排），空間太小看不清楚；改成 2 個獨立卡片
+    // 各自占用 1 行，這樣戒指圖示能更大、更清楚。每張卡片左邊放圖示、右邊放「戒指 1/2」標籤。
     {
-      // 第 6 格改成兩個戒指小欄位並排（戒指目前只能從扭蛋機取得，扭蛋機制還沒
-      // 實作，所以這兩格暫時一定是空的，但一旦拿到戒指就會直接顯示圖示）。
-      // 戒指圖示原本只有 30x30／scale 0.18，跟旁邊主裝備欄的 40x40／0.24 比起來
-      // 明顯過小；這裡放大到跟主裝備欄一致的視覺尺寸，兩顆戒指靠右並排。
-      const { x, y } = equipPos[5];
-      const ringSize = 40, ringGap = 8;
-      this.add.image(x, y, 'ui_stat_chip').setDisplaySize(chipW, chipH).setScrollFactor(0);
-      this.add.text(x - chipW / 2 + 18, y, '戒指', textStyle({
-        fontSize: '19px', color: '#8a8f9c',
-      })).setOrigin(0, 0.5).setScrollFactor(0);
+      const ringChipW = chipW * 1.25, ringChipH = 44; // 比普通卡片寬一點
+      const ring1X = col3CenterX - colW * 0.235, ring1Y = gridTopY + rowGap * 2;
+      const ring2X = col3CenterX + colW * 0.235, ring2Y = gridTopY + rowGap * 2;
       RING_SLOTS.forEach((slot, i) => {
-        const rx = x + chipW / 2 - 8 - ringSize / 2 - (RING_SLOTS.length - 1 - i) * (ringSize + ringGap);
+        const x = i === 0 ? ring1X : ring2X;
+        const y = ring1Y;
         const itemId = equipped[slot];
-        const ringBg = this.add.image(rx, y, 'ui_equip_slot').setDisplaySize(ringSize, ringSize).setScrollFactor(0);
+        this.add.image(x, y, 'ui_stat_chip').setDisplaySize(ringChipW, ringChipH).setScrollFactor(0);
+        const ringSlotBg = this.add.image(x - ringChipW / 2 + 32, y, 'ui_equip_slot').setDisplaySize(48, 48).setScrollFactor(0);
         if (itemId && EQUIPMENT_DATA[itemId]) {
-          this.add.image(rx, y, EQUIPMENT_DATA[itemId].icon).setScale(0.28).setScrollFactor(0);
+          this.add.image(x - ringChipW / 2 + 32, y, EQUIPMENT_DATA[itemId].icon).setScale(0.32).setScrollFactor(0);
         } else {
-          ringBg.setAlpha(0.3);
+          ringSlotBg.setAlpha(0.3);
         }
+        this.add.text(x - ringChipW / 2 + 70, y, `戒指 ${i + 1}`, textStyle({
+          fontSize: '18px', color: itemId ? '#ffe066' : '#8a8f9c',
+        })).setOrigin(0, 0.5).setScrollFactor(0);
       });
+    }
+    // 原本第 6 格卡片改成空佔位格（保持視覺平衡）
+    {
+      const { x, y } = equipPos[5];
+      this.add.image(x, y, 'ui_stat_chip').setDisplaySize(chipW, chipH).setAlpha(0.15).setScrollFactor(0);
     }
 
     // ---------- 技能（5 個被動 + 1 個保留格；武器已經在右上角的技能面板顯示過，
