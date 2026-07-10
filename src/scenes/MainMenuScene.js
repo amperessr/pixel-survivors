@@ -2,7 +2,7 @@ import { promptPlayerName, getPlayerName, logout, getStatLevel, isMailClaimed, i
 import { subscribeLeaderboard, subscribeWoofWarLeaderboard } from '../firebase/firebase.js';
 import { textStyle } from '../utils/TextStyle.js';
 import { MAIL_DATA } from '../mail/MailData.js';
-import { getWoofWarEffectivePhase, formatWoofWarTime, WOOF_WAR_OPEN_AT, WOOF_WAR_CLOSE_LABEL } from '../activities/ActivityData.js';
+import { getWoofWarPhase, formatWoofWarTime, WOOF_WAR_OPEN_AT, WOOF_WAR_CLOSE_LABEL } from '../activities/ActivityData.js';
 import { resolveWoofWarRewardIfNeeded, WOOF_WAR_REWARD_MAIL_ID } from '../activities/WoofWarRewardSystem.js';
 
 // 主選單：初始角色固定為「平衡型」，不再需要選角，
@@ -78,11 +78,13 @@ export default class MainMenuScene extends Phaser.Scene {
     });
 
     // ---- 開始遊戲：活動關卡／第一關，維持原本的直向大按鈕堆疊 ----
-    // 「當前關卡」（從存檔點繼續）已移除，原本的位置改放「活動關卡」入口，
-    // 目前活動是「汪汪大作戰」限時挑戰（見 GameScene 的 woofWarMode）。
+    // 「當前關卡」（從存檔點繼續）已移除，原本的位置改放「活動關卡」入口。
+    // 「活動關卡」不寫死顯示活動名稱——點下去是先進 ActivitySelectScene 選活動
+    // （見 ActivityData.js 的 ACTIVITIES 清單），這裡寫死名字會在未來活動變多/
+    // 輪替時跟實際內容對不上，具體是什麼活動留給下一頁自己顯示。
     const items = [
       {
-        label: '活動關卡', stageLabel: '汪汪大作戰',
+        label: '活動關卡',
         onPick: () => this.scene.start('ActivitySelectScene'),
       },
       {
@@ -207,7 +209,10 @@ export default class MainMenuScene extends Phaser.Scene {
     // ---- 活動關卡排行 TOP5（汪汪大作戰傷害排行＋獎品）：疊在排行榜 TOP10 面板下方，
     // 開放前只顯示「開放時間」不接排行榜；開放後（含活動結束後）都接排行榜即時顯示，
     // 只是標題下面那行狀態文字換成「結束時間」或「活動已結束」。----
-    const woofPhase = getWoofWarEffectivePhase(getPlayerName());
+    // 這裡一律用真實時間的 phase，不套封測名單的提早解鎖——排行榜面板的狀態文字
+    // 要跟所有玩家看到的一樣，封測名單只影響「點得進去活動」這件事（見
+    // ActivitySelectScene／ActivityData.canEnterWoofWar）。
+    const woofPhase = getWoofWarPhase();
     const WOOF_PRIZES = ['🎁 自選神話裝備', '🎁 自選傳說裝備', '💰 10 萬金幣', '💰 3 萬金幣', '💰 3 萬金幣'];
     const activityBodyStyle = { fontSize: '19px', color: '#cfe9ff', align: 'center', lineSpacing: 9 };
     const activityMeasure = this.add.text(0, 0, Array(5).fill('讀取排行榜中...').join('\n'), textStyle(activityBodyStyle)).setVisible(false);

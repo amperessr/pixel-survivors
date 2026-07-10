@@ -14,6 +14,7 @@ import { dist } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 import { submitWoofWarScore } from '../firebase/firebase.js';
+import { getWoofWarPhase } from '../activities/ActivityData.js';
 
 // 關卡推進規則：一般關（非 5 的倍數）擊殺滿 KILLS_PER_STAGE 隻小怪就進到下一關；
 // 魔王關（第 5、10、15...關）改成打死魔王才會進到下一關，見 registerKill()/onBossDefeated()。
@@ -254,7 +255,12 @@ export default class GameScene extends Phaser.Scene {
 
     const totalDamage = Math.round((this.boss && this.boss.totalDamageTaken) || 0);
     const name = getPlayerName() || '冒險者';
-    submitWoofWarScore({ name, damage: totalDamage, date: new Date().toISOString() });
+    // 只有活動真的開放中（'live'）才會把這次的傷害送上真正的排行榜——封測名單內的
+    // 玩家可以在正式開放前提早進來測試（見 ActivityData.canEnterWoofWar），但測試
+    // 期間打的傷害不該混進正式排行榜，活動結束後也不再計分。
+    if (getWoofWarPhase() === 'live') {
+      submitWoofWarScore({ name, damage: totalDamage, date: new Date().toISOString() });
+    }
 
     const ui = this.scene.get('UIScene');
     if (ui && ui.showWoofWarResult) ui.showWoofWarResult(totalDamage);

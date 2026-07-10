@@ -22,16 +22,20 @@ export function getWoofWarPhase(now = Date.now()) {
   return 'after';
 }
 
-// 封測名單：正式開放時間到之前，只有名單內的玩家能提早把活動當成「開放中」來測試，
-// 其餘玩家還是照真實時間看到「尚未開放」——活動結束後（'after'）名單就不再生效，
-// 不會讓已結束的活動又對名單內的人重新打開。要正式公開測試時把名單清空即可，
-// 不用動到任何呼叫這個函式的地方。
+// 封測名單：正式開放時間到之前，只有名單內的玩家能提早「點得進去」活動關卡測試，
+// 但畫面上看到的東西（開放/結束時間、活動關卡排行面板的狀態文字）全部照真實時間
+// 顯示，跟一般玩家看到的一模一樣——封測名單只影響「能不能進去玩」這一件事，
+// 不影響任何顯示內容，所以刻意不做成「假裝已經開放」的 effective phase，
+// 顯示一律呼叫 getWoofWarPhase()，只有判斷「能不能進」的地方才查這個名單
+// （見 canEnterWoofWar）。活動結束後（'after'）名單就不再生效，不會讓已結束的
+// 活動又對名單內的人重新打開。要正式公開測試時把名單清空即可，不用動到任何
+// 呼叫這兩個函式的地方。
 export const WOOF_WAR_BETA_TESTERS = ['安培'];
 
-export function getWoofWarEffectivePhase(playerName) {
+export function canEnterWoofWar(playerName) {
   const phase = getWoofWarPhase();
-  if (phase === 'before' && WOOF_WAR_BETA_TESTERS.includes(playerName)) return 'live';
-  return phase;
+  if (phase === 'live') return true;
+  return phase === 'before' && WOOF_WAR_BETA_TESTERS.includes(playerName);
 }
 
 function pad2(n) { return String(n).padStart(2, '0'); }
@@ -48,7 +52,8 @@ export const ACTIVITIES = [
     label: '汪汪大作戰',
     desc: '打倒血量異常高的汪汪，比誰在時限內造成的傷害最多！排行榜前 5 名活動結束後會收到獎勵信件。',
     icon: 'boss_woof',
-    getPhase: (playerName) => getWoofWarEffectivePhase(playerName),
+    getPhase: () => getWoofWarPhase(),
+    canEnter: (playerName) => canEnterWoofWar(playerName),
     onEnter: (scene) => scene.scene.start('GameScene', { woofWarMode: true }),
   },
 ];

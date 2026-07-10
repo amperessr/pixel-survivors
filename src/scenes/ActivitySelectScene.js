@@ -23,12 +23,16 @@ export default class ActivitySelectScene extends Phaser.Scene {
     const playerName = getPlayerName();
     ACTIVITIES.forEach((act, i) => {
       const cx = startX + i * (cardW + gap);
-      const phase = act.getPhase(playerName);
+      const phase = act.getPhase();
       const card = this.add.image(cx, cy, 'ui_card').setDisplaySize(cardW, cardH)
         .setInteractive({ useHandCursor: true }).setScrollFactor(0);
       if (phase !== 'live') card.setAlpha(0.55);
 
-      this.add.image(cx, cy - 160, act.icon).setScale(1.4).setScrollFactor(0);
+      // act.icon 目前是 'boss_woof'——魔王本體的完整貼圖（很大張，遊戲內用
+      // BOSS_SCALE=0.55 縮小顯示），不是給小圖示用的素材，用 setScale() 直接套
+      // 一般圖示的倍率會整張爆大蓋住卡片其他內容。改用 setDisplaySize 固定成
+      // 卡片圖示該有的大小，不管來源貼圖實際多大都會被限制在這個尺寸內。
+      this.add.image(cx, cy - 160, act.icon).setDisplaySize(160, 160).setScrollFactor(0);
       this.add.text(cx, cy - 40, act.label, textStyle({
         fontSize: '30px', color: '#fff', align: 'center',
       })).setOrigin(0.5).setScrollFactor(0);
@@ -48,9 +52,12 @@ export default class ActivitySelectScene extends Phaser.Scene {
       card.on('pointerover', () => card.setTint(0xbfe9ff));
       card.on('pointerout', () => card.clearTint());
       card.on('pointerdown', () => {
+        // 卡片上顯示的狀態（開放/結束時間、活動已結束）一律是真實時間，跟所有人
+        // 看到的一樣；canEnter 才會考慮封測名單——名單內的人卡片看起來一樣是
+        // 「尚未開放」，但點下去真的能提前進去測試，其他人點了只會看到提示。
+        if (act.canEnter(playerName)) { act.onEnter(this); return; }
         if (phase === 'before') { this._showToast(`活動尚未開放，開放時間：${formatWoofWarTime(WOOF_WAR_OPEN_AT)}`); return; }
-        if (phase === 'after') { this._showToast('活動已結束，敬請期待下次活動！'); return; }
-        act.onEnter(this);
+        this._showToast('活動已結束，敬請期待下次活動！');
       });
     });
 
