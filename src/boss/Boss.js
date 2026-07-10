@@ -34,6 +34,7 @@ const BOSS_TYPES = {
     chargeTint: 0xaaccff,
     windColor: 0x24242c, // 黑龍衝刺時周圍的黑色風系粒子
     clawColor: 0xffe066,
+    clawTexture: 'fx_claw_slash_gold',
     relicId: 'dragonAura',
     skills: ['charge', 'claw', 'breath'],
     skillLabels: { charge: '⚠ 衝刺！', claw: '⚠ 龍爪！', breath: '⚠ 龍息！' },
@@ -50,6 +51,7 @@ const BOSS_TYPES = {
     chargeTint: 0xffcfa0,
     windColor: 0xcc2200, // 紅龍衝刺時周圍的紅色風系粒子
     clawColor: 0xffe066,
+    clawTexture: 'fx_claw_slash_gold',
     relicId: 'dragonWings',
     skills: ['charge', 'claw', 'breath'],
     skillLabels: { charge: '⚠ 衝刺！', claw: '⚠ 龍爪！', breath: '⚠ 龍息！' },
@@ -66,6 +68,7 @@ const BOSS_TYPES = {
     chargeTint: 0xe0c3ff,
     windColor: 0x4b1a66, // 惡魔王施放技能時周圍的暗紫色風系粒子
     clawColor: 0xd94dff,
+    clawTexture: 'fx_claw_slash_gold',
     relicId: null, // 遺物之後補上
     skills: ['breath', 'nova', 'claw'], // 遠距：深淵彈幕／特殊：詛咒新星／近戰：惡魔爪擊
     skillLabels: { breath: '⚠ 深淵彈幕！', nova: '⚠ 詛咒新星！', claw: '⚠ 惡魔爪擊！' },
@@ -88,6 +91,7 @@ const BOSS_TYPES = {
     chargeTint: 0xc8f7b0,
     windColor: 0x2e5c1f, // 樹王施放技能時周圍的深綠色風系粒子
     clawColor: 0x9dff6b,
+    clawTexture: 'fx_claw_slash_amber',
     relicId: null, // 遺物之後補上
     skills: ['breath', 'nova', 'claw'], // 遠距：荊棘彈幕／特殊：樹根衝擊／近戰：巨杖橫掃
     skillLabels: { breath: '⚠ 荊棘彈幕！', nova: '⚠ 樹根衝擊！', claw: '⚠ 巨杖橫掃！' },
@@ -107,6 +111,7 @@ const BOSS_TYPES = {
     chargeTint: 0xfff2c2,
     windColor: 0xb8860b, // 獅鷲王施放技能時周圍的金褐色風系粒子
     clawColor: 0xffe066,
+    clawTexture: 'fx_claw_slash_amber',
     relicId: null, // 遺物之後補上
     skills: ['breath', 'nova', 'claw'], // 遠距：疾風彈幕／特殊：王者威壓／近戰：利爪連擊
     skillLabels: { breath: '⚠ 疾風彈幕！', nova: '⚠ 王者威壓！', claw: '⚠ 利爪連擊！' },
@@ -492,13 +497,27 @@ export default class Boss {
     this.scene.spawnGlowRing(originX, originY, 'fx_bossdeath', clawColor, 0.3, 2.2, 300);
     this.scene.spawnBurstFx(originX, originY, clawColor, 12, 'fx_crit', 160);
 
+    // 爪痕震波正式美術圖（見 BOSS_TYPES.clawTexture／BootScene.preload()）取代原本
+    // TextureFactory 畫的簡易弧形；原圖是 1536x1024 的大圖，用 setDisplaySize 收到
+    // 跟舊版視覺份量相近的大小。新增兩個效果讓正式圖更有份量：
+    // 1) 出現瞬間從 60% 彈到 100% 大小的「彈出」動畫，取代原本一出現就是滿尺寸；
+    // 2) 疊加（ADD）混合模式，讓圖中本來就偏亮的核心線條在畫面上看起來像會發光。
+    const clawTexture = this.typeDef.clawTexture || 'fx_claw_slash_gold';
+    const waveW = 150, waveH = 100;
     const perpAng = ang + Math.PI / 2;
     for (let i = -2; i <= 2; i++) {
       const off = i * 34;
       const sx = originX + Math.cos(perpAng) * off;
       const sy = originY + Math.sin(perpAng) * off;
-      const wave = this.scene.physics.add.image(sx, sy, 'fx_claw_slash')
-        .setDepth(20005).setRotation(ang).setScale(1.0, 1.2).setAlpha(0.95).setTint(clawColor);
+      const wave = this.scene.physics.add.image(sx, sy, clawTexture)
+        .setDepth(20005).setRotation(ang).setDisplaySize(waveW, waveH)
+        .setAlpha(0.95).setTint(clawColor).setBlendMode(Phaser.BlendModes.ADD);
+      const finalScaleX = wave.scaleX, finalScaleY = wave.scaleY;
+      wave.setScale(finalScaleX * 0.6, finalScaleY * 0.6);
+      this.scene.tweens.add({
+        targets: wave, scaleX: finalScaleX, scaleY: finalScaleY,
+        duration: 140, delay: Math.abs(i) * 40, ease: 'Back.easeOut',
+      });
       wave.body.setVelocity(Math.cos(ang) * 430, Math.sin(ang) * 430);
       wave.setData('dmg', this.dmg * 1.1);
       wave.setData('kind', 'bossBolt');
