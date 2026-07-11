@@ -777,41 +777,57 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // 地面殘留特效（燃燒地板／冰霜地板）：不再貼一整張方形素材圖（切圖帶背景、
-  // 看起來像一塊方塊壓在地上），改成「圓形柔光底暈＋持續 3 秒隨機竄出的小火苗/
-  // 碎冰粒子」，讓地板看起來真的在燃燒/結凍。深度壓在怪物腳下（y-2/y-3）。
+  // 看起來像一塊方塊壓在地上），改成「圓形柔光底暈＋邊界外框＋持續 3 秒隨機
+  // 竄出的小火苗/碎冰粒子」，讓地板看起來真的在燃燒/結凍。深度壓在怪物腳下
+  // （y-2/y-3）。2026-07-12：玩家反應原本的柔光太淡（尖峰只有 0.3、脈動又掉到
+  // 0.16）、粒子太稀疏（130ms 一顆），完全看不出地板有沒有效果——這裡整體拉高
+  // 亮度、加一圈標示實際命中半徑的邊界外框、並加密粒子頻率。
   _spawnGroundPatchFx(x, y, aoe, type) {
     const isFire = type === 'fire';
-    const tint = isFire ? 0xff7a2d : 0x8fe3ff;
+    const glowTint = isFire ? 0xff7a2d : 0x8fe3ff;
+    // 冰霜地板原本用偏白的 0xcdefff／0x8fe3ff，在較亮的地面貼圖上對比太弱，
+    // 這裡邊界外框跟粒子改用飽和度更高的藍色，跟火焰的橘紅拉開明顯區隔。
+    const accentTint = isFire ? 0xff7a2d : 0x4fc3ff;
 
-    // 底層圓形柔光（fx_bossdeath 是圓形柔光貼圖）：交代地板的生效範圍，
-    // 用 ADD 疊加模式呈現「地面在發光」而不是一張圖蓋在地上，並隨時間輕微脈動
-    const glow = this.add.image(x, y, 'fx_bossdeath').setDepth(y - 3).setTint(tint)
+    // 底層圓形柔光：透明度尖峰從 0.3 拉高到 0.5，脈動最低也維持在 0.35（原本會
+    // 掉到 0.16 幾乎看不見），全程更亮更穩定。
+    const glow = this.add.image(x, y, 'fx_bossdeath').setDepth(y - 3).setTint(glowTint)
       .setAlpha(0).setScale(aoe / 26).setBlendMode(Phaser.BlendModes.ADD);
-    this.tweens.add({ targets: glow, alpha: 0.3, duration: 200 });
-    this.tweens.add({ targets: glow, alpha: { from: 0.3, to: 0.16 }, duration: 450, delay: 250, yoyo: true, repeat: 2 });
+    this.tweens.add({ targets: glow, alpha: 0.5, duration: 200 });
+    this.tweens.add({ targets: glow, alpha: { from: 0.5, to: 0.35 }, duration: 450, delay: 250, yoyo: true, repeat: 3 });
     this.tweens.add({ targets: glow, alpha: 0, duration: 400, delay: 2600, onComplete: () => glow.destroy() });
 
-    // 持續 3 秒、每 130ms 在範圍內隨機一點竄出一小簇火苗（往上飄）或碎冰（原地
-    // 結晶長出來再化掉），做出「地板正在燒／正在結凍」的動態感
+    // 邊界外框：fx_levelup 是描邊圓環貼圖（不是實心光暈），縮放到剛好貼合實際
+    // 命中半徑 aoe，讓玩家能清楚看到「站在這圈裡面才算」，而不是只有中心一坨
+    // 模糊的光暈猜不出範圍多大。
+    const ring = this.add.image(x, y, 'fx_levelup').setDepth(y - 3).setTint(accentTint)
+      .setAlpha(0).setScale(aoe / 28).setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: ring, alpha: 0.65, duration: 200 });
+    this.tweens.add({ targets: ring, alpha: { from: 0.65, to: 0.4 }, duration: 500, delay: 250, yoyo: true, repeat: 3 });
+    this.tweens.add({ targets: ring, alpha: 0, duration: 400, delay: 2600, onComplete: () => ring.destroy() });
+
+    // 持續 3 秒、每 85ms（原本 130ms）在範圍內隨機一點竄出一小簇火苗（往上飄）
+    // 或碎冰（原地結晶長出來再化掉），加密頻率＋放大尺寸做出「地板正在持續燒／
+    // 持續結凍」的動態感。
     this.time.addEvent({
-      delay: 130, repeat: Math.floor(2700 / 130),
+      delay: 85, repeat: Math.floor(2700 / 85),
       callback: () => {
         const ang = Math.random() * Math.PI * 2;
         const r = Math.sqrt(Math.random()) * aoe * 0.9; // sqrt 讓分佈均勻鋪滿整個圓，不會擠在中心
         const fxX = x + Math.cos(ang) * r, fxY = y + Math.sin(ang) * r;
         if (isFire) {
           const flame = this.add.image(fxX, fxY, 'fx_flame').setDepth(y - 2)
-            .setScale(0.3 + Math.random() * 0.35).setAlpha(0.9);
+            .setScale(0.4 + Math.random() * 0.4).setAlpha(1);
           this.tweens.add({
-            targets: flame, y: fxY - 16, scale: 0.15, alpha: 0,
+            targets: flame, y: fxY - 18, scale: 0.18, alpha: 0,
             duration: 400 + Math.random() * 150, ease: 'Cubic.easeOut',
             onComplete: () => flame.destroy(),
           });
         } else {
           const shard = this.add.image(fxX, fxY, 'fx_frost').setDepth(y - 2)
-            .setScale(0.08).setAlpha(0.85).setTint(0xcdefff).setRotation(Math.random() * Math.PI);
+            .setScale(0.14).setAlpha(1).setTint(accentTint).setRotation(Math.random() * Math.PI);
           this.tweens.add({
-            targets: shard, scale: 0.3 + Math.random() * 0.25, alpha: 0,
+            targets: shard, scale: 0.4 + Math.random() * 0.3, alpha: 0,
             duration: 550 + Math.random() * 200, ease: 'Sine.easeOut',
             onComplete: () => shard.destroy(),
           });
