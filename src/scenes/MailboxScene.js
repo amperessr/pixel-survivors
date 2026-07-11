@@ -2,7 +2,7 @@ import { MAIL_DATA } from '../mail/MailData.js';
 import { EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
 import {
   getMailStatus, isMailClaimed, isMailDeleted, claimMail, deleteMail,
-  addGold, addItemToInventory, getGold, getWoofWarReward,
+  addGold, addItemToInventory, getGold, getWoofWarReward, isNewbieAccount,
 } from '../managers/SaveManager.js';
 import { resolveWoofWarRewardIfNeeded, WOOF_WAR_REWARD_MAIL_ID } from '../activities/WoofWarRewardSystem.js';
 import { textStyle } from '../utils/TextStyle.js';
@@ -32,9 +32,10 @@ export default class MailboxScene extends Phaser.Scene {
       console.warn('[MailboxScene] 汪汪大作戰獎勵結算失敗（可能離線）：', err.message);
     });
 
-    // 新的信排最上面；已刪除的信直接不顯示。動態的活動結算信疊在最上面。
+    // 新的信排最上面；已刪除的信直接不顯示。動態的新手禮包／活動結算信疊在最上面。
+    const starterMail = this._buildStarterPackMail();
     const woofWarMail = this._buildWoofWarRewardMail();
-    this.mails = [...(woofWarMail ? [woofWarMail] : []), ...[...MAIL_DATA].reverse()]
+    this.mails = [...(starterMail ? [starterMail] : []), ...(woofWarMail ? [woofWarMail] : []), ...[...MAIL_DATA].reverse()]
       .filter((m) => !isMailDeleted(m.id));
     this.selectedId = this.mails.length > 0 ? this.mails[0].id : null;
 
@@ -233,6 +234,20 @@ export default class MailboxScene extends Phaser.Scene {
     const w = this.scale.width, h = this.scale.height;
     const t = this.add.text(w / 2, h - 130, msg, textStyle({ fontSize: '24px', color: '#5bff8f' })).setOrigin(0.5);
     this.tweens.add({ targets: t, alpha: 0, duration: 1400, delay: 500, onComplete: () => t.destroy() });
+  }
+
+  // 新手禮包：只有帳號建立當下被標記成「新手」的玩家才看得到（見 SaveManager.js
+  // 的 isNewbieAccount／_markAsNewbieAccount），不寫進 MAIL_DATA 固定清單，
+  // 避免舊玩家帳號也一起看到、白拿一筆多出來的金幣。
+  _buildStarterPackMail() {
+    if (!isNewbieAccount()) return null;
+    return {
+      id: 'starter_pack',
+      title: '🎁 新手禮包',
+      date: '',
+      message: '歡迎遊玩像素生存~ 有任何問題可以私訊',
+      rewards: { gold: 30000, items: [] },
+    };
   }
 
   // 依這個玩家自己結算出的名次（見 WoofWarRewardSystem.resolveWoofWarRewardIfNeeded）

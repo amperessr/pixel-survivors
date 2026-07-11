@@ -1,4 +1,4 @@
-import { promptPlayerName, getPlayerName, logout, getStatLevel, isMailClaimed, isMailDeleted, getWoofWarReward } from '../managers/SaveManager.js';
+import { promptPlayerName, getPlayerName, logout, getStatLevel, isMailClaimed, isMailDeleted, getWoofWarReward, isNewbieAccount } from '../managers/SaveManager.js';
 import { subscribeLeaderboard, subscribeWoofWarLeaderboard } from '../firebase/firebase.js';
 import { textStyle } from '../utils/TextStyle.js';
 import { MAIL_DATA } from '../mail/MailData.js';
@@ -53,7 +53,8 @@ export default class MainMenuScene extends Phaser.Scene {
     const woofWarReward = getWoofWarReward();
     const hasUnclaimedWoofWarReward = !!(woofWarReward && woofWarReward.participated
       && !isMailClaimed(WOOF_WAR_REWARD_MAIL_ID) && !isMailDeleted(WOOF_WAR_REWARD_MAIL_ID));
-    const hasUnreadMail = hasUnclaimedWoofWarReward
+    const hasUnclaimedStarterPack = isNewbieAccount() && !isMailClaimed('starter_pack') && !isMailDeleted('starter_pack');
+    const hasUnreadMail = hasUnclaimedWoofWarReward || hasUnclaimedStarterPack
       || MAIL_DATA.some((m) => !isMailClaimed(m.id) && !isMailDeleted(m.id));
     const quickItems = [
       { label: '背包', onPick: () => this.scene.start('InventoryScene') },
