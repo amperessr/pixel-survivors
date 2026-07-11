@@ -87,7 +87,7 @@ export default class GameScene extends Phaser.Scene {
     // 見 _computeSetBonuses 的 shadow3/shadow5、EnemySystem._killEnemy／onBossDefeated
     // 的提取判定、UIScene 的召喚按鈕）。
     this.shadowMinionCount = 0;
-    this.shadowBossCount = 0;
+    this.shadowBossQueue = []; // 依提取順序記錄 bossType，召喚時先進先出（見 onBossDefeated／UIScene._onSummonShadow）
     this.paused = false;
     this.escPaused = false; // 僅代表玩家手動按 ESC 暫停（用於顯示「已暫停」遮罩）
     this.dragonAuraActive = false; // 是否已接受龍之光環（永久跟隨光環視覺開關）
@@ -1028,10 +1028,10 @@ export default class GameScene extends Phaser.Scene {
     if (this.healthPackSystem && bossX != null) {
       this.healthPackSystem.forceSpawn(bossX, bossY, true);
     }
-    // 暗影君王套裝五件套：擊殺魔王 50% 機率提取一個魔王影子（見 _computeSetBonuses
-    // 的 shadow5、UIScene 的召喚按鈕怎麼消耗這個數字）。
+    // 暗影君王套裝五件套：擊殺魔王 50% 機率提取一個魔王影子，記錄下是「這隻」魔王
+    // （見 _computeSetBonuses 的 shadow5、UIScene 的召喚按鈕怎麼依序消耗這個佇列）。
     if (this.setBonuses && this.setBonuses.shadow5 && bossX != null && Math.random() < 0.5) {
-      this.shadowBossCount++;
+      this.shadowBossQueue.push(bossType);
       this.spawnGlowRing(bossX, bossY, 'fx_crit', 0x9d6bff, 0.3, 2.4, 320);
       this.spawnBurstFx(bossX, bossY, 0x9d6bff, 16, 'fx_crit', 160);
     }

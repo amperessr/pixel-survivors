@@ -567,20 +567,25 @@ export default class UIScene extends Phaser.Scene {
     this.shadowPanel.setVisible(visible);
     if (!visible) return;
     this.shadowCountTexts[0].setText(String(this.gs.shadowMinionCount || 0));
-    this.shadowCountTexts[1].setText(String(this.gs.shadowBossCount || 0));
+    this.shadowCountTexts[1].setText(String((this.gs.shadowBossQueue || []).length));
   }
 
-  // 點下召喚按鈕：小兵影子跟魔王影子召喚出來的是同一種影子盟友（見
-  // ShadowAllySystem.spawn()），差別只在消耗哪個貨幣池、以及一次召喚的數量——
-  // 小兵影子比較好取得（5% 機率），一次最多召 100 隻，數量不夠 100 就有多少召多少
-  // （不是「不滿 100 就不能召」）；魔王影子比較稀有，一次固定召 1 隻、消耗 1 個。
+  // 點下召喚按鈕：小兵影子外觀隨機（見 ShadowAllySystem.spawn()），一次最多召 100 隻，
+  // 數量不夠 100 就有多少召多少（不是「不滿 100 就不能召」）。魔王影子改成佇列——
+  // 依提取順序先進先出，一次固定召喚佇列最前面那隻，外觀就是那隻魔王本人。
   _onSummonShadow(kind) {
-    const key = kind === 'minion' ? 'shadowMinionCount' : 'shadowBossCount';
-    const available = this.gs[key] || 0;
-    if (available <= 0) return;
-    const count = kind === 'minion' ? Math.min(100, available) : 1;
-    this.gs[key] -= count;
-    for (let i = 0; i < count; i++) this.gs.shadowAllySystem.spawn();
+    if (kind === 'minion') {
+      const available = this.gs.shadowMinionCount || 0;
+      if (available <= 0) return;
+      const count = Math.min(100, available);
+      this.gs.shadowMinionCount -= count;
+      for (let i = 0; i < count; i++) this.gs.shadowAllySystem.spawn('minion');
+    } else {
+      const queue = this.gs.shadowBossQueue || [];
+      if (queue.length <= 0) return;
+      const bossType = queue.shift();
+      this.gs.shadowAllySystem.spawn('boss', bossType);
+    }
     this.announceShadowRise();
   }
 

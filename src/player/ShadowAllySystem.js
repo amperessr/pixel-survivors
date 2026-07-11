@@ -1,4 +1,6 @@
 import { dist, angleTo } from '../utils/MathUtils.js';
+import { ENEMY_TYPES, ENEMY_IDS } from '../enemy/EnemyData.js';
+import { BOSS_TYPES } from '../boss/Boss.js';
 
 // 暗影君王套裝召喚出的「影子盟友」：永久存在（沒有存活時間限制），會主動貼近
 // 附近敵人攻擊、也會被敵人反打，血量歸零才會消失。跟 ring_clone 的分身幻影不同
@@ -9,6 +11,13 @@ const ATTACK_COOLDOWN = 700;
 const MOVE_SPEED = 140;
 const FOLLOW_RADIUS = 80; // 沒有目標時，離玩家多遠才會主動靠攏，避免散得太開
 const HIT_INVULN_MS = 500; // 比照 Player.takeDamage 的無敵時間，避免同一幀被多隻怪重複打
+const SHADOW_TINT = 0x2a1533; // 小兵/魔王影子統一染色，維持「都是提取出的影子」的一致觀感
+
+// 魔王影子要「明顯比小兵影子大」來區分稀有度，但五種魔王原始美術圖尺寸差異很大
+// （兩隻龍 425x320/407x320 vs 惡魔王/樹王 1536x1024 vs 獅鷲王 700x616），直接沿用
+// Boss.js 的 BOSS_TYPES.scale（那是給「真正的魔王戰鬥」用的縮放，套在隨從身上會
+// 巨大到誇張）。改成用長邊統一縮放到固定目標尺寸，五種魔王影子看起來大小才一致。
+const BOSS_SHADOW_TARGET_SIZE = 110;
 
 export default class ShadowAllySystem {
   constructor(scene, player) {
@@ -20,12 +29,28 @@ export default class ShadowAllySystem {
   // 召喚一隻新的影子盟友：HP 在召喚當下依玩家目前生命上限鎖定（之後不會跟著玩家
   // 生命上限變動而改變上限），防禦力/攻擊力則在戰鬥時即時讀玩家目前數值，
   // 玩家後續變強時，已經召喚出來的影子也會一起變強。三圍統一都是玩家的 1/5。
-  spawn() {
+  // kind='minion'：外觀隨機挑一種小怪貼圖（哥布林/山豬/骷髏/半獸人），比例照該怪物
+  // 原本的顯示大小。kind='boss'：外觀是 bossType 指定的那隻魔王貼圖，縮小成統一的
+  // 隨從尺寸（見 BOSS_SHADOW_TARGET_SIZE），比小兵影子明顯大一圈以區分稀有度。
+  spawn(kind = 'minion', bossType = null) {
     const px = this.player.sprite.x, py = this.player.sprite.y;
     const ang = Math.random() * Math.PI * 2;
     const x = px + Math.cos(ang) * 40, y = py + Math.sin(ang) * 40;
-    const sprite = this.scene.physics.add.sprite(x, y, this.player.charDef.texture)
-      .setScale(0.5).setTint(0x2a1533).setDepth(y);
+
+    let texture, scale;
+    if (kind === 'boss') {
+      const def = BOSS_TYPES[bossType] || BOSS_TYPES.blue;
+      texture = def.texture;
+      const src = this.scene.textures.get(texture).getSourceImage();
+      scale = BOSS_SHADOW_TARGET_SIZE / Math.max(src.width, src.height);
+    } else {
+      const def = ENEMY_TYPES[ENEMY_IDS[Math.floor(Math.random() * ENEMY_IDS.length)]];
+      texture = def.texture;
+      scale = def.scale;
+    }
+
+    const sprite = this.scene.physics.add.sprite(x, y, texture)
+      .setScale(scale).setTint(SHADOW_TINT).setDepth(y);
     sprite.body.setCircle(10, sprite.width / 2 - 10, sprite.height / 2 - 10);
     const maxHp = Math.max(1, Math.round(this.player.stats.maxHp / 5));
     sprite.setData('maxHp', maxHp);
@@ -100,7 +125,7 @@ export default class ShadowAllySystem {
     const hp = ally.getData('hp') - mitigated;
     ally.setData('hp', hp);
     ally.setTintFill(0xffffff);
-    this.scene.time.delayedCall(80, () => { if (ally.active) ally.setTint(0x2a1533); });
+    this.scene.time.delayedCall(80, () => { if (ally.active) ally.setTint(SHADOW_TINT); });
     if (hp <= 0) this._killAlly(ally);
   }
 
