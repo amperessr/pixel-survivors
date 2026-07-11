@@ -40,8 +40,6 @@ export default class MainMenuScene extends Phaser.Scene {
       console.warn('[MainMenuScene] 汪汪大作戰獎勵結算失敗（可能離線）：', err.message);
     });
 
-    this.add.image(w / 2, 340, 'player_balanced').setScale(2.4);
-
     const btnW = 420, btnH = 88, gap = 24;
 
     // ---- 快捷功能列：背包／商店／信箱，三個並排的小按鈕 ----
@@ -64,7 +62,8 @@ export default class MainMenuScene extends Phaser.Scene {
     const quickBtnH = 70, quickGap = 16;
     const quickTotalW = quickItems.length * btnW / 3 + (quickItems.length - 1) * quickGap;
     let qx = w / 2 - quickTotalW / 2 + (btnW / 3) / 2;
-    const quickY = 560;
+    // 移除角色預覽圖之後空出的空間，快捷按鈕整組往上移補齊（原本 560）
+    const quickY = 400;
     quickItems.forEach((item) => {
       const bw = btnW / 3;
       const btn = this.add.image(qx, quickY, 'ui_button_parchment').setDisplaySize(bw, quickBtnH).setInteractive({ useHandCursor: true });
@@ -89,7 +88,7 @@ export default class MainMenuScene extends Phaser.Scene {
         onPick: () => this.scene.start('ActivitySelectScene'),
       },
       {
-        label: '第一關', stageLabel: `第 1 關`,
+        label: '一般關卡', stageLabel: `第 1 關`,
         onPick: () => { console.log('[STAGE] 點了「第一關」，startStage=1'); this.scene.start('GameScene', { startStage: 1 }); },
       },
     ];
