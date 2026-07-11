@@ -1251,6 +1251,31 @@ export default class GameScene extends Phaser.Scene {
     return ring;
   }
 
+  // 麻痺：身上竄出短促電弧，比單純染色更有「正在觸電」的臨場感（見 EnemySystem.update()／
+  // Boss.update() 對 paralyzedUntil 的週期呼叫，每次呼叫只噴一小簇，疊加起來看起來像電流亂竄）
+  spawnBodyLightningFx(x, y) {
+    const count = 2;
+    for (let i = 0; i < count; i++) {
+      const ox = (Math.random() - 0.5) * 26;
+      const oy = (Math.random() - 0.5) * 30;
+      const bolt = this.add.image(x + ox, y + oy, 'fx_bolt').setDepth(y + 1)
+        .setScale(0.22 + Math.random() * 0.18, 0.6 + Math.random() * 0.5)
+        .setRotation((Math.random() - 0.5) * 0.8)
+        .setTint(0xffe066).setAlpha(0.95).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: bolt, alpha: 0, duration: 100 + Math.random() * 60, onComplete: () => bolt.destroy() });
+    }
+  }
+
+  // 緩速：腳邊留一小片淡藍霜跡並隨怪物腳步持續補上，讓「地板有緩速感」而不只是怪物染色
+  spawnSlowGroundFx(x, y) {
+    const decal = this.add.image(x, y + 8, 'fx_frost').setDepth(y - 2)
+      .setScale(0.3 + Math.random() * 0.1).setAlpha(0.4).setTint(0xbfe9ff);
+    this.tweens.add({
+      targets: decal, alpha: 0, scaleX: decal.scaleX + 0.18, scaleY: decal.scaleY + 0.18,
+      duration: 420, onComplete: () => decal.destroy(),
+    });
+  }
+
   spawnCritFx(x, y) {
     const fx = this.add.image(x, y - 10, 'fx_crit').setDepth(30000).setScale(1.3);
     this.tweens.add({ targets: fx, y: y - 34, alpha: 0, scale: 1.9, duration: 380, onComplete: () => fx.destroy() });

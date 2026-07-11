@@ -186,6 +186,7 @@ export default class Boss {
     this.nextSkillAt = scene.time.now + 2500;
     this.chargeTarget = null;
     this.paralyzedUntil = 0; // 雷霆套裝三件套：麻痺中無法選新技能（見 update()），見 GameScene._maybeThunderParalyze()
+    this.nextParalyzeFxAt = 0; // 麻痺中身上竄電特效的節流時間戳，見 update()
 
     // 頂部血條改由 UIScene 繪製（見 UIScene 的魔王血條區塊）——原本建立在
     // GameScene 裡，但 GameScene 鏡頭有 2.1 倍縮放，scrollFactor(0) 的元素照樣
@@ -256,6 +257,12 @@ export default class Boss {
     // paralyzedUntil 才會恢復正常選招——不影響正在前搖/執行中的技能，只擋「下一招」。
     if (time > this.nextSkillAt && this.phase === 'chase' && time >= this.paralyzedUntil) {
       this._chooseSkill(time);
+    }
+
+    // 麻痺視覺：跟小怪一樣，身上要看得出電流竄動，不是只有選不了技能
+    if (time < this.paralyzedUntil && time >= this.nextParalyzeFxAt) {
+      this.nextParalyzeFxAt = time + 90 + Math.random() * 70;
+      this.scene.spawnBodyLightningFx(bx, by - this.sprite.displayHeight * 0.25);
     }
 
     if (this.phase === 'chase') {

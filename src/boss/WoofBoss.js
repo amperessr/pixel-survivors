@@ -68,6 +68,7 @@ export default class WoofBoss {
     this.nextReadyAt = { charge: 0, laser: 0, shield: 0, meteor: 0 };
     this._chooseAt = scene.time.now + 1200;
     this.paralyzedUntil = 0; // 雷霆套裝三件套：麻痺中無法選新招式，見 update()／GameScene._maybeThunderParalyze()
+    this.nextParalyzeFxAt = 0; // 麻痺中身上竄電特效的節流時間戳，見 update()
 
     this.headBarBg = scene.add.image(x, y - 90, 'ui_bar_bg').setDisplaySize(160, 14).setDepth(29996);
     this.headBarFill = scene.add.image(x - 78, y - 90, 'ui_bar_fill_boss').setOrigin(0, 0.5).setDisplaySize(154, 10).setDepth(29997);
@@ -91,7 +92,15 @@ export default class WoofBoss {
         this.sprite.body.setVelocity(0, 0);
       }
       if (time >= this._chooseAt && time >= this.paralyzedUntil) this._chooseSkill(time);
-    } else if (this.phase === 'telegraph') {
+    }
+
+    // 麻痺視覺：跟小怪一樣，身上要看得出電流竄動，不是只有選不了招式
+    if (time < this.paralyzedUntil && time >= this.nextParalyzeFxAt) {
+      this.nextParalyzeFxAt = time + 90 + Math.random() * 70;
+      this.scene.spawnBodyLightningFx(bx, by - this.sprite.displayHeight * 0.25);
+    }
+
+    if (this.phase === 'telegraph') {
       this._updateTelegraph(time);
     } else if (this.phase === 'charge') {
       this._updateCharge(time);

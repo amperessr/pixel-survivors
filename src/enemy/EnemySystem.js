@@ -109,6 +109,14 @@ export default class EnemySystem {
     sprite.setData('burnUntil', 0);
     sprite.setData('burnDps', 0);
     sprite.setData('burnNextTick', 0);
+    sprite.setData('nextParalyzeFxAt', 0); // 麻痺/燃燒/緩速的持續特效節流用時間戳，見 update()
+    sprite.setData('nextBurnFxAt', 0);
+    sprite.setData('nextSlowFxAt', 0);
+    // 防呆：理論上冰凍覆蓋圖會在解凍/死亡時清掉（見 update()／_killEnemy()），
+    // 這裡保險起見再清一次，避免物件池重用時殘留上一輪生命週期的覆蓋圖
+    const staleOverlay = sprite.getData('freezeOverlay');
+    if (staleOverlay) staleOverlay.destroy();
+    sprite.setData('freezeOverlay', null);
     sprite.setData('knockbackUntil', 0);
     sprite.setData('knockbackVX', 0);
     sprite.setData('knockbackVY', 0);
@@ -261,6 +269,39 @@ export default class EnemySystem {
           const tierTint = e.getData('tierTint');
           if (tierTint) e.setTint(tierTint); else e.clearTint();
         }
+      }
+
+      // 狀態動態特效：染色只是底色，另外疊加持續性的動態效果，不然遠遠看只有
+      // 顏色不同、很容易忽略中了什麼狀態——冰凍在身上蓋一層跟著移動的冰殼、
+      // 燃燒身上持續冒火星、麻痺身上竄電弧、緩速腳邊留霜跡（地板感）。
+      if (frozen) {
+        let overlay = e.getData('freezeOverlay');
+        if (!overlay) {
+          overlay = this.scene.add.image(e.x, e.y, 'fx_frost')
+            .setScale(Math.max(1.2, (e.getData('baseScale') || 1) * 1.8))
+            .setAlpha(0.75).setTint(0xcdf3ff).setBlendMode(Phaser.BlendModes.ADD);
+          e.setData('freezeOverlay', overlay);
+        }
+        overlay.setPosition(e.x, e.y).setDepth(e.y + 1);
+      } else {
+        const overlay = e.getData('freezeOverlay');
+        if (overlay) {
+          overlay.destroy();
+          e.setData('freezeOverlay', null);
+        }
+      }
+
+      if (now < e.getData('paralyzedUntil') && now >= e.getData('nextParalyzeFxAt')) {
+        e.setData('nextParalyzeFxAt', now + 90 + Math.random() * 70);
+        this.scene.spawnBodyLightningFx(e.x, e.y);
+      }
+      if (now < e.getData('burnUntil') && now >= e.getData('nextBurnFxAt')) {
+        e.setData('nextBurnFxAt', now + 180 + Math.random() * 100);
+        this.scene.spawnEmbersFx(e.x, e.y - 6, 2, 0xff7a4d);
+      }
+      if (!frozen && now < e.getData('slowUntil') && now >= e.getData('nextSlowFxAt')) {
+        e.setData('nextSlowFxAt', now + 220 + Math.random() * 100);
+        this.scene.spawnSlowGroundFx(e.x, e.y);
       }
 
       // 接觸傷害：冰凍期間怪物完全動彈不得，也不會主動造成接觸傷害
@@ -519,6 +560,13 @@ export default class EnemySystem {
   }
 
   _killEnemy(enemy) {
+    // 冰凍覆蓋圖是獨立於物件池的圖片物件，怪物死亡時（可能還在冰凍中被打死）
+    // 要主動清掉，不然物件池 free() 只是隱藏本體，覆蓋圖會孤兒般留在畫面上不消失
+    const freezeOverlay = enemy.getData('freezeOverlay');
+    if (freezeOverlay) {
+      freezeOverlay.destroy();
+      enemy.setData('freezeOverlay', null);
+    }
     const exp = enemy.getData('exp');
     this.expGemPool.spawn(enemy.x, enemy.y, exp);
     // 物件池 free() 會讓怪物瞬間隱形供下一隻重用，本體不能拿來播死亡動畫；
