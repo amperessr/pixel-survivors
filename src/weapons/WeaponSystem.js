@@ -436,29 +436,39 @@ export default class WeaponSystem {
     this._fireWorldEndPillarRing(data, stats, px, py, dmgMult);
   }
 
-  // 世界末日新增技能：以玩家為中心 8 方向冰柱/炎柱交替往外刺出，跟隕石/冰塊
-  // 各打各的目標互相獨立，純粹補一圈範圍傷害（見 GameScene.spawnFirePillar()／
-  // spawnIcePillar()）。傷害拉低到 0.7 倍避免跟隕石+冰塊疊加太誇張——這一圈
-  // 本來就是「額外補傷害」，不是取代原本兩顆天降打擊。
+  // 世界末日新增技能：完全比照冰霜新星進化版「永凍冰川」的技能結構（見
+  // _fireFrost 的 data.evolved 分支）——由近到遠分 4 階、每階同時往 N 個方向
+  // 冒出巨大冰柱，只是方向數從 6 改成 8，並且方向之間交替「大冰柱／炎柱」
+  // （不是每階交替，是整條方向柱子固定同一種屬性）。跟隕石/冰塊各打各的目標
+  // 互相獨立，傷害拉低到 0.7 倍避免疊加太誇張——這一圈本來就是「額外補傷害」，
+  // 不是取代原本兩顆天降打擊。
   _fireWorldEndPillarRing(data, stats, px, py, dmgMult) {
     const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult * 0.7;
     const kb = WEAPON_KNOCKBACK.frost;
     const knockback = { force: kb.force, duration: kb.duration };
     const sizeMult = this._windSizeMult();
     const directions = 8;
-    const ringRadius = data.aoe * 1.3; // 比隕石/冰塊命中範圍略遠，圍成一圈不跟它們疊在同一點
-    for (let d = 0; d < directions; d++) {
-      const ang = (d / directions) * Math.PI * 2;
-      const x = px + Math.cos(ang) * ringRadius;
-      const y = py + Math.sin(ang) * ringRadius;
-      const isFire = d % 2 === 0;
-      this.scene.time.delayedCall(d * 90, () => {
-        if (isFire) {
-          this.scene.spawnFirePillar(x, y, dmg, stats.critRate, stats.critDmg, knockback, sizeMult);
-        } else {
-          this.scene.spawnIcePillar(x, y, dmg, 1500, stats.critRate, stats.critDmg, knockback, false, false, sizeMult);
-        }
-      });
+    const steps = 4;
+    // Doomsday 沒有 frost 那種 radius 欄位，借用 aoe（隕石/冰塊命中半徑）換算，
+    // 3.2 倍抓出跟永凍冰川同一個量級的「刺出去有感」距離。
+    const totalRadius = data.aoe * 3.2;
+    const stepDist = totalRadius / steps;
+    for (let s = 1; s <= steps; s++) {
+      const pillarDist = stepDist * s;
+      const outermost = s === steps;
+      for (let d = 0; d < directions; d++) {
+        const ang = (d / directions) * Math.PI * 2;
+        const x = px + Math.cos(ang) * pillarDist;
+        const y = py + Math.sin(ang) * pillarDist;
+        const isFire = d % 2 === 0;
+        this.scene.time.delayedCall((s - 1) * 120, () => {
+          if (isFire) {
+            this.scene.spawnFirePillar(x, y, dmg, stats.critRate, stats.critDmg, knockback, outermost, sizeMult);
+          } else {
+            this.scene.spawnIcePillar(x, y, dmg, data.slowDuration || 1500, stats.critRate, stats.critDmg, knockback, true, outermost, sizeMult);
+          }
+        });
+      }
     }
   }
 

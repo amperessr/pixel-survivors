@@ -1785,16 +1785,19 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  // 世界末日新增技能：以玩家為中心 8 方向冰柱/炎柱交替往外刺出（見
-  // WeaponSystem._fireWorldEndPillarRing()），跟隕石/冰塊各打各的目標互相獨立，
-  // 純粹補一圈範圍傷害。炎柱沿用 spawnIcePillar()「由下往上刺出」的動畫語言，
-  // 只是換成火焰貼圖＋燃燒效果（見 EnemySystem.applyBurn()）取代減速/冰凍。
-  spawnFirePillar(x, y, dmg, critRate, critDmg, knockback, sizeMult = 1) {
+  // 世界末日新增技能：完全比照冰霜新星進化版「永凍冰川」的技能結構，由近到遠
+  // 分 4 階、8 個方向同時冒出巨大冰柱/炎柱交替（見 WeaponSystem._fireWorldEndPillarRing()），
+  // 跟隕石/冰塊各打各的目標互相獨立，純粹補一圈範圍傷害。炎柱沿用 spawnIcePillar()
+  // 「由下往上刺出」的動畫語言＋evolved/outermost 同一套份量遞增規則，只是換成
+  // 火焰貼圖＋燃燒效果（見 EnemySystem.applyBurn()）取代減速/冰凍。
+  spawnFirePillar(x, y, dmg, critRate, critDmg, knockback, outermost = false, sizeMult = 1) {
     // 地面裂痕提示，借用 fx_frost 貼圖染成橘紅色，跟 spawnIcePillar 同一種手法
-    const crack = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setScale(0.25 * sizeMult).setAlpha(0.6).setTint(0xff8a3d);
-    this.tweens.add({ targets: crack, scale: 1.3 * sizeMult, alpha: 0, duration: 260, onComplete: () => crack.destroy() });
+    const crack = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setScale((outermost ? 0.4 : 0.25) * sizeMult).setAlpha(0.6).setTint(0xff8a3d);
+    this.tweens.add({ targets: crack, scale: (outermost ? 1.9 : 1.3) * sizeMult, alpha: 0, duration: 260, onComplete: () => crack.destroy() });
 
-    const pillarScale = 0.5 * sizeMult;
+    // fx_fire_pillar 原圖 200x420，比冰柱 fx_ice_pillar_evo（283x420）略窄，用跟
+    // 冰柱 evolved 同一套基準值（0.35，outermost 再 x1.4）讓兩種柱子份量對齊。
+    const pillarScale = (outermost ? 0.35 * 1.4 : 0.35) * sizeMult;
     const pillar = this.add.image(x, y, 'fx_fire_pillar').setOrigin(0.5, 1).setDepth(y + 1)
       .setScale(pillarScale, pillarScale * 0.05).setAlpha(0.95);
 
@@ -1805,18 +1808,18 @@ export default class GameScene extends Phaser.Scene {
       ease: 'Back.easeOut',
       onComplete: () => {
         if (!pillar.active) return;
-        const hitRadius = 42 * sizeMult;
+        const hitRadius = (outermost ? 65 : 50) * sizeMult;
         this.enemySystem.queryNear(x, y, hitRadius, (e) => {
           if (dist(x, y, e.x, e.y) > hitRadius) return;
           this.enemySystem.damageEnemy(e, dmg, critRate, critDmg, knockback ? {
             fromX: x, fromY: y, force: knockback.force, duration: knockback.duration,
           } : null);
-          this.enemySystem.applyBurn(e, 2000);
+          this.enemySystem.applyBurn(e, outermost ? 3500 : 2000);
         });
         if (this.boss && this.boss.alive && dist(x, y, this.boss.sprite.x, this.boss.sprite.y) <= hitRadius + 20) {
           this.boss.takeDamage(dmg, critRate, critDmg);
         }
-        this.spawnImpactFx(x, y, 'fireball', hitRadius, false);
+        this.spawnImpactFx(x, y, 'fireball', hitRadius, outermost);
 
         this.tweens.add({
           targets: pillar, scaleY: 0, alpha: 0, duration: 220, delay: 260,
