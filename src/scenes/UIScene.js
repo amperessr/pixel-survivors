@@ -1,5 +1,5 @@
 import { WEAPON_DATA, WEAPON_EVOLUTIONS, WEAPON_FUSIONS } from '../weapons/WeaponData.js';
-import { EQUIP_SLOTS, RING_SLOTS, EQUIPMENT_DATA, LEGENDARY_SET_BONUS_TEXT } from '../equipment/EquipmentData.js';
+import { EQUIP_SLOTS, RING_SLOTS, EQUIPMENT_DATA, LEGENDARY_SET_BONUS_TEXT, MYTHIC_SET_BONUS_TEXT } from '../equipment/EquipmentData.js';
 import { PASSIVE_IDS, PASSIVE_DATA } from '../skills/PassiveData.js';
 import { getEquipped, isLevelUpAutoMode, setLevelUpAutoMode, getPlayerName } from '../managers/SaveManager.js';
 import { audioManager } from '../managers/AudioManager.js';
@@ -448,8 +448,9 @@ export default class UIScene extends Phaser.Scene {
     if (!this.gs.setBonuses) return;
     const sb = this.gs.setBonuses;
     const lines = [];
-    Object.keys(LEGENDARY_SET_BONUS_TEXT).forEach((slug) => {
-      const def = LEGENDARY_SET_BONUS_TEXT[slug];
+    const allSetBonusText = { ...LEGENDARY_SET_BONUS_TEXT, ...MYTHIC_SET_BONUS_TEXT };
+    Object.keys(allSetBonusText).forEach((slug) => {
+      const def = allSetBonusText[slug];
       if (sb[`${slug}3`]) lines.push(`✅ ${def.label} 3件\n${def.three}`);
       if (sb[`${slug}5`]) lines.push(`✅ ${def.label} 5件\n${def.five}`);
     });

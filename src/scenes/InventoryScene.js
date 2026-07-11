@@ -1,6 +1,6 @@
 import {
   EQUIPMENT_DATA, EQUIP_SLOTS, RING_SLOTS, SLOT_LABELS, RARITY_DATA, RARITY_IDS, SELL_PRICES,
-  LEGENDARY_SET_BONUS_TEXT, getLegendarySeriesSlug,
+  LEGENDARY_SET_BONUS_TEXT, MYTHIC_SET_BONUS_TEXT, getLegendarySeriesSlug,
 } from '../equipment/EquipmentData.js';
 import { createRarityFrame } from '../utils/RarityFrame.js';
 import {
@@ -394,9 +394,10 @@ export default class InventoryScene extends Phaser.Scene {
       if (slug) setCounts[slug] = (setCounts[slug] || 0) + 1;
     });
     const setLines = [];
-    Object.keys(LEGENDARY_SET_BONUS_TEXT).forEach((slug) => {
+    const allSetBonusText = { ...LEGENDARY_SET_BONUS_TEXT, ...MYTHIC_SET_BONUS_TEXT };
+    Object.keys(allSetBonusText).forEach((slug) => {
       const n = setCounts[slug] || 0;
-      const def = LEGENDARY_SET_BONUS_TEXT[slug];
+      const def = allSetBonusText[slug];
       if (n >= 3) setLines.push(`${def.label}：${def.three}`);
       if (n >= 5) setLines.push(`${def.label}：${def.five}`);
     });
