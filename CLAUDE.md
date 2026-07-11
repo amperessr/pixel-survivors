@@ -53,6 +53,7 @@ assets/         正式美術圖，見下方「美術資產規範」
   | `equip_{slot}_{tier}.png` | 商店裝備，`slot`=weapon/helmet/clothes/pants/shoes，`tier`=beginner/mid/high |
   | `equip_{slot}_g{01-20}.png` | 扭蛋一般裝備，5 部位 × 20 款 |
   | `equip_legendary_{slot}_{theme}.png` | 傳說套裝，`theme`=flame/ice/holy/wind/thunder |
+  | `equip_mythic_{slot}_{theme}.png` | 神話套裝（比傳說更高一階），`theme`=shadow（暗影君王，目前僅一組） |
   | `weapon_xxx_lv5.png` / `proj_xxx.png` | 融合武器與其彈道正式圖 |
   | `fx_xxx.png` | 特效圖，如 `fx_bloodstorm`／`fx_ice_pillar_evo` |
   | `ring_xxx.png` / `player_xxx.png` | 戒指、玩家角色圖 |
@@ -75,6 +76,7 @@ assets/         正式美術圖，見下方「美術資產規範」
 - 協作者：安培
 - 動作流程：先確認要怎麼修改跟我討論，絕對要詢問是否要上傳(git push)，我確認後才動手；只有我說「上傳」才執行 git push
 - 本機驗證：`npm start` 後開 `http://localhost:8080` 手動測試（純前端，沒有自動化測試）
+- 開瀏覽器測試的帳號只使用這組，ID:系統測試員、password:123，並且分數不納入任何排行榜
 
 ## 省 Token 協作建議
 

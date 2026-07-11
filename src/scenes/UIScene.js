@@ -95,6 +95,13 @@ export default class UIScene extends Phaser.Scene {
     this._panelW = PANEL_W;
     this._titleH = TITLE_H;
 
+    // ---- 左側：暗影君王套裝專用面板（只有裝備滿 3 件才顯示，見 update() 裡的
+    // setVisible 判斷）。顯示已提取的小兵影子／魔王影子數量＋各自的召喚按鈕，
+    // 位置放在左上角 HP/XP 條下方原本空著的區域，不會跟右側技能面板搶位置。
+    // 安培要求「文字視覺效果要大」，數字字級刻意拉到比其他 UI 格明顯大上一截
+    // （36px + 描邊），做出「這是特殊資源」的份量感。
+    this._buildShadowPanel();
+
     // ---- 下方：狀態列，分成「數值／已發動能力／裝備／技能」四大塊，數值/裝備/
     // 技能各自用 2 欄 x 3 列的卡片式排版（每個項目都用 ui_stat_chip 包成一張獨立
     // 卡片）；已發動能力獨立一欄顯示套裝效果文字，不用卡片格（內容是長條說明文字，
@@ -429,6 +436,7 @@ export default class UIScene extends Phaser.Scene {
     });
 
     this._refreshWeaponPanel();
+    this._refreshShadowPanel();
     this._updatePickupArrows();
   }
 
@@ -504,6 +512,96 @@ export default class UIScene extends Phaser.Scene {
     arrowImg.setPosition(ax, ay);
     arrowImg.setRotation(ang);
     arrowImg.setVisible(true);
+  }
+
+  // 建立暗影君王套裝面板的所有元素（背景/標題/兩列數字/兩個召喚按鈕），全部包進
+  // 一個 container 方便一次 setVisible 開關（沒湊到 3 件套時整組隱藏，見 update()）。
+  _buildShadowPanel() {
+    const panelX = 250, panelTop = 190, panelW = 400, panelH = 190;
+    this.shadowPanel = this.add.container(0, 0).setScrollFactor(0).setDepth(50);
+
+    const bg = this.add.image(panelX, panelTop, 'ui_panel')
+      .setOrigin(0.5, 0).setDisplaySize(panelW, panelH).setDepth(-1);
+    const title = this.add.text(panelX, panelTop + 14, '⚔ 暗影君王套裝', textStyle({
+      fontSize: '24px', color: '#c68fff', fontStyle: 'bold',
+    })).setOrigin(0.5, 0);
+    const divider = this.add.rectangle(panelX, panelTop + 46, panelW - 36, 2, 0xc68fff, 0.4);
+
+    // 每一列：圓形色塊當圖示（不用額外準備材質）＋標籤＋大字級數字＋召喚按鈕
+    const rowY = [panelTop + 90, panelTop + 146];
+    const labels = ['小兵影子', '魔王影子'];
+    this.shadowCountTexts = [];
+    this.shadowBtns = [];
+    labels.forEach((label, i) => {
+      const y = rowY[i];
+      const dot = this.add.circle(panelX - panelW / 2 + 34, y, 15, 0x6a3fa0).setStrokeStyle(2, 0xc68fff);
+      this.add.text(panelX - panelW / 2 + 62, y, label, textStyle({
+        fontSize: '20px', color: '#e8d6ff',
+      })).setOrigin(0, 0.5);
+      // 數字視覺效果要大：36px + 描邊，明顯比其他 UI 格的數字（22px 上下）大上一截
+      const countText = this.add.text(panelX + 30, y, '0', textStyle({
+        fontSize: '36px', color: '#ffffff', fontStyle: 'bold', stroke: '#4a1f7a', strokeThickness: 5,
+      })).setOrigin(0.5);
+      this.shadowCountTexts.push(countText);
+
+      const btn = this.add.image(panelX + panelW / 2 - 60, y, 'ui_button_parchment')
+        .setDisplaySize(96, 42).setInteractive({ useHandCursor: true });
+      const btnText = this.add.text(panelX + panelW / 2 - 60, y, '召喚', textStyle({
+        fontSize: '20px', color: '#3a2413',
+      })).setOrigin(0.5);
+      btn.on('pointerover', () => btn.setTint(0xfff3d0));
+      btn.on('pointerout', () => btn.clearTint());
+      btn.on('pointerdown', () => this._onSummonShadow(i === 0 ? 'minion' : 'boss'));
+      this.shadowBtns.push(btn);
+
+      this.shadowPanel.add([dot, btn, btnText, countText]);
+    });
+    this.shadowPanel.add([bg, title, divider]);
+    this.shadowPanel.setVisible(false);
+  }
+
+  // 每幀同步兩個數字；只有裝備滿 3 件暗影君王套裝時才顯示整組面板。
+  _refreshShadowPanel() {
+    const setBonuses = this.gs.setBonuses;
+    const visible = !!(setBonuses && setBonuses.shadow3);
+    this.shadowPanel.setVisible(visible);
+    if (!visible) return;
+    this.shadowCountTexts[0].setText(String(this.gs.shadowMinionCount || 0));
+    this.shadowCountTexts[1].setText(String(this.gs.shadowBossCount || 0));
+  }
+
+  // 點下召喚按鈕：小兵影子跟魔王影子召喚出來的是同一種影子盟友（見
+  // ShadowAllySystem.spawn()），差別只在消耗哪個貨幣池、以及一次召喚的數量——
+  // 小兵影子比較好取得（5% 機率），一次最多召 100 隻，數量不夠 100 就有多少召多少
+  // （不是「不滿 100 就不能召」）；魔王影子比較稀有，一次固定召 1 隻、消耗 1 個。
+  _onSummonShadow(kind) {
+    const key = kind === 'minion' ? 'shadowMinionCount' : 'shadowBossCount';
+    const available = this.gs[key] || 0;
+    if (available <= 0) return;
+    const count = kind === 'minion' ? Math.min(100, available) : 1;
+    this.gs[key] -= count;
+    for (let i = 0; i < count; i++) this.gs.shadowAllySystem.spawn();
+    this.announceShadowRise();
+  }
+
+  // 召喚瞬間的畫面正中央提示：黑色粗體「起來吧」+ 紫色底板，比照
+  // showWoofWarStartBanner() 的淡入停留淡出寫法。
+  announceShadowRise() {
+    const w = this.scale.width, h = this.scale.height;
+    const text = this.add.text(w / 2, h / 2, '起來吧', textStyle({
+      fontSize: '64px', color: '#000000', fontStyle: 'bold', stroke: '#c68fff', strokeThickness: 8,
+    })).setOrigin(0.5).setScrollFactor(0).setDepth(60001).setAlpha(0);
+    const bg = this.add.rectangle(w / 2, h / 2, text.width + 90, text.height + 40, 0x2a1533, 0.8)
+      .setStrokeStyle(3, 0xc68fff, 0.9).setScrollFactor(0).setDepth(60000).setAlpha(0);
+    this.tweens.add({
+      targets: [text, bg], alpha: 1, duration: 200,
+      onComplete: () => {
+        this.tweens.add({
+          targets: [text, bg], alpha: 0, duration: 500, delay: 700,
+          onComplete: () => { text.destroy(); bg.destroy(); },
+        });
+      },
+    });
   }
 
   _refreshWeaponPanel() {

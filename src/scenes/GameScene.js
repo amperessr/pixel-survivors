@@ -1,4 +1,5 @@
 import Player from '../player/Player.js';
+import ShadowAllySystem from '../player/ShadowAllySystem.js';
 import MapGenerator from '../systems/MapGenerator.js';
 import EnemySystem from '../enemy/EnemySystem.js';
 import HealthPackSystem from '../systems/HealthPackSystem.js';
@@ -64,6 +65,7 @@ export default class GameScene extends Phaser.Scene {
     this.healthPackSystem = new HealthPackSystem(this, this.player);
     this.magnetSystem = new MagnetSystem(this, this.player);
     this.weaponSystem = new WeaponSystem(this, this.player, this.enemySystem);
+    this.shadowAllySystem = new ShadowAllySystem(this, this.player); // 暗影君王套裝召喚的影子盟友
 
     this.bossBoltGroup = this.physics.add.group();
     this.boss = null;
@@ -81,6 +83,11 @@ export default class GameScene extends Phaser.Scene {
 
     this.killCount = 0;
     this.bossKillCount = 0; // 擊殺魔王數：結算時每隻額外加分
+    // 暗影君王套裝專用的影子貨幣：單局內狀態，不存檔（套裝效果本來就是「裝備時才生效」，
+    // 見 _computeSetBonuses 的 shadow3/shadow5、EnemySystem._killEnemy／onBossDefeated
+    // 的提取判定、UIScene 的召喚按鈕）。
+    this.shadowMinionCount = 0;
+    this.shadowBossCount = 0;
     this.paused = false;
     this.escPaused = false; // 僅代表玩家手動按 ESC 暫停（用於顯示「已暫停」遮罩）
     this.dragonAuraActive = false; // 是否已接受龍之光環（永久跟隨光環視覺開關）
@@ -336,7 +343,7 @@ export default class GameScene extends Phaser.Scene {
       if (slug) counts[slug] = (counts[slug] || 0) + 1;
     });
     const flags = {};
-    ['flame', 'ice', 'wind', 'holy', 'thunder'].forEach((slug) => {
+    ['flame', 'ice', 'wind', 'holy', 'thunder', 'shadow'].forEach((slug) => {
       const n = counts[slug] || 0;
       flags[`${slug}3`] = n >= 3;
       flags[`${slug}5`] = n >= 5;
@@ -503,6 +510,7 @@ export default class GameScene extends Phaser.Scene {
     this.healthPackSystem.update(time, delta);
     this.magnetSystem.update(time);
     this.weaponSystem.update(time, delta);
+    this.shadowAllySystem.update(time);
 
     this._updateCollisions(time);
 
@@ -1019,6 +1027,13 @@ export default class GameScene extends Phaser.Scene {
     // 魔王 100% 掉落血包（一般小怪是 10% 機率，見 EnemySystem._killEnemy）
     if (this.healthPackSystem && bossX != null) {
       this.healthPackSystem.forceSpawn(bossX, bossY, true);
+    }
+    // 暗影君王套裝五件套：擊殺魔王 50% 機率提取一個魔王影子（見 _computeSetBonuses
+    // 的 shadow5、UIScene 的召喚按鈕怎麼消耗這個數字）。
+    if (this.setBonuses && this.setBonuses.shadow5 && bossX != null && Math.random() < 0.5) {
+      this.shadowBossCount++;
+      this.spawnGlowRing(bossX, bossY, 'fx_crit', 0x9d6bff, 0.3, 2.4, 320);
+      this.spawnBurstFx(bossX, bossY, 0x9d6bff, 16, 'fx_crit', 160);
     }
     // 慶祝特效一定會播放，不受任何選單開關影響。2026-07-10：延後 220ms 才觸發，
     // 避免跟 Boss._die() 自己的死亡爆炸特效疊在同一幀一次建立太多物件，那是「擊敗

@@ -280,8 +280,39 @@ EQUIP_SLOTS.forEach((slot) => {
   });
 });
 
-// 依裝備 id 找出它屬於哪一套傳說套裝的 slug（flame/ice/wind/holy/thunder），
-// 不是傳說套裝裝備（含戒指、非傳說裝備）一律回傳 null。
+// 神話階：暗影君王套裝（目前唯一一組神話護甲），5 部位，用玩家提供的正式美術圖
+// （assets/equip_mythic_<slot>_<slug>.png，切自 D:\遊戲檔案\素材\暗影君王.png）。
+// 數值統一用該部位 mythic 級距的上限（跟傳說套裝同一套規則，見上面 RARITY_STAT_RANGES）。
+const MYTHIC_ARMOR_SERIES = [
+  { slug: 'shadow', label: '暗影' },
+];
+
+// 套裝效果：3件套機率提取「小兵影子」、5件套機率提取「魔王影子」——實際判定在
+// EnemySystem._killEnemy()／GameScene.onBossDefeated()，UI 顯示與召喚按鈕在 UIScene，
+// 召喚出的影子盟友邏輯在 src/player/ShadowAllySystem.js（搜尋 setBonuses.shadow3/shadow5）。
+export const MYTHIC_SET_BONUS_TEXT = {
+  shadow: { label: '暗影君王套裝', three: '打死小怪時 5% 機率提取一個小兵影子', five: '打死魔王時 50% 機率提取一個魔王影子' },
+};
+
+EQUIP_SLOTS.forEach((slot) => {
+  const statKey = GACHA_STAT_KEY[slot];
+  const [, hi] = RARITY_STAT_RANGES[statKey].mythic;
+  MYTHIC_ARMOR_SERIES.forEach(({ slug, label }) => {
+    const id = `${slot}_mythic_${slug}`;
+    const setText = MYTHIC_SET_BONUS_TEXT[slug];
+    EQUIPMENT_DATA[id] = {
+      id, slot, tier: null, tierIndex: 0, prevId: null, rarity: 'mythic',
+      name: `${label}${LEGENDARY_SLOT_SUFFIX[slot]}`,
+      desc: `${GACHA_STAT_LABEL[statKey]} +${hi}（僅扭蛋機取得）\n${setText.label} 3件：${setText.three}\n5件：${setText.five}`,
+      icon: `equip_mythic_${slot}_${slug}`, bonus: { [statKey]: hi },
+      setSlug: slug,
+    };
+    GACHA_EQUIPMENT_IDS.push(id);
+  });
+});
+
+// 依裝備 id 找出它屬於哪一套傳說/神話套裝的 slug（flame/ice/wind/holy/thunder/shadow），
+// 不是套裝裝備（含戒指、非套裝裝備）一律回傳 null。
 export function getLegendarySeriesSlug(itemId) {
   return (EQUIPMENT_DATA[itemId] && EQUIPMENT_DATA[itemId].setSlug) || null;
 }

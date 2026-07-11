@@ -310,6 +310,19 @@ export default class EnemySystem {
         const died = this.player.takeDamage(e.getData('dmg'), now);
         if (died) this.scene.onPlayerDeath();
       }
+
+      // 反打暗影君王套裝召喚的影子盟友：怪物不會特別鎖定攻擊影子（AI 還是一律朝
+      // 玩家移動，見上面的 chase 邏輯），是影子自己主動貼上去打才會順路被打到——
+      // 這裡只需要判斷「這隻怪物現在人剛好站在某隻影子旁邊」，不用改任何怪物的
+      // 移動/鎖定目標邏輯，改動範圍小很多（見 ShadowAllySystem.damageAlly）。
+      const shadowAllies = this.scene.shadowAllySystem && this.scene.shadowAllySystem.allies;
+      if (!frozen && shadowAllies && shadowAllies.length > 0) {
+        for (const ally of shadowAllies) {
+          if (ally.active && dist(e.x, e.y, ally.x, ally.y) < 20) {
+            this.scene.shadowAllySystem.damageAlly(ally, e.getData('dmg'));
+          }
+        }
+      }
     });
 
     this.expGemPool.forEachActive((g) => {
@@ -590,6 +603,12 @@ export default class EnemySystem {
     // 見 GameScene.onBossDefeated；地圖不再定時自動生成血包）
     if (Math.random() < 0.1 && this.scene.healthPackSystem) {
       this.scene.healthPackSystem.forceSpawn(enemy.x, enemy.y);
+    }
+    // 暗影君王套裝三件套：擊殺小怪 5% 機率提取一個小兵影子（見 GameScene.
+    // _computeSetBonuses 的 shadow3、UIScene 的召喚按鈕怎麼消耗這個數字）。
+    if (this.scene.setBonuses && this.scene.setBonuses.shadow3 && Math.random() < 0.05) {
+      this.scene.shadowMinionCount++;
+      this.scene.spawnBurstFx(enemy.x, enemy.y, 0x9d6bff, 6, 'fx_crit', 90);
     }
     this.pool.free(enemy);
   }

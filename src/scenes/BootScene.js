@@ -67,6 +67,16 @@ export default class BootScene extends Phaser.Scene {
       });
     });
 
+    // 神話階護甲套裝：暗影君王（目前唯一一組），正式美術圖切自
+    // D:\遊戲檔案\素材\暗影君王.png，見 EquipmentData.js 的 MYTHIC_ARMOR_SERIES。
+    const mythicSlugs = ['shadow'];
+    mythicSlugs.forEach((slug) => {
+      equipSlots.forEach((slot) => {
+        const key = `equip_mythic_${slot}_${slug}`;
+        this.load.image(key, `assets/${key}.png`);
+      });
+    });
+
     // 電擊飛刃／血肉風暴／世界末日三把融合武器改用正式美術圖，取代原本
     // TextureFactory.generateFusionWeaponIcons() 畫的簡易圖示。
     // 世界末日的 worldend_* 特效切圖已棄用（切圖帶著原圖漸層背景去不乾淨，
