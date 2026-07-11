@@ -75,21 +75,23 @@ export default class UIScene extends Phaser.Scene {
     })).setOrigin(0.5).setScrollFactor(0).setDepth(102).setVisible(false);
 
     // ---- 右側：目前技能（用面板框把整塊「技能」區域框起來）----
-    const PANEL_W = 380;
-    this.panelX = w - 220;
+    // 2026-07-11：原本 rowH=88／iconSize=60／PANEL_W=380 留白太多、文字顯得
+    // 過小，整體收緊——面板變窄、列高變矮、圖示縮小，文字比例相對變大更好讀。
+    const PANEL_W = 300;
+    this.panelX = w - 180;
     this.panelTop = 150;
-    const TITLE_H = 70;
+    const TITLE_H = 52;
 
     this.weaponPanelBg = this.add.image(this.panelX, this.panelTop, 'ui_panel')
       .setOrigin(0.5, 0).setScrollFactor(0).setDisplaySize(PANEL_W, 140).setDepth(-1);
-    this.weaponPanelTitle = this.add.text(this.panelX, this.panelTop + 16, '技能', textStyle({
-      fontSize: '28px', color: '#6fd3ff',
+    this.weaponPanelTitle = this.add.text(this.panelX, this.panelTop + 12, '技能', textStyle({
+      fontSize: '24px', color: '#6fd3ff',
     })).setOrigin(0.5, 0).setScrollFactor(0);
     this.weaponPanelDivider = this.add.rectangle(
-      this.panelX, this.panelTop + TITLE_H - 12, PANEL_W - 44, 2, 0x6fd3ff, 0.4
+      this.panelX, this.panelTop + TITLE_H - 10, PANEL_W - 36, 2, 0x6fd3ff, 0.4
     ).setScrollFactor(0);
 
-    this.weaponPanel = this.add.container(this.panelX - 70, this.panelTop + TITLE_H).setScrollFactor(0);
+    this.weaponPanel = this.add.container(this.panelX - 50, this.panelTop + TITLE_H).setScrollFactor(0);
     this._panelW = PANEL_W;
     this._titleH = TITLE_H;
 
@@ -513,13 +515,15 @@ export default class UIScene extends Phaser.Scene {
     this._lastKeyStr = stateStr;
 
     // 面板高度依技能數量自動調整，讓「技能」框永遠剛好包住目前所有武器
-    const rowH = 88;
+    // 2026-07-11：rowH 88→56、iconSize 60→44，收緊行距讓文字比例更明顯，
+    // 不再留一大片空白（見上面 create() 裡 PANEL_W／panelX 的同步調整）。
+    const rowH = 56;
     const rows = Math.max(keys.length, 1);
-    const panelH = this._titleH + rows * rowH + 24;
+    const panelH = this._titleH + rows * rowH + 16;
     this.weaponPanelBg.setDisplaySize(this._panelW, panelH);
 
     this.weaponPanel.removeAll(true);
-    const iconSize = 60; // 統一圖示顯示大小；不用 setScale 直接放大原始材質，
+    const iconSize = 44; // 統一圖示顯示大小；不用 setScale 直接放大原始材質，
                           // 否則等級越高（材質本身越大）圖示會越畫越大，容易超出框外
     keys.forEach((id, i) => {
       // 每一列的圖示改成「垂直置中在該列的區塊內」，而不是貼在列的最上緣——
@@ -529,14 +533,14 @@ export default class UIScene extends Phaser.Scene {
       const evolved = ws.isEvolved(id);
       const fusion = WEAPON_FUSIONS[id];
       const iconKey = fusion ? fusion.icon : `weapon_${id}_lv${owned[id]}`;
-      const icon = this.add.image(-60, y, iconKey).setDisplaySize(iconSize, iconSize);
+      const icon = this.add.image(-58, y, iconKey).setDisplaySize(iconSize, iconSize);
       if (evolved) icon.setTint(0xffe066);
       else if (fusion) icon.setTint(0xff9de0);
       const labelStr = evolved ? `⭐${WEAPON_EVOLUTIONS[id].name}`
         : fusion ? `🔥${fusion.name}`
         : `${WEAPON_DATA[id].name} Lv${owned[id]}`;
-      const label = this.add.text(-10, y, labelStr, textStyle({
-        fontSize: '24px', color: evolved ? '#ffe066' : fusion ? '#ff9de0' : '#fff',
+      const label = this.add.text(-14, y, labelStr, textStyle({
+        fontSize: '22px', color: evolved ? '#ffe066' : fusion ? '#ff9de0' : '#fff',
       })).setOrigin(0, 0.5);
       this.weaponPanel.add([icon, label]);
     });
