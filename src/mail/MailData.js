@@ -14,6 +14,9 @@
 //             實際存在的 id（例如 'equip_legendary_weapon_flame'、
 //             'ring_heal'、'weapon_g05' 等），背包格子不夠會直接跳過那件、
 //             其餘獎勵照樣發放，不會整封信領取失敗。
+//   target  - 【可選】指定收件人的玩家名稱（對應 SaveManager.getPlayerName()）。
+//             不填就是發給所有人（原本的行為）；填了就只有這個名字的帳號登入時
+//             才會在信箱看到這封信，其他人完全看不到（見 MailboxScene 怎麼過濾）。
 //
 // 新的信排在陣列最後面，信箱列表會由新到舊排序，不用自己手動排序。
 export const MAIL_DATA = [
@@ -37,5 +40,19 @@ export const MAIL_DATA = [
     date: '2026-07-10',
     message: '抱歉機率太低了嗚嗚',
     rewards: { gold: 100000, items: [] },
+  },
+  {
+    id: 'shadow_king_gift_安培_2026_07_11',
+    title: '🗡️ 暗影君王套裝一份',
+    date: '2026-07-11',
+    message: '新做的神話套裝，先送你一套試試看！',
+    rewards: {
+      gold: 0,
+      items: [
+        'weapon_mythic_shadow', 'helmet_mythic_shadow', 'clothes_mythic_shadow',
+        'pants_mythic_shadow', 'shoes_mythic_shadow',
+      ],
+    },
+    target: '安培',
   },
 ];

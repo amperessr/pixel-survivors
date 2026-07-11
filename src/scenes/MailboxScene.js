@@ -2,7 +2,7 @@ import { MAIL_DATA } from '../mail/MailData.js';
 import { EQUIPMENT_DATA } from '../equipment/EquipmentData.js';
 import {
   getMailStatus, isMailClaimed, isMailDeleted, claimMail, deleteMail,
-  addGold, addItemToInventory, getGold, getWoofWarReward, isNewbieAccount,
+  addGold, addItemToInventory, getGold, getWoofWarReward, isNewbieAccount, getPlayerName,
 } from '../managers/SaveManager.js';
 import { resolveWoofWarRewardIfNeeded, WOOF_WAR_REWARD_MAIL_ID } from '../activities/WoofWarRewardSystem.js';
 import { textStyle } from '../utils/TextStyle.js';
@@ -33,9 +33,13 @@ export default class MailboxScene extends Phaser.Scene {
     });
 
     // 新的信排最上面；已刪除的信直接不顯示。動態的新手禮包／活動結算信疊在最上面。
+    // MAIL_DATA 裡有填 target 的信只有名字對上的帳號看得到（見 MailData.js 的
+    // target 欄位說明），沒填 target 的維持原本「發給所有人」的行為。
     const starterMail = this._buildStarterPackMail();
     const woofWarMail = this._buildWoofWarRewardMail();
-    this.mails = [...(starterMail ? [starterMail] : []), ...(woofWarMail ? [woofWarMail] : []), ...[...MAIL_DATA].reverse()]
+    const playerName = getPlayerName();
+    const broadcastMail = MAIL_DATA.filter((m) => !m.target || m.target === playerName);
+    this.mails = [...(starterMail ? [starterMail] : []), ...(woofWarMail ? [woofWarMail] : []), ...[...broadcastMail].reverse()]
       .filter((m) => !isMailDeleted(m.id));
     this.selectedId = this.mails.length > 0 ? this.mails[0].id : null;
 
