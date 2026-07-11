@@ -23,6 +23,8 @@ export default class BootScene extends Phaser.Scene {
     // 冰霜新星／永凍冰川（進化版）的冰柱正式美術圖，取代原本程式產生的簡易冰柱貼圖
     this.load.image('fx_ice_pillar_normal', 'assets/fx_ice_pillar_normal.png');
     this.load.image('fx_ice_pillar_evo', 'assets/fx_ice_pillar_evo.png');
+    // 世界末日新增的炎柱環（見 WeaponSystem._fireWorldEndPillarRing()），跟冰柱交替往外刺出
+    this.load.image('fx_fire_pillar', 'assets/fx_fire_pillar.png');
     // 玩家角色改用正式美術圖（藍色史萊姆），取代原本程式產生的簡易貼圖
     this.load.image('player_balanced', 'assets/player_slime.png');
     // 四種小怪改用正式美術圖（山豬/哥布林/骷髏/半獸人），取代原本 TextureFactory
