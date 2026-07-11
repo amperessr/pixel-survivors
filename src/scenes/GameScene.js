@@ -714,7 +714,7 @@ export default class GameScene extends Phaser.Scene {
       callback: () => { if (meteor.active) this.spawnEmbersFx(meteor.x, meteor.y - 10, 2, 0xff8a3d); },
     });
     this.tweens.add({
-      targets: meteor, y, duration: 430, ease: 'Cubic.easeIn',
+      targets: meteor, y, duration: 650, ease: 'Cubic.easeIn',
       onComplete: () => {
         trailTimer.remove();
         meteor.destroy();
@@ -744,7 +744,7 @@ export default class GameScene extends Phaser.Scene {
     const ice = this.add.image(x, y - 620, 'proj_frost')
       .setDepth(30003).setScale(3.4).setTint(0xcdefff).setRotation(-0.3);
     this.tweens.add({
-      targets: ice, y, duration: 430, ease: 'Cubic.easeIn',
+      targets: ice, y, duration: 650, ease: 'Cubic.easeIn',
       onComplete: () => {
         ice.destroy();
         this._spawnWorldEndImpactFx(x, y, aoe, 'frost');

@@ -109,7 +109,8 @@ export const WEAPON_FUSIONS = {
     parents: ['fireball', 'frost'],
     desc: '火球融合冰霜。分別鎖定兩隻敵人，從天而降砸下隕石與大冰塊：隕石打中直接燃燒目標並留下燃燒地板，冰塊打中直接冰凍目標 1 秒並留下冰霜地板，經過地板的敵人會持續燃燒或減速。同時以自己為中心，冰柱與炎柱交替向八個方向刺出，補上一圈範圍傷害。',
     icon: 'weapon_fireball_frost_lv5',
-    stats: { dmg: 48, cooldown: 935, aoe: 64 },
+    // 冷卻從 935 縮短到 700，玩家反應原本開火頻率太慢
+    stats: { dmg: 48, cooldown: 700, aoe: 64 },
   },
 };
 
