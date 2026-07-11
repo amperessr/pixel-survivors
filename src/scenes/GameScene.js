@@ -1028,13 +1028,6 @@ export default class GameScene extends Phaser.Scene {
     if (this.healthPackSystem && bossX != null) {
       this.healthPackSystem.forceSpawn(bossX, bossY, true);
     }
-    // 暗影君王套裝五件套：擊殺魔王 50% 機率提取一個魔王影子，記錄下是「這隻」魔王
-    // （見 _computeSetBonuses 的 shadow5、UIScene 的召喚按鈕怎麼依序消耗這個佇列）。
-    if (this.setBonuses && this.setBonuses.shadow5 && bossX != null && Math.random() < 0.5) {
-      this.shadowBossQueue.push(bossType);
-      this.spawnGlowRing(bossX, bossY, 'fx_crit', 0x9d6bff, 0.3, 2.4, 320);
-      this.spawnBurstFx(bossX, bossY, 0x9d6bff, 16, 'fx_crit', 160);
-    }
     // 慶祝特效一定會播放，不受任何選單開關影響。2026-07-10：延後 220ms 才觸發，
     // 避免跟 Boss._die() 自己的死亡爆炸特效疊在同一幀一次建立太多物件，那是「擊敗
     // 魔王時會卡頓」的主因——分散成兩個時間點，各自負擔小很多，肉眼幾乎感覺不到延遲。
@@ -1042,6 +1035,35 @@ export default class GameScene extends Phaser.Scene {
       if (!this.gameEnded && this.player && this.player.sprite.active) this.spawnSuperSaiyanAura();
     });
 
+    // 暗影君王套裝五件套：跳出抽取視窗（見 ShadowExtractScene，最多三次機會、
+    // 機率 10%/25%/50% 遞增），視窗關閉後才由 resumeFromShadowExtract() 接手繼續
+    // 走遺物/經驗值結算，避免兩個彈窗同時疊在畫面上。
+    if (this.setBonuses && this.setBonuses.shadow5 && bossX != null) {
+      this._openShadowExtractPrompt(bossType, relicId);
+    } else {
+      this._finishBossDefeated(relicId);
+    }
+  }
+
+  _openShadowExtractPrompt(bossType, relicId) {
+    this._pendingBossRelicId = relicId;
+    this.paused = true;
+    this.physics.world.pause();
+    this.scene.launch('ShadowExtractScene', { gameScene: this, bossType });
+  }
+
+  resumeFromShadowExtract() {
+    // 跟 resumeFromRelicChoice() 一樣的防呆：死亡後就不要再把物理世界恢復運作
+    if (this.gameEnded) return;
+    this.paused = false;
+    this.physics.world.resume();
+    this.player.clearBankedInput();
+    const relicId = this._pendingBossRelicId;
+    this._pendingBossRelicId = null;
+    this._finishBossDefeated(relicId);
+  }
+
+  _finishBossDefeated(relicId) {
     const relic = RELICS[relicId];
     // 每個遺物只能拿一次：如果玩家已經擁有這個遺物，就不用再跳出選擇視窗詢問了
     const alreadyOwned = relic && relic.hasIt(this.player);
@@ -1146,7 +1168,7 @@ export default class GameScene extends Phaser.Scene {
     // 死亡當下如果升級選單／遺物選擇視窗／開局選技能視窗剛好開著（例如跟 Boss
     // 同歸於盡），這些視窗不會自己關掉，會一直蓋在畫面最上層，看起來像是
     // 「遊戲卡住沒結束」，所以這裡強制把它們也一併關掉，確保一定會看到結算畫面。
-    ['UIScene', 'LevelUpScene', 'RelicChoiceScene', 'StartSkillScene'].forEach((key) => {
+    ['UIScene', 'LevelUpScene', 'RelicChoiceScene', 'ShadowExtractScene', 'StartSkillScene'].forEach((key) => {
       try { this.scene.stop(key); } catch (err) { console.error(`[GameScene] 關閉 ${key} 失敗：`, err); }
     });
     // time 只留給結算畫面當「存活時間」資訊顯示用，分數計算已經改用 stage（見
