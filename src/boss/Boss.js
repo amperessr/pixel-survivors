@@ -651,7 +651,11 @@ export default class Boss {
     this._clearTelegraphFx(); // 前搖到一半被打死的話，警示文字/範圍指示不該留在畫面上
     audioManager.bossDeath();
     this.scene.cameras.main.flash(500, 255, 255, 255);
-    this.scene.hitStop(150);
+    // 死亡特效本身就會同步建立大量物件（光環/爆炸圖/粒子），這裡若再疊加
+    // hitStop 把物理時間流速壓到 0.05 倍、150ms 後又彈回正常速度，會讓玩家/
+    // 小怪的移動在「幾乎凍結」跟「正常速度」之間產生強烈反差，看起來像
+    // 衝刺／瞬移。拿掉 hitStop，讓速度全程保持一致，就不會有這個反差。
+    // 畫面閃光（上面的 cameras.main.flash）已經足夠交代「這一擊很重」。
 
     const dx = this.sprite.x, dy = this.sprite.y;
     const themeColor = this.typeDef.aoeColor;
