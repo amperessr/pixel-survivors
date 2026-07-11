@@ -1128,6 +1128,18 @@ export default class GameScene extends Phaser.Scene {
     this.spawnBurstFx(x, y, 0xffffff, 16, 'fx_crit', 170);
     const ring = this.add.image(x, y, 'fx_bossdeath').setDepth(30005).setScale(0.5).setTint(0xff5a3d);
     this.tweens.add({ targets: ring, scale: 3.6, alpha: 0, duration: 520, onComplete: () => ring.destroy() });
+    // 正式爆炸美術圖疊在光環中間，隨機轉個角度＋先小一圈再彈出來，做出「炸開」的
+    // 動態過程，不是單純貼一張定格圖；ADD 疊加模式讓暗部融進背景只留亮部發光，
+    // 跟光環/粒子同一套疊加風格，不會像方形貼紙貼上去。
+    const EXPLOSION_SIZE = 300;
+    const explosion = this.add.image(x, y, 'fx_explosion_player')
+      .setDepth(30006).setRotation(Math.random() * Math.PI * 2)
+      .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.95);
+    explosion.setDisplaySize(EXPLOSION_SIZE * 0.55, EXPLOSION_SIZE * 0.55);
+    const explosionFinalScale = explosion.scaleX;
+    explosion.setScale(explosionFinalScale * 0.5);
+    this.tweens.add({ targets: explosion, scale: explosionFinalScale, duration: 160, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: explosion, alpha: 0, duration: 420, delay: 200, onComplete: () => explosion.destroy() });
 
     if (this.player.sprite.active) {
       this.tweens.add({

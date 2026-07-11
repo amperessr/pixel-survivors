@@ -657,10 +657,26 @@ export default class Boss {
         onComplete: () => fx.destroy(),
       });
     }
+    // 正式爆炸美術圖疊在光環中間：隨機轉個角度（每隻王死掉朝向都不同，不會每次
+    // 都長一樣）、先比最終尺寸小一圈再彈出來（Back 回彈），再跟光環一起淡出——
+    // 不是單純貼一張定格圖，而是「炸開」的動態過程。ADD 疊加模式讓貼圖本身偏暗
+    // 的部分融進背景，只留下亮部，跟其他光環/粒子的疊加風格一致，不會像方形貼紙。
+    const EXPLOSION_SIZE = 620;
+    const explosion = this.scene.add.image(dx, dy, 'fx_explosion_boss')
+      .setDepth(20002).setRotation(Math.random() * Math.PI * 2)
+      .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.95);
+    explosion.setDisplaySize(EXPLOSION_SIZE * 0.55, EXPLOSION_SIZE * 0.55);
+    const explosionFinalScale = explosion.scaleX;
+    explosion.setScale(explosionFinalScale * 0.5);
+    this.scene.tweens.add({ targets: explosion, scale: explosionFinalScale, duration: 220, ease: 'Back.easeOut' });
+    this.scene.tweens.add({
+      targets: explosion, alpha: 0, duration: 700, delay: 350,
+      onComplete: () => explosion.destroy(),
+    });
     // 型態專屬色的衝擊波（跟這隻龍的範圍技能同一種顏色，強化「同一隻龍」的視覺一致性）
     // + 一圈純白的內層閃光，讓爆炸有明暗層次而不是單一顏色的色塊
-    this.scene.spawnGlowRing(dx, dy, 'fx_frost', themeColor, 0.6, 11, 950, 20002);
-    this.scene.spawnGlowRing(dx, dy, 'fx_frost', 0xffffff, 0.5, 6, 650, 20003);
+    this.scene.spawnGlowRing(dx, dy, 'fx_frost', themeColor, 0.6, 11, 950, 20003);
+    this.scene.spawnGlowRing(dx, dy, 'fx_frost', 0xffffff, 0.5, 6, 650, 20004);
     // 大量四散碎片分兩批噴發，做出「還沒完全炸完、殘骸持續飛濺」的層次感。
     // 2026-07-10：兩批數量原本是 30+20，跟擊敗魔王後緊接著的升級選單／慶祝特效
     // （見 GameScene.onBossDefeated）疊在同一幀一次建立太多物件，會有感卡頓，

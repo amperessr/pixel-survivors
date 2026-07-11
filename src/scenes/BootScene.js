@@ -88,6 +88,12 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('fx_shockwave_ring', 'assets/fx_shockwave_ring.png');
     this.load.image('fx_shockwave_burst', 'assets/fx_shockwave_burst.png');
 
+    // 爆炸正式美術圖：魔王死亡（Boss.js _die()）疊金黃色爆裂，玩家死亡
+    // （GameScene._spawnPlayerDeathExplosion）疊帶煙塵感的爆裂，取代原本純光環+
+    // 粒子的程式特效（改成「光環+粒子+真的爆炸貼圖」三者疊加，不是單純貼一張圖）。
+    this.load.image('fx_explosion_boss', 'assets/fx_explosion_boss.png');
+    this.load.image('fx_explosion_player', 'assets/fx_explosion_player.png');
+
     // 汪汪大作戰（限時挑戰活動）專用魔王美術圖，見 src/boss/WoofBoss.js
     this.load.image('boss_woof', 'assets/boss_woof.png');
   }
