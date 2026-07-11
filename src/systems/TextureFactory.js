@@ -360,83 +360,39 @@ export default class TextureFactory {
     }
   }
 
-  // ---------- 地圖 Tile (草地/樹/石頭/花/河流/小路) ----------
+  // ---------- 地圖 Tile：三種地形的圖塊集（草地/沙漠/雪地）+ 各自的裝飾物 ----------
+  // 2026-07-11：改版成「圖塊集」——每種地形一張橫向 3 格的合併材質（frame 0=平地／
+  // 1=小徑／2=水域），供 MapGenerator 的 Phaser.Tilemaps 直接當 tileset 來源使用，
+  // 不再是三張各自獨立的單格材質。之後若要換成正式美術圖，只要在 BootScene.preload()
+  // 加 this.load.spritesheet(key, 'assets/xxx.png', {frameWidth:32, frameHeight:32})，
+  // 把這裡對應的 generateTileset(...) 呼叫拿掉即可無痛替換（同一套慣例見檔案開頭說明）。
   generateTiles() {
-    const T = 32;
-    // 草地
-    {
-      const { tex, ctx } = this._canvas('tile_grass', T, T);
-      ctx.fillStyle = '#5cb85c';
-      ctx.fillRect(0, 0, T, T);
-      ctx.fillStyle = 'rgba(80,160,80,0.5)';
-      for (let i = 0; i < 6; i++) {
-        ctx.fillRect(Math.random() * T, Math.random() * T, 2, 2);
-      }
-      this._finish(tex);
-    }
-    // 小路
-    {
-      const { tex, ctx } = this._canvas('tile_path', T, T);
-      ctx.fillStyle = '#d8c48a';
-      ctx.fillRect(0, 0, T, T);
-      ctx.fillStyle = 'rgba(160,140,90,0.4)';
-      for (let i = 0; i < 8; i++) {
-        ctx.fillRect(Math.random() * T, Math.random() * T, 2, 2);
-      }
-      this._finish(tex);
-    }
-    // 河流
-    {
-      const { tex, ctx } = this._canvas('tile_river', T, T);
-      ctx.fillStyle = '#4aa3e0';
-      ctx.fillRect(0, 0, T, T);
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.fillRect(0, 10, T, 3);
-      ctx.fillRect(0, 22, T, 2);
-      this._finish(tex);
-    }
-    // 樹
-    {
-      const { tex, ctx } = this._canvas('obj_tree', T, T + 12);
-      ctx.fillStyle = 'rgba(0,0,0,0.2)';
-      ctx.beginPath(); ctx.ellipse(T / 2, T + 8, 10, 3, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#7a4a2a';
-      ctx.fillRect(T / 2 - 3, T - 8, 6, 16);
-      ctx.fillStyle = '#3f9e4a';
-      ctx.beginPath(); ctx.arc(T / 2, 12, 14, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#57c266';
-      ctx.beginPath(); ctx.arc(T / 2 - 5, 8, 7, 0, Math.PI * 2); ctx.fill();
-      this._finish(tex);
-    }
-    // 石頭
-    {
-      const { tex, ctx } = this._canvas('obj_rock', T, T);
-      ctx.fillStyle = 'rgba(0,0,0,0.2)';
-      ctx.beginPath(); ctx.ellipse(16, 26, 10, 3, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#9a9a9a';
-      ctx.beginPath(); ctx.ellipse(16, 18, 11, 8, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.beginPath(); ctx.ellipse(12, 14, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
-      this._finish(tex);
-    }
-    // 花
-    {
-      const { tex, ctx } = this._canvas('obj_flower', T, T);
-      const colors = ['#ff6b9d', '#ffd93d', '#fff'];
-      const c = colors[Math.floor(Math.random() * colors.length)];
-      ctx.fillStyle = '#3f9e4a';
-      ctx.fillRect(15, 18, 2, 10);
-      ctx.fillStyle = c;
-      for (let i = 0; i < 5; i++) {
-        const ang = (i / 5) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.arc(16 + Math.cos(ang) * 4, 16 + Math.sin(ang) * 4, 3, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.fillStyle = '#ffd93d';
-      ctx.beginPath(); ctx.arc(16, 16, 2.5, 0, Math.PI * 2); ctx.fill();
-      this._finish(tex);
-    }
+    this._generateTileset('tileset_grass', [
+      (ctx, T) => this._drawGrassFloor(ctx, T),
+      (ctx, T) => this._drawPathFloor(ctx, T, '#d8c48a', '#a68c5a'),
+      (ctx, T) => this._drawWaterFloor(ctx, T, '#3d8fd6', '#6fc2ef'),
+    ]);
+    this._generateTileset('tileset_desert', [
+      (ctx, T) => this._drawSandFloor(ctx, T),
+      (ctx, T) => this._drawPathFloor(ctx, T, '#c9a865', '#9c7d43'),
+      (ctx, T) => this._drawWaterFloor(ctx, T, '#2fa9a0', '#6fdccd'),
+    ]);
+    this._generateTileset('tileset_snow', [
+      (ctx, T) => this._drawSnowFloor(ctx, T),
+      (ctx, T) => this._drawPathFloor(ctx, T, '#dbe6ee', '#aebdc9'),
+      (ctx, T) => this._drawWaterFloor(ctx, T, '#8fd3e8', '#d3f3ff'),
+    ]);
+
+    this._drawTree('obj_tree', '#7a4a2a', '#3f9e4a', '#57c266');
+    this._drawRock('obj_rock', '#9a9a9a', 'rgba(255,255,255,0.3)');
+    this._drawSmallBush('obj_flower', true);
+    this._drawCactus('obj_cactus');
+    this._drawRock('obj_dune_rock', '#b98d5a', 'rgba(255,235,200,0.35)');
+    this._drawSmallBush('obj_dry_bush', false);
+    this._drawPine('obj_pine');
+    this._drawRock('obj_ice_rock', '#bfe6f5', 'rgba(255,255,255,0.55)');
+    this._drawSmallBush('obj_snow_bush', false, true);
+
     // 背景 (更大範圍的草原漸層，作為 tilesprite 背景備援)
     {
       const { tex, ctx } = this._canvas('bg_field', 256, 256);
@@ -447,6 +403,205 @@ export default class TextureFactory {
       ctx.fillRect(0, 0, 256, 256);
       this._finish(tex);
     }
+  }
+
+  // 建立一張橫向拼接的圖塊集材質：frames.length 張 32x32 小圖依序橫排在同一張
+  // 材質裡，每張各自呼叫 draw(ctx, T) 畫在對應偏移量（用 save/translate/restore
+  // 讓每個 draw 函式可以照 (0,0) 原點作畫，不用自己處理偏移），畫完後 Phaser 的
+  // Tilemap.addTilesetImage(key, texKey, 32, 32) 就能直接依格線切成 tile index 0..N。
+  _generateTileset(key, frames) {
+    const T = 32;
+    const { tex, ctx } = this._canvas(key, T * frames.length, T);
+    frames.forEach((draw, i) => {
+      ctx.save();
+      ctx.translate(i * T, 0);
+      draw(ctx, T);
+      ctx.restore();
+    });
+    this._finish(tex);
+  }
+
+  // 草地地板：雙色漸層底 + 隨機速細草葉描邊，比單色平塗多一層層次感
+  _drawGrassFloor(ctx, T) {
+    const grad = ctx.createLinearGradient(0, 0, 0, T);
+    grad.addColorStop(0, '#63bd63');
+    grad.addColorStop(1, '#4fa851');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, T, T);
+    ctx.strokeStyle = 'rgba(70,150,70,0.5)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) {
+      const x = Math.random() * T, y = Math.random() * T;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 1, y - 3); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(90,180,90,0.35)';
+    for (let i = 0; i < 4; i++) ctx.fillRect(Math.random() * T, Math.random() * T, 2, 2);
+  }
+
+  // 沙漠地板：暖沙色漸層 + 弧形沙丘紋路 + 細沙粒點
+  _drawSandFloor(ctx, T) {
+    const grad = ctx.createLinearGradient(0, 0, T, T);
+    grad.addColorStop(0, '#e6cf94');
+    grad.addColorStop(1, '#d8bb78');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, T, T);
+    ctx.strokeStyle = 'rgba(160,130,80,0.35)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      const y = 6 + i * 9 + Math.random() * 3;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.quadraticCurveTo(T / 2, y - 4, T, y);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(120,95,55,0.3)';
+    for (let i = 0; i < 5; i++) ctx.fillRect(Math.random() * T, Math.random() * T, 1.5, 1.5);
+  }
+
+  // 雪地地板：偏藍白漸層 + 淡雪堆陰影弧線 + 亮點雪花閃爍感
+  _drawSnowFloor(ctx, T) {
+    const grad = ctx.createLinearGradient(0, 0, 0, T);
+    grad.addColorStop(0, '#f4fbff');
+    grad.addColorStop(1, '#dcedf6');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, T, T);
+    ctx.fillStyle = 'rgba(170,200,220,0.3)';
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.ellipse(Math.random() * T, Math.random() * T, 6, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    for (let i = 0; i < 4; i++) ctx.fillRect(Math.random() * T, Math.random() * T, 1.5, 1.5);
+  }
+
+  // 小徑地板：三種地形共用同一種畫法（不同底色/斑點色），走過的痕跡感
+  _drawPathFloor(ctx, T, base, speck) {
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, T, T);
+    ctx.fillStyle = speck;
+    for (let i = 0; i < 7; i++) {
+      ctx.globalAlpha = 0.35;
+      ctx.fillRect(Math.random() * T, Math.random() * T, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // 水域地板：三種地形共用同一種畫法（不同底色/波紋色）——河流/綠洲/結冰湖
+  _drawWaterFloor(ctx, T, base, highlight) {
+    const grad = ctx.createLinearGradient(0, 0, 0, T);
+    grad.addColorStop(0, highlight);
+    grad.addColorStop(1, base);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, T, T);
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, 11); ctx.quadraticCurveTo(T / 2, 8, T, 11); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 23); ctx.quadraticCurveTo(T / 2, 20, T, 23); ctx.stroke();
+  }
+
+  // 樹（草地）：共用畫法保留給草地專用配色，維持既有外觀
+  _drawTree(key, trunk, leafDark, leafLight) {
+    const T = 32;
+    const { tex, ctx } = this._canvas(key, T, T + 12);
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath(); ctx.ellipse(T / 2, T + 8, 10, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = trunk;
+    ctx.fillRect(T / 2 - 3, T - 8, 6, 16);
+    ctx.fillStyle = leafDark;
+    ctx.beginPath(); ctx.arc(T / 2, 12, 14, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = leafLight;
+    ctx.beginPath(); ctx.arc(T / 2 - 5, 8, 7, 0, Math.PI * 2); ctx.fill();
+    this._finish(tex);
+  }
+
+  // 松樹（雪地）：三角形樹冠疊層 + 頂端積雪
+  _drawPine(key) {
+    const T = 32;
+    const { tex, ctx } = this._canvas(key, T, T + 14);
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath(); ctx.ellipse(T / 2, T + 10, 10, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5a3a22';
+    ctx.fillRect(T / 2 - 2, T - 2, 4, 10);
+    ctx.fillStyle = '#1f6b45';
+    [0, 8, 15].forEach((yOff, i) => {
+      const w = 16 - i * 3;
+      ctx.beginPath();
+      ctx.moveTo(T / 2, yOff - 2);
+      ctx.lineTo(T / 2 - w, yOff + 12);
+      ctx.lineTo(T / 2 + w, yOff + 12);
+      ctx.closePath();
+      ctx.fill();
+    });
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath(); ctx.moveTo(T / 2, -2); ctx.lineTo(T / 2 - 5, 6); ctx.lineTo(T / 2 + 5, 6); ctx.closePath(); ctx.fill();
+    this._finish(tex);
+  }
+
+  // 仙人掌（沙漠）：主幹 + 兩側彎臂 + 頂端小花
+  _drawCactus(key) {
+    const T = 32;
+    const { tex, ctx } = this._canvas(key, T, T + 12);
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath(); ctx.ellipse(T / 2, T + 8, 9, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#3f8f4f';
+    TextureFactory.roundRect(ctx, T / 2 - 4, T - 20, 8, 26, 4); ctx.fill();
+    TextureFactory.roundRect(ctx, T / 2 - 12, T - 10, 8, 14, 4); ctx.fill();
+    TextureFactory.roundRect(ctx, T / 2 + 4, T - 14, 8, 18, 4); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 1;
+    for (let y = T - 18; y < T + 4; y += 5) { ctx.beginPath(); ctx.moveTo(T / 2 - 4, y); ctx.lineTo(T / 2 + 4, y); ctx.stroke(); }
+    ctx.fillStyle = '#ff8fb3';
+    ctx.beginPath(); ctx.arc(T / 2, T - 20, 3, 0, Math.PI * 2); ctx.fill();
+    this._finish(tex);
+  }
+
+  // 岩石：三種地形共用畫法（不同底色/高光色）——一般石頭/沙丘岩/冰岩
+  _drawRock(key, base, highlight) {
+    const T = 32;
+    const { tex, ctx } = this._canvas(key, T, T);
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath(); ctx.ellipse(16, 26, 10, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = base;
+    ctx.beginPath(); ctx.ellipse(16, 18, 11, 8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = highlight;
+    ctx.beginPath(); ctx.ellipse(12, 14, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+    this._finish(tex);
+  }
+
+  // 矮裝飾：三種地形共用畫法——草地花朵(isFlower)／沙漠乾灌木／雪地雪灌木(isSnow)
+  _drawSmallBush(key, isFlower, isSnow = false) {
+    const T = 32;
+    const { tex, ctx } = this._canvas(key, T, T);
+    if (isFlower) {
+      const colors = ['#ff6b9d', '#ffd93d', '#fff'];
+      const c = colors[Math.floor(Math.random() * colors.length)];
+      ctx.fillStyle = '#3f9e4a';
+      ctx.fillRect(15, 18, 2, 10);
+      ctx.fillStyle = c;
+      for (let i = 0; i < 5; i++) {
+        const ang = (i / 5) * Math.PI * 2;
+        ctx.beginPath(); ctx.arc(16 + Math.cos(ang) * 4, 16 + Math.sin(ang) * 4, 3, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = '#ffd93d';
+      ctx.beginPath(); ctx.arc(16, 16, 2.5, 0, Math.PI * 2); ctx.fill();
+    } else {
+      // 乾灌木/雪灌木：一叢不規則枝條圍成球狀
+      ctx.strokeStyle = isSnow ? '#6b8a7a' : '#9c7a3f';
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 7; i++) {
+        const ang = (i / 7) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(16, 20);
+        ctx.lineTo(16 + Math.cos(ang) * 8, 20 + Math.sin(ang) * 6 - 4);
+        ctx.stroke();
+      }
+      if (isSnow) {
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.beginPath(); ctx.ellipse(16, 15, 6, 3, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    this._finish(tex);
   }
 
   // ---------- 特效 (爆擊/擊殺/火焰/雷電/冰凍/升級光圈/Boss死亡) ----------
