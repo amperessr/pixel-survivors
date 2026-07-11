@@ -55,4 +55,18 @@ export const MAIL_DATA = [
     },
     target: '安培',
   },
+  {
+    id: 'shadow_king_gift_安培_2026_07_11_2',
+    title: '🗡️ 暗影君王套裝一份（第二份）',
+    date: '2026-07-11',
+    message: '再送你一套暗影君王套裝！',
+    rewards: {
+      gold: 0,
+      items: [
+        'weapon_mythic_shadow', 'helmet_mythic_shadow', 'clothes_mythic_shadow',
+        'pants_mythic_shadow', 'shoes_mythic_shadow',
+      ],
+    },
+    target: '安培',
+  },
 ];
