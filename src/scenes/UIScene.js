@@ -517,46 +517,46 @@ export default class UIScene extends Phaser.Scene {
   // 建立暗影君王套裝面板的所有元素（背景/標題/兩列數字/兩個召喚按鈕），全部包進
   // 一個 container 方便一次 setVisible 開關（沒湊到 3 件套時整組隱藏，見 update()）。
   _buildShadowPanel() {
-    const panelX = 250, panelTop = 190, panelW = 400, panelH = 190;
+    const panelX = 250, panelTop = 190, panelW = 320, panelH = 155;
     this.shadowPanel = this.add.container(0, 0).setScrollFactor(0).setDepth(50);
 
     const bg = this.add.image(panelX, panelTop, 'ui_panel')
       .setOrigin(0.5, 0).setDisplaySize(panelW, panelH).setDepth(-1);
-    const title = this.add.text(panelX, panelTop + 14, '⚔ 暗影君王套裝', textStyle({
-      fontSize: '24px', color: '#c68fff', fontStyle: 'bold',
+    const title = this.add.text(panelX, panelTop + 11, '⚔ 暗影君王套裝', textStyle({
+      fontSize: '20px', color: '#c68fff', fontStyle: 'bold',
     })).setOrigin(0.5, 0);
-    const divider = this.add.rectangle(panelX, panelTop + 46, panelW - 36, 2, 0xc68fff, 0.4);
+    const divider = this.add.rectangle(panelX, panelTop + 38, panelW - 28, 2, 0xc68fff, 0.4);
+
+    this.shadowPanel.add([bg, title, divider]);
 
     // 每一列：圓形色塊當圖示（不用額外準備材質）＋標籤＋大字級數字＋召喚按鈕
-    const rowY = [panelTop + 90, panelTop + 146];
+    const rowY = [panelTop + 72, panelTop + 116];
     const labels = ['小兵影子', '魔王影子'];
     this.shadowCountTexts = [];
     this.shadowBtns = [];
     labels.forEach((label, i) => {
       const y = rowY[i];
-      const dot = this.add.circle(panelX - panelW / 2 + 34, y, 15, 0x6a3fa0).setStrokeStyle(2, 0xc68fff);
-      this.add.text(panelX - panelW / 2 + 62, y, label, textStyle({
-        fontSize: '20px', color: '#e8d6ff',
+      const dot = this.add.circle(panelX - panelW / 2 + 27, y, 12, 0x6a3fa0).setStrokeStyle(2, 0xc68fff);
+      const labelText = this.add.text(panelX - panelW / 2 + 49, y, label, textStyle({
+        fontSize: '17px', color: '#e8d6ff',
       })).setOrigin(0, 0.5);
-      // 數字視覺效果要大：36px + 描邊，明顯比其他 UI 格的數字（22px 上下）大上一截
-      const countText = this.add.text(panelX + 30, y, '0', textStyle({
-        fontSize: '36px', color: '#ffffff', fontStyle: 'bold', stroke: '#4a1f7a', strokeThickness: 5,
+      const countText = this.add.text(panelX + 24, y, '0', textStyle({
+        fontSize: '30px', color: '#ffffff', fontStyle: 'bold', stroke: '#4a1f7a', strokeThickness: 4,
       })).setOrigin(0.5);
       this.shadowCountTexts.push(countText);
 
-      const btn = this.add.image(panelX + panelW / 2 - 60, y, 'ui_button_parchment')
-        .setDisplaySize(96, 42).setInteractive({ useHandCursor: true });
-      const btnText = this.add.text(panelX + panelW / 2 - 60, y, '召喚', textStyle({
-        fontSize: '20px', color: '#3a2413',
+      const btn = this.add.image(panelX + panelW / 2 - 48, y, 'ui_button_parchment')
+        .setDisplaySize(77, 34).setInteractive({ useHandCursor: true });
+      const btnText = this.add.text(panelX + panelW / 2 - 48, y, '召喚', textStyle({
+        fontSize: '17px', color: '#3a2413',
       })).setOrigin(0.5);
       btn.on('pointerover', () => btn.setTint(0xfff3d0));
       btn.on('pointerout', () => btn.clearTint());
       btn.on('pointerdown', () => this._onSummonShadow(i === 0 ? 'minion' : 'boss'));
       this.shadowBtns.push(btn);
 
-      this.shadowPanel.add([dot, btn, btnText, countText]);
+      this.shadowPanel.add([dot, labelText, countText, btn, btnText]);
     });
-    this.shadowPanel.add([bg, title, divider]);
     this.shadowPanel.setVisible(false);
   }
 
