@@ -126,8 +126,10 @@ export const WEAPON_KNOCKBACK = {
   fireball: { force: 260, duration: 220 },
   lightning: { force: 170, duration: 150 },
   knife: { force: 210, duration: 150 },
-  sawblade: { force: 130, duration: 120 },
-  frost: { force: 190, duration: 260 },
+  sawblade: { force: 300, duration: 120 },
+  frost: { force: 350, duration: 260 },
+  // 融合武器與進化版本也使用相同擊退設定
+  knife_sawblade: { force: 300, duration: 120 },
 };
 
 // 武器五級滿了之後可以「進化」成更強的高階版本，不是單純數值疊加，
