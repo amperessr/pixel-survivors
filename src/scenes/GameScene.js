@@ -231,15 +231,6 @@ export default class GameScene extends Phaser.Scene {
     if (ui && ui.showWoofWarStartBanner) ui.showWoofWarStartBanner();
   }
 
-  // 大招/衝撞等招式傷害不足以致命，但仍留一個安全網：血量真的歸零時原地滿血復活
-  // 並給 1 秒無敵，不中斷挑戰、不跳結算畫面，讓玩家能把剩下的時間都花在輸出上。
-  _woofWarRevivePlayer(time) {
-    this.player.hp = this.player.stats.maxHp;
-    this.player.invulnerableUntil = time + 1000;
-    this.cameras.main.flash(200, 255, 255, 255);
-    this.spawnBurstFx(this.player.sprite.x, this.player.sprite.y, 0x6fd3ff, 16, 'fx_crit', 160);
-  }
-
   // 汪汪血量異常高，正常情況下 3 分鐘打不死；萬一真的被打死，當成直接提前結算。
   onWoofBossDefeated() {
     this._endWoofWarChallenge();
@@ -434,10 +425,10 @@ export default class GameScene extends Phaser.Scene {
     // 這個呼叫本身也包 try/catch——萬一 onPlayerDeath() 內部真的有什麼漏網之魚，
     // 至少不會讓整個 update() 迴圈跟著掛掉，下一幀還有機會再試一次。
     if (this.player && this.player.hp <= 0) {
-      // 汪汪大作戰：血量歸零不是死亡結算，是原地滿血復活繼續拚傷害（見
-      // _woofWarRevivePlayer），不會走一般模式的死亡/結算流程。
+      // 汪汪大作戰：血量歸零直接視為挑戰結束，跳跟時間到一樣的結算畫面
+      // （見 _endWoofWarChallenge），不再原地滿血復活。
       if (this.woofWarMode) {
-        if (!this.gameEnded) this._woofWarRevivePlayer(time);
+        if (!this._woofWarEnded && !this.gameEnded) this._endWoofWarChallenge();
         return;
       }
       if (!this._hpZeroSince) this._hpZeroSince = time;

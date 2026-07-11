@@ -6,9 +6,9 @@ import { textStyle } from '../utils/TextStyle.js';
 // 隨機輪流選」，這邊是「四招各自獨立 CD」，招式內容也完全不同（雷射掃射／防護罩
 // 無敵／持續追人的隕石大招），共用一套邏輯反而會讓 Boss.js 變得更難懂，所以另外
 // 獨立一個檔案。2026-07-11 平衡調整：四招傷害全面拉高到「不閃真的會死」的程度
-// （見 SKILLS 各招的 dmg）——「死」在汪汪大作戰裡不是遊戲結束，只是觸發
-// _woofWarRevivePlayer() 原地滿血復活＋1 秒無敵，所以傷害可以放到接近/超過玩家
-// 血量上限，逼玩家認真閃招，不會真的把挑戰打斷。
+// （見 SKILLS 各招的 dmg）。血量歸零現在會直接結束這次挑戰（見 GameScene.update()
+// 的 woofWarMode 分支），數值故意沒有跟著調降——保留原本「逼玩家認真閃招」的
+// 高風險設計，死亡的代價從「無傷害地滿血復活」變成「提早結束挑戰」。
 const MAX_HP = 2_000_000;
 const DEFENSE = 300; // 百分比減傷公式跟 Player.takeDamage 一致：100/(100+defense)
 const TOUCH_RADIUS = 90;
