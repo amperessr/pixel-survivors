@@ -78,16 +78,45 @@ export default class InventoryScene extends Phaser.Scene {
     // 但那段空隙其實只有戒指欄底邊到角色圖示頂端之間約 50px，兩行字的面板塞不下、
     // 還是會跟戒指圖示或角色圖示疊到——改放到最上排，跟右上角「金幣」同一列，
     // 用自己的小面板獨立框起來，就不會再跟任何欄位重疊。
-    const levelBoxY = 46, levelBoxW = 260, levelBoxH = 46;
+    // 等級框改成金色雙線＋四角刻花的「徽章」風格（跟裝備傳說級外框同一套設計語言，
+    // 見 RarityFrame.js），外層疊一圈緩慢脈動的金色光暈，字級也放大加描邊，
+    // 讓等級這個數值在畫面上更搶眼；下面再加一條 EXP 進度條，不用心算兩個數字
+    // 就能一眼看出離升級還差多少。
+    const levelBoxY = 50, levelBoxW = 290, levelBoxH = 62;
+    const levelGlow = this.add.image(leftX, levelBoxY, 'fx_bossdeath')
+      .setDisplaySize(levelBoxW * 1.15, levelBoxH * 2.6)
+      .setTint(0xffd700).setAlpha(0.22).setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({
+      targets: levelGlow, alpha: { from: 0.14, to: 0.32 }, duration: 1200,
+      yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    });
     this.add.image(leftX, levelBoxY, 'ui_panel').setDisplaySize(levelBoxW, levelBoxH);
     this.add.rectangle(leftX, levelBoxY, levelBoxW - 6, levelBoxH - 6)
-      .setStrokeStyle(2, 0x6fd3ff, 0.6).setFillStyle(0, 0);
-    this.levelText = this.add.text(leftX, levelBoxY - 10, '', textStyle({
-      fontSize: '20px', color: '#6fd3ff', fontStyle: 'bold',
+      .setStrokeStyle(3, 0xffd700, 1).setFillStyle(0, 0);
+    this.add.rectangle(leftX, levelBoxY, levelBoxW, levelBoxH)
+      .setStrokeStyle(1, 0xffd700, 0.5).setFillStyle(0, 0);
+    // 四角刻花：短的 L 形折線裝飾（跟傳說級裝備外框同一招）
+    {
+      const tickG = this.add.graphics();
+      tickG.lineStyle(2, 0xffd700, 0.9);
+      const hw = levelBoxW / 2, hh = levelBoxH / 2, tick = 12;
+      [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
+        const cx = leftX + sx * hw, cy = levelBoxY + sy * hh;
+        tickG.lineBetween(cx, cy - sy * tick, cx, cy);
+        tickG.lineBetween(cx - sx * tick, cy, cx, cy);
+      });
+    }
+    this.levelText = this.add.text(leftX, levelBoxY - 15, '', textStyle({
+      fontSize: '27px', color: '#ffe066', fontStyle: 'bold',
+      stroke: '#3a2413', strokeThickness: 4,
     })).setOrigin(0.5);
-    this.levelExpText = this.add.text(leftX, levelBoxY + 11, '', textStyle({
+    this.levelExpText = this.add.text(leftX, levelBoxY + 6, '', textStyle({
       fontSize: '13px', color: '#9fd3ff',
     })).setOrigin(0.5);
+    const expBarW = levelBoxW - 32, expBarH = 6;
+    this.levelExpBarW = expBarW;
+    this.add.rectangle(leftX, levelBoxY + 21, expBarW, expBarH, 0x000000, 0.45);
+    this.levelExpBarFill = this.add.rectangle(leftX - expBarW / 2, levelBoxY + 21, 0, expBarH, 0xffe066, 1).setOrigin(0, 0.5);
 
     this.equipSlotImgs = {};
     this.equipIconImgs = {};
@@ -437,8 +466,10 @@ export default class InventoryScene extends Phaser.Scene {
     });
 
     this.goldText.setText(`金幣：${getGold()}`);
-    this.levelText.setText(`Lv.${getStatLevel()}`);
-    this.levelExpText.setText(`${getStatExp()}/${getStatExpToNext()} EXP`);
+    this.levelText.setText(`⭐ Lv.${getStatLevel()}`);
+    const exp = getStatExp(), expToNext = Math.max(1, getStatExpToNext());
+    this.levelExpText.setText(`${exp}/${expToNext} EXP`);
+    this.levelExpBarFill.width = this.levelExpBarW * Math.min(1, exp / expToNext);
     this._refreshStatsPanel();
   }
 
