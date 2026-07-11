@@ -253,16 +253,25 @@ export default class InventoryScene extends Phaser.Scene {
       this.add.text(cx - panelW / 2 + 56, ry, def.label, textStyle({
         fontSize: '19px', color: '#cfe9ff',
       })).setOrigin(0, 0.5);
-      this.statsValueTexts[def.label] = this.add.text(cx + panelW / 2 - 78, ry, '', textStyle({
+      this.statsValueTexts[def.label] = this.add.text(cx + panelW / 2 - 92, ry, '', textStyle({
         fontSize: '19px', color: def.color,
       })).setOrigin(1, 0.5);
 
-      const plusBtn = this.add.image(cx + panelW / 2 - 30, ry, 'ui_button_parchment').setDisplaySize(48, 30).setInteractive({ useHandCursor: true });
-      this.add.text(cx + panelW / 2 - 30, ry, '+1', textStyle({ fontSize: '16px', color: '#3a2413' })).setOrigin(0.5);
-      plusBtn.on('pointerover', () => plusBtn.setTint(0xfff3d0));
-      plusBtn.on('pointerout', () => plusBtn.clearTint());
-      plusBtn.on('pointerdown', () => this._addPendingStat(def.investKey));
-      this.plusBtns[def.investKey] = plusBtn;
+      // 「+1」跟「+10」兩顆快捷加點鍵並排，「+10」給想一次加多一點的玩家用，
+      // 不用像單顆「+1」那樣點很多下。
+      const plus1Btn = this.add.image(cx + panelW / 2 - 56, ry, 'ui_button_parchment').setDisplaySize(32, 28).setInteractive({ useHandCursor: true });
+      this.add.text(cx + panelW / 2 - 56, ry, '+1', textStyle({ fontSize: '14px', color: '#3a2413' })).setOrigin(0.5);
+      plus1Btn.on('pointerover', () => plus1Btn.setTint(0xfff3d0));
+      plus1Btn.on('pointerout', () => plus1Btn.clearTint());
+      plus1Btn.on('pointerdown', () => this._addPendingStat(def.investKey, 1));
+
+      const plus10Btn = this.add.image(cx + panelW / 2 - 18, ry, 'ui_button_parchment').setDisplaySize(38, 28).setInteractive({ useHandCursor: true });
+      this.add.text(cx + panelW / 2 - 18, ry, '+10', textStyle({ fontSize: '13px', color: '#3a2413' })).setOrigin(0.5);
+      plus10Btn.on('pointerover', () => plus10Btn.setTint(0xfff3d0));
+      plus10Btn.on('pointerout', () => plus10Btn.clearTint());
+      plus10Btn.on('pointerdown', () => this._addPendingStat(def.investKey, 10));
+
+      this.plusBtns[def.investKey] = [plus1Btn, plus10Btn];
     });
 
     const footerTop = rowStartY + STATS_PANEL_DEFS.length * rowGap + 10;
@@ -300,15 +309,21 @@ export default class InventoryScene extends Phaser.Scene {
     })).setOrigin(0.5, 0);
   }
 
-  _addPendingStat(key) {
+  // 「+1」／「+10」都走這個共用邏輯：先扣「還剩多少可加點數」的上限，超過上限
+  // （目前只有爆擊率 40%）的部分直接跳過，不會多加；點數不夠時能加多少算多少，
+  // 而不是整次都不加（例如剩 4 點按「+10」，就先加滿這 4 點）。
+  _addPendingStat(key, amount) {
     const def = STAT_INVEST_DEFS[key];
     const available = getStatPoints() - this._pendingTotal();
     if (available <= 0) { this._showToast('沒有剩餘技能點了'); return; }
+    let addAmount = Math.min(amount, available);
     if (def.cap != null) {
       const invested = getStatInvest()[key] + this._pendingInvest[key];
-      if (invested >= def.cap) { this._showToast('爆擊率已經到上限 40% 了'); return; }
+      const capRemaining = def.cap - invested;
+      if (capRemaining <= 0) { this._showToast('爆擊率已經到上限 40% 了'); return; }
+      addAmount = Math.min(addAmount, capRemaining);
     }
-    this._pendingInvest[key]++;
+    this._pendingInvest[key] += addAmount;
     this._refreshStatsPanel();
   }
 
