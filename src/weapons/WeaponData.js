@@ -7,15 +7,16 @@ export const WEAPON_DATA = {
   fireball: {
     id: 'fireball',
     name: '火球術',
-    desc: '朝最近敵人發射火球，命中後爆炸造成範圍傷害。升級可提升傷害、爆炸範圍與穿透。',
+    desc: '朝最近敵人發射火球，命中後爆炸造成範圍傷害。升級可提升傷害、爆炸範圍與數量。',
     projectile: 'proj_fireball',
     synergyStat: 'attack',
+    // count：同時發射的火球數（原本是穿透 pierce，改成比照飛刀的「一次射多顆」）
     levels: [
-      { dmg: 12, cooldown: 1300, aoe: 26, speed: 260, pierce: 0 },
-      { dmg: 16, cooldown: 1180, aoe: 32, speed: 270, pierce: 0 },
-      { dmg: 22, cooldown: 1060, aoe: 38, speed: 280, pierce: 1 },
-      { dmg: 30, cooldown: 950, aoe: 46, speed: 300, pierce: 1 },
-      { dmg: 42, cooldown: 850, aoe: 58, speed: 320, pierce: 2 },
+      { dmg: 12, cooldown: 1300, aoe: 26, speed: 260, count: 1 },
+      { dmg: 16, cooldown: 1180, aoe: 32, speed: 270, count: 1 },
+      { dmg: 22, cooldown: 1060, aoe: 38, speed: 280, count: 2 },
+      { dmg: 30, cooldown: 950, aoe: 46, speed: 300, count: 2 },
+      { dmg: 42, cooldown: 850, aoe: 58, speed: 320, count: 3 },
     ],
   },
   lightning: {
@@ -38,12 +39,13 @@ export const WEAPON_DATA = {
     desc: '朝最近敵人連續投擲飛刀。升級可提升傷害、飛刀數量與穿透。',
     projectile: 'proj_knife',
     synergyStat: 'atkSpeed',
+    // pierce 固定為 4（命中數 = pierce+1 = 5），不再隨等級遞增，等級只影響傷害/數量/速度
     levels: [
-      { dmg: 8, cooldown: 500, count: 1, speed: 420, pierce: 1 },
-      { dmg: 9, cooldown: 460, count: 2, speed: 440, pierce: 1 },
-      { dmg: 11, cooldown: 420, count: 2, speed: 460, pierce: 2 },
-      { dmg: 13, cooldown: 380, count: 3, speed: 480, pierce: 2 },
-      { dmg: 16, cooldown: 340, count: 4, speed: 500, pierce: 4 }, // pierce 4 = 命中數 5（見 pierce 定義：實際命中數 = pierce+1）
+      { dmg: 8, cooldown: 500, count: 1, speed: 420, pierce: 4 },
+      { dmg: 9, cooldown: 460, count: 2, speed: 440, pierce: 4 },
+      { dmg: 11, cooldown: 420, count: 2, speed: 460, pierce: 4 },
+      { dmg: 13, cooldown: 380, count: 3, speed: 480, pierce: 4 },
+      { dmg: 16, cooldown: 340, count: 4, speed: 500, pierce: 4 },
     ],
   },
   sawblade: {
@@ -53,9 +55,9 @@ export const WEAPON_DATA = {
     projectile: 'proj_sawblade',
     synergyStat: 'atkSpeed',
     levels: [
-      { dmg: 6, cooldown: 200, count: 1, radius: 46, rotSpeed: 2.4 },
+      { dmg: 6, cooldown: 200, count: 2, radius: 46, rotSpeed: 2.4 },
       { dmg: 7, cooldown: 200, count: 2, radius: 50, rotSpeed: 2.7 },
-      { dmg: 9, cooldown: 180, count: 2, radius: 54, rotSpeed: 3.0 },
+      { dmg: 9, cooldown: 180, count: 3, radius: 54, rotSpeed: 3.0 },
       { dmg: 11, cooldown: 180, count: 3, radius: 58, rotSpeed: 3.4 },
       { dmg: 14, cooldown: 160, count: 4, radius: 64, rotSpeed: 3.8 },
     ],
@@ -68,12 +70,13 @@ export const WEAPON_DATA = {
     synergyStat: 'defense',
     // 減速強度統一固定 50%（見 EnemySystem.applySlow），不再逐級增強，所以這裡
     // 只留 slowDuration（減速能持續多久）隨等級提升，沒有 slow 欄位了。
+    // 傷害提高至與火球術同級距（原本明顯偏低，冰霜作為控場+輸出雙重定位吃虧）
     levels: [
-      { dmg: 8, cooldown: 2600, radius: 70, slowDuration: 1500 },
-      { dmg: 10, cooldown: 2400, radius: 82, slowDuration: 1700 },
-      { dmg: 13, cooldown: 2200, radius: 94, slowDuration: 1900 },
-      { dmg: 17, cooldown: 2000, radius: 108, slowDuration: 2100 },
-      { dmg: 22, cooldown: 1800, radius: 126, slowDuration: 2400 },
+      { dmg: 12, cooldown: 2600, radius: 70, slowDuration: 1500 },
+      { dmg: 16, cooldown: 2400, radius: 82, slowDuration: 1700 },
+      { dmg: 22, cooldown: 2200, radius: 94, slowDuration: 1900 },
+      { dmg: 30, cooldown: 2000, radius: 108, slowDuration: 2100 },
+      { dmg: 42, cooldown: 1800, radius: 126, slowDuration: 2400 },
     ],
   },
 };

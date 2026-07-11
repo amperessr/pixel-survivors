@@ -265,32 +265,43 @@ export default class WeaponSystem {
     const scaleBonus = (1 + powerCards * 0.08) * (data.evolved ? 1.3 : 1);
     const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult;
     const aoe = data.aoe * scaleBonus;
+    const baseAng = angleTo(px, py, enemy.x, enemy.y);
 
     if (data.evolved) {
       // 進化「隕石燄爆」：不再沿地面飛行，改成直接鎖定目標敵人所在位置，
-      // 從天而降砸下一顆隕石（見 GameScene.spawnMeteorStrike()）
+      // 從天而降砸下巨大隕石（見 GameScene.spawnMeteorStrike()）；data.count 顆
+      // 隕石依序間隔 100ms 落下，避免同一瞬間疊在一起看不出層次。
       const kb = WEAPON_KNOCKBACK.fireball;
-      this.scene.spawnMeteorStrike(enemy.x, enemy.y, dmg, aoe, stats.critRate, stats.critDmg, {
-        force: kb.force, duration: kb.duration,
-      });
+      for (let i = 0; i < data.count; i++) {
+        this.scene.time.delayedCall(i * 100, () => {
+          this.scene.spawnMeteorStrike(enemy.x, enemy.y, dmg, aoe, stats.critRate, stats.critDmg, {
+            force: kb.force, duration: kb.duration,
+          });
+        });
+      }
       return;
     }
 
-    const ang = angleTo(px, py, enemy.x, enemy.y);
-    const proj = this.projectilePool.spawn();
-    proj.setTexture('proj_fireball');
-    proj.setPosition(px, py);
-    proj.setScale(scaleBonus * this._windSizeMult());
-    proj.clearTint();
-    proj.setData('dmg', dmg);
-    proj.setData('aoe', aoe);
-    proj.setData('pierce', data.pierce);
-    proj.setData('exploded', false);
-    proj.setData('kind', 'fireball');
-    proj.setData('evolved', false);
-    proj.setData('expireAt', this.scene.time.now + 2500);
-    proj.body.setVelocity(Math.cos(ang) * data.speed, Math.sin(ang) * data.speed);
-    this.scene.spawnCastFx(px, py, 'fireball', ang, 0, false);
+    // 火球數量（原本是穿透 pierce，改成比照飛刀的一次射多顆），用小角度散開
+    // 避免多顆火球完全重疊。
+    const spread = 0.18;
+    for (let i = 0; i < data.count; i++) {
+      const off = (i - (data.count - 1) / 2) * spread;
+      const ang = baseAng + off;
+      const proj = this.projectilePool.spawn();
+      proj.setTexture('proj_fireball');
+      proj.setPosition(px, py);
+      proj.setScale(scaleBonus * this._windSizeMult());
+      proj.clearTint();
+      proj.setData('dmg', dmg);
+      proj.setData('aoe', aoe);
+      proj.setData('exploded', false);
+      proj.setData('kind', 'fireball');
+      proj.setData('evolved', false);
+      proj.setData('expireAt', this.scene.time.now + 2500);
+      proj.body.setVelocity(Math.cos(ang) * data.speed, Math.sin(ang) * data.speed);
+    }
+    this.scene.spawnCastFx(px, py, 'fireball', baseAng, 0, false);
   }
 
   _fireLightning(data, stats, enemy, px, py, dmgMult = 1) {
@@ -342,9 +353,11 @@ export default class WeaponSystem {
   }
 
   _fireFrost(data, stats, px, py, dmgMult = 1) {
-    // 冰霜原本連動的是防禦力，但被動卡片沒有「防禦」這張，所以冰霜範圍只由
-    // 武器等級與進化決定（同樣不受角色永久能力值或裝備影響）；傷害仍吃攻擊力。
-    const totalRadius = data.radius;
+    // 冰系（冰霜新星）比照火系，體積/範圍同樣只受「力量卡片」張數影響
+    // （每張 +8%），不受角色永久能力值或裝備影響；傷害仍吃攻擊力。
+    const powerCards = this.player.passiveLevels.attack || 0;
+    const scaleBonus = (1 + powerCards * 0.08) * (data.evolved ? 1.3 : 1);
+    const totalRadius = data.radius * scaleBonus;
     const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult;
     const kb = WEAPON_KNOCKBACK.frost;
     const knockback = { force: kb.force, duration: kb.duration };
@@ -426,14 +439,19 @@ export default class WeaponSystem {
   // 隕石打這次開火瞄準的目標（跟其他武器一致的規則，通常是最近的敵人/魔王），
   // 冰塊另外隨機挑一隻不同的敵人；找不到別的敵人時，退而求其次也打同一個目標。
   _fireWorldEnd(data, stats, enemy, px, py, dmgMult = 1) {
+    // 世界末日是火+冰融合，同樣吃「力量卡片」的體積/範圍加成（融合武器不能
+    // 進化，所以沒有 evolved 額外倍率那段）。
+    const powerCards = this.player.passiveLevels.attack || 0;
+    const scaleBonus = 1 + powerCards * 0.08;
     const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult;
+    const aoe = data.aoe * scaleBonus;
     const kb = WEAPON_KNOCKBACK.frost;
-    this.scene.spawnMeteorDrop(enemy.x, enemy.y, dmg, data.aoe, stats.critRate, stats.critDmg, {
+    this.scene.spawnMeteorDrop(enemy.x, enemy.y, dmg, aoe, stats.critRate, stats.critDmg, {
       force: kb.force, duration: kb.duration,
     });
     const iceTarget = this.enemySystem.findRandomOther(enemy) || enemy;
-    this.scene.spawnIceDrop(iceTarget.x, iceTarget.y, dmg, data.aoe, stats.critRate, stats.critDmg);
-    this._fireWorldEndPillarRing(data, stats, px, py, dmgMult);
+    this.scene.spawnIceDrop(iceTarget.x, iceTarget.y, dmg, aoe, stats.critRate, stats.critDmg);
+    this._fireWorldEndPillarRing(data, stats, px, py, dmgMult, aoe);
   }
 
   // 世界末日新增技能：完全比照冰霜新星進化版「永凍冰川」的技能結構（見
@@ -442,16 +460,16 @@ export default class WeaponSystem {
   // （不是每階交替，是整條方向柱子固定同一種屬性）。跟隕石/冰塊各打各的目標
   // 互相獨立，傷害拉低到 0.7 倍避免疊加太誇張——這一圈本來就是「額外補傷害」，
   // 不是取代原本兩顆天降打擊。
-  _fireWorldEndPillarRing(data, stats, px, py, dmgMult) {
+  _fireWorldEndPillarRing(data, stats, px, py, dmgMult, aoe) {
     const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult * 0.7;
     const kb = WEAPON_KNOCKBACK.frost;
     const knockback = { force: kb.force, duration: kb.duration };
     const sizeMult = this._windSizeMult();
     const directions = 8;
     const steps = 4;
-    // Doomsday 沒有 frost 那種 radius 欄位，借用 aoe（隕石/冰塊命中半徑）換算，
-    // 3.2 倍抓出跟永凍冰川同一個量級的「刺出去有感」距離。
-    const totalRadius = data.aoe * 3.2;
+    // Doomsday 沒有 frost 那種 radius 欄位，借用（已套用力量卡片加成的）aoe
+    // 換算，3.2 倍抓出跟永凍冰川同一個量級的「刺出去有感」距離。
+    const totalRadius = aoe * 3.2;
     const stepDist = totalRadius / steps;
     for (let s = 1; s <= steps; s++) {
       const pillarDist = stepDist * s;
@@ -505,7 +523,11 @@ export default class WeaponSystem {
     }
 
     const data = this._getEffectiveData('sawblade');
-    for (let i = 0; i < data.count; i++) {
+    // 鋸片數量比照飛刀，額外吃「疾風之刃（攻速）卡片」張數加成（每 2 張多 1 片），
+    // 不受角色永久能力值或裝備影響。
+    const bonusCount = Math.floor((this.player.passiveLevels.atkSpeed || 0) / 2);
+    const totalCount = data.count + bonusCount;
+    for (let i = 0; i < totalCount; i++) {
       const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'proj_sawblade');
       sp.setDepth(6000);
       sp.setScale(sizeMult);

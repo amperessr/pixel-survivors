@@ -11,7 +11,7 @@ export const MAX_PASSIVE_LEVEL = 10;
 export const PASSIVE_DATA = {
   attack: {
     id: 'attack', name: '力量祝福', icon: 'icon_attack',
-    desc: '每級攻擊力 +8%（提升所有武器傷害）；並使火球術的體積與爆炸範圍每級 +8%。',
+    desc: '每級攻擊力 +8%（提升所有武器傷害）；並使火系（火球術）與冰系（冰霜新星）技能\n（含各自的進化與融合版本）體積/範圍每級 +8%。',
     perLevel: 8, // 每級增加的百分比數值
   },
   critRate: {
@@ -26,7 +26,7 @@ export const PASSIVE_DATA = {
   },
   atkSpeed: {
     id: 'atkSpeed', name: '疾風之刃', icon: 'icon_atkSpeed',
-    desc: '每級攻擊速度 +8%（縮短武器冷卻）；並使飛刀每 2 級多 1 把、旋轉鋸片轉速每級 +8%。',
+    desc: '每級攻擊速度 +8%（縮短武器冷卻）；並使飛刀與旋轉鋸片每 2 級各多 1 個、\n旋轉鋸片轉速每級 +8%。',
     perLevel: 8,
   },
   moveSpeed: {

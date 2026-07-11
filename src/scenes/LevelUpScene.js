@@ -171,6 +171,11 @@ export default class LevelUpScene extends Phaser.Scene {
     } else if (opt.type === 'passive') {
       const value = passiveLevelValue(opt.id, 1);
       this.gs.player.applyPassiveBonus(opt.id, value);
+      // 疾風之刃卡片會影響鋸片數量（每 2 級 +1，見 WeaponSystem._rebuildSawblades），
+      // 選卡當下就要重建環繞的鋸片 sprite，否則要等下一次升級/進化才會補上新的鋸片。
+      if (opt.id === 'atkSpeed' && this.weaponSystem.owned.sawblade) {
+        this.weaponSystem._rebuildSawblades();
+      }
     } else if (opt.type === 'heal') {
       const p = this.gs.player;
       const healAmount = Math.round(p.stats.maxHp * 0.4);
