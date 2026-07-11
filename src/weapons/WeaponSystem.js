@@ -133,9 +133,10 @@ export default class WeaponSystem {
     return data;
   }
 
+  // 統一委派給 GameScene.windSizeMult()，避免這裡跟 GameScene 各自維護一份
+  // wind5 門檻判斷（見 GameScene.windSizeMult() 的說明）
   _windSizeMult() {
-    const sb = this.scene.setBonuses;
-    return sb && sb.wind5 ? 2 : 1;
+    return this.scene.windSizeMult();
   }
 
   // 攻速對各武器冷卻縮短的影響權重：飛刀/鋸片本來就是「攻速流」武器，攻速加成
@@ -301,6 +302,7 @@ export default class WeaponSystem {
     const proj = this.projectilePool.spawn();
     proj.setTexture('proj_lightning');
     proj.setPosition(px, py);
+    proj.setScale(this._windSizeMult());
     // 改成電光藍白色調（類似英雄聯盟史提克彈簧刀電刀的連鎖閃電配色）
     proj.setTint(data.evolved ? 0xffe066 : 0x7ef7ff);
     proj.setData('dmg', dmg);
@@ -346,6 +348,10 @@ export default class WeaponSystem {
     const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult;
     const kb = WEAPON_KNOCKBACK.frost;
     const knockback = { force: kb.force, duration: kb.duration };
+    // 狂風套裝五件套：冰柱排列間距（totalRadius，上面已經吃到 wind5）跟每根冰柱
+    // 自己的命中半徑/貼圖大小要用同一個倍率，不然只有冰柱之間站得更開、單根
+    // 冰柱本身完全沒變大——見 GameScene.spawnIcePillar() 的 sizeMult 參數。
+    const sizeMult = this._windSizeMult();
 
     if (data.evolved) {
       // 進化：改成跟一般版一樣「由內到外」一根接一根冒出來的節奏，
@@ -365,7 +371,7 @@ export default class WeaponSystem {
           // 做得更大並直接冰凍命中的敵人，而不只是緩速——進化後的收尾一擊更有份量感。
           const outermost = s === steps;
           this.scene.time.delayedCall((s - 1) * 120, () => {
-            this.scene.spawnIcePillar(x, y, dmg, data.slowDuration, stats.critRate, stats.critDmg, knockback, true, outermost);
+            this.scene.spawnIcePillar(x, y, dmg, data.slowDuration, stats.critRate, stats.critDmg, knockback, true, outermost, sizeMult);
           });
         }
       }
@@ -380,7 +386,7 @@ export default class WeaponSystem {
         const x = px + Math.cos(ang) * pillarDist;
         const y = py + Math.sin(ang) * pillarDist;
         this.scene.time.delayedCall((i - 1) * 120, () => {
-          this.scene.spawnIcePillar(x, y, dmg, data.slowDuration, stats.critRate, stats.critDmg, knockback, false);
+          this.scene.spawnIcePillar(x, y, dmg, data.slowDuration, stats.critRate, stats.critDmg, knockback, false, false, sizeMult);
         });
       }
     }
@@ -402,7 +408,7 @@ export default class WeaponSystem {
       proj.setTexture('proj_electroknife');
       proj.setPosition(px, py);
       proj.setRotation(baseAng + off + Math.PI / 4);
-      proj.setScale(0.9);
+      proj.setScale(0.9 * this._windSizeMult());
       proj.clearTint();
       proj.setData('dmg', dmg);
       proj.setData('pierce', data.pierce);
@@ -435,6 +441,10 @@ export default class WeaponSystem {
   _rebuildSawblades() {
     for (const sp of this.sawbladeSprites) sp.destroy();
     this.sawbladeSprites = [];
+    // 狂風套裝五件套：刀刃貼圖也要跟著放大，不然環繞半徑（見 update() 的 radius/
+    // innerRadius/outerRadius，已經是 wind5 放大過的數值）變大了，刀刃本身看起來
+    // 還是原本大小，畫面上會很不協調。
+    const sizeMult = this._windSizeMult();
 
     if (this.owned['knife_sawblade']) {
       const s = WEAPON_FUSIONS['knife_sawblade'].stats;
@@ -442,7 +452,7 @@ export default class WeaponSystem {
         // 內圈改用正式美術圖（血紅色的旋轉刀刃圖騰），取代原本借用一般鋸片貼圖，
         // 本身已經有完整配色，不用再額外染色。
         const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_bloodstorm');
-        sp.setScale(0.5);
+        sp.setScale(0.5 * sizeMult);
         sp.setDepth(6000).setData('kind', 'sawblade').setData('lastHit', new Map()).setData('ring', 0);
         this.sawbladeSprites.push(sp);
       }
@@ -450,7 +460,7 @@ export default class WeaponSystem {
         // 外圈改用跟內圈同一張血肉風暴美術圖（本身已有完整配色，不用染色），
         // 只是外圈半徑比較大，稍微放大一點跟內圈做出區隔。
         const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'fx_bloodstorm');
-        sp.setScale(0.65);
+        sp.setScale(0.65 * sizeMult);
         sp.setDepth(6000).setData('kind', 'sawblade').setData('lastHit', new Map()).setData('ring', 1);
         this.sawbladeSprites.push(sp);
       }
@@ -461,6 +471,7 @@ export default class WeaponSystem {
     for (let i = 0; i < data.count; i++) {
       const sp = this.scene.add.image(this.player.sprite.x, this.player.sprite.y, 'proj_sawblade');
       sp.setDepth(6000);
+      sp.setScale(sizeMult);
       if (data.evolved) sp.setTint(0xffe066);
       sp.setData('kind', 'sawblade');
       sp.setData('lastHit', new Map());

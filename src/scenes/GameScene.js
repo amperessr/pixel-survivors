@@ -357,6 +357,15 @@ export default class GameScene extends Phaser.Scene {
     this._lifestealHealed = 0;
   }
 
+  // 狂風套裝五件套「所有技能大小 +100%」的統一倍率來源——WeaponSystem（貼圖縮放）
+  // 跟這裡的命中判定/特效縮放都讀同一個地方，避免兩邊各自維護一份門檻邏輯，
+  // 之前就是因為判定範圍（WeaponSystem._applyWindSizeBonus）跟實際命中半徑/貼圖
+  // 縮放（spawnIcePillar 寫死的 hitRadius、_handleSawbladeHits 寫死的 16）各自為政，
+  // 才會出現「數值有放大、畫面跟判定沒有跟著變大」的落差。
+  windSizeMult() {
+    return this.setBonuses && this.setBonuses.wind5 ? 2 : 1;
+  }
+
   // 吸血戒指：攻擊造成傷害時吸取傷害的 3% 回復生命，每秒最多回復最大生命的 5%
   // ——上限是必要的：後期全武器同時輸出的總傷害極高，沒有上限的話吸血會直接
   // 讓玩家鎖血打不死。由 EnemySystem.damageEnemy()／Boss.takeDamage() 呼叫。
@@ -875,13 +884,16 @@ export default class GameScene extends Phaser.Scene {
     const kb = WEAPON_KNOCKBACK.sawblade;
     const isBloodStorm = !!this.weaponSystem.owned['knife_sawblade'];
     const impactKind = isBloodStorm ? 'bloodStorm' : 'sawblade';
+    // 狂風套裝五件套：刀刃貼圖放大了（見 WeaponSystem._rebuildSawblades()），命中
+    // 判定半徑也要跟著放大，不然「看起來變大」但打得到的範圍沒變，等於套裝白裝
+    const hitRadius = 16 * this.windSizeMult();
     for (const saw of this.weaponSystem.sawbladeSprites) {
       const dmg = this.weaponSystem.getSawbladeDamage();
       const evolved = this.weaponSystem.isEvolved('sawblade');
       const lastHit = saw.getData('lastHit');
-      this.enemySystem.queryNear(saw.x, saw.y, 16, (e) => {
+      this.enemySystem.queryNear(saw.x, saw.y, hitRadius, (e) => {
         if (!e.active) return;
-        if (dist(saw.x, saw.y, e.x, e.y) > 16) return;
+        if (dist(saw.x, saw.y, e.x, e.y) > hitRadius) return;
         const last = lastHit.get(e) || 0;
         if (time - last < 300) return;
         lastHit.set(e, time);
@@ -890,7 +902,7 @@ export default class GameScene extends Phaser.Scene {
         });
         this.spawnImpactFx(e.x, e.y, impactKind, 0, evolved);
       });
-      if (this.boss && this.boss.alive && dist(saw.x, saw.y, this.boss.sprite.x, this.boss.sprite.y) < BOSS_SAW_RADIUS) {
+      if (this.boss && this.boss.alive && dist(saw.x, saw.y, this.boss.sprite.x, this.boss.sprite.y) < BOSS_SAW_RADIUS * this.windSizeMult()) {
         const last = lastHit.get(this.boss) || 0;
         if (time - last >= 300) {
           lastHit.set(this.boss, time);
@@ -1545,13 +1557,17 @@ export default class GameScene extends Phaser.Scene {
   // 攻擊「命中瞬間」特效：依武器種類顯示不同的命中視覺回饋，並附加碎片噴射與發光層
   spawnImpactFx(x, y, kind, radius = 0, evolved = false) {
     const evoTint = 0xffe066;
+    // 狂風套裝五件套：範圍型武器（火球/冰霜/鋸片系）的命中特效也要跟著放大，
+    // 不然傷害判定範圍變大了，爆炸/命中特效看起來還是原本大小——雷電/飛刀類
+    // 是點命中沒有「範圍」這個概念，不受這個倍率影響。
+    const sizeMult = this.windSizeMult();
     switch (kind) {
       case 'fireball': {
-        const scale = evolved ? 2.6 : 1.9;
+        const scale = (evolved ? 2.6 : 1.9) * sizeMult;
         const fx = this.add.image(x, y, 'fx_flame').setDepth(29999).setScale(scale * 0.55);
         if (evolved) fx.setTint(evoTint);
         this.tweens.add({ targets: fx, scale, alpha: 0, duration: 280, onComplete: () => fx.destroy() });
-        this.spawnGlowRing(x, y, 'fx_flame', evolved ? evoTint : 0xff6a2d, 0.4, evolved ? 3.2 : 2.2, 340);
+        this.spawnGlowRing(x, y, 'fx_flame', evolved ? evoTint : 0xff6a2d, 0.4 * sizeMult, (evolved ? 3.2 : 2.2) * sizeMult, 340);
         this.spawnBurstFx(x, y, evolved ? evoTint : 0xff8a3d, evolved ? 16 : 10, 'fx_flame', evolved ? 170 : 115);
         this.spawnEmbersFx(x, y, evolved ? 10 : 6, evolved ? evoTint : 0xffb066);
         break;
@@ -1571,17 +1587,17 @@ export default class GameScene extends Phaser.Scene {
         break;
       }
       case 'sawblade': {
-        const fx = this.add.image(x, y, 'fx_crit').setDepth(29999).setScale(evolved ? 1.3 : 0.8).setTint(evolved ? evoTint : 0xcfcfcf);
-        this.tweens.add({ targets: fx, scale: (evolved ? 1.3 : 0.8) * 1.8, alpha: 0, duration: 140, onComplete: () => fx.destroy() });
+        const fx = this.add.image(x, y, 'fx_crit').setDepth(29999).setScale((evolved ? 1.3 : 0.8) * sizeMult).setTint(evolved ? evoTint : 0xcfcfcf);
+        this.tweens.add({ targets: fx, scale: (evolved ? 1.3 : 0.8) * 1.8 * sizeMult, alpha: 0, duration: 140, onComplete: () => fx.destroy() });
         break;
       }
       case 'frost': {
         // 冰系刻意不跟其他武器共用金色進化色，維持藍色系（進化版用更亮的冰藍白）
         const frostEvoTint = 0xbfe9ff;
-        const fx = this.add.image(x, y, 'fx_frost').setDepth(29999).setScale(evolved ? 1.5 : 0.85).setAlpha(0.85);
+        const fx = this.add.image(x, y, 'fx_frost').setDepth(29999).setScale((evolved ? 1.5 : 0.85) * sizeMult).setAlpha(0.85);
         if (evolved) fx.setTint(frostEvoTint);
-        this.tweens.add({ targets: fx, scale: (evolved ? 1.5 : 0.85) * 1.9, alpha: 0, duration: 240, onComplete: () => fx.destroy() });
-        this.spawnGlowRing(x, y, 'fx_frost', evolved ? frostEvoTint : 0x8fe3ff, 0.3, evolved ? 2.6 : 1.5, 300);
+        this.tweens.add({ targets: fx, scale: (evolved ? 1.5 : 0.85) * 1.9 * sizeMult, alpha: 0, duration: 240, onComplete: () => fx.destroy() });
+        this.spawnGlowRing(x, y, 'fx_frost', evolved ? frostEvoTint : 0x8fe3ff, 0.3 * sizeMult, (evolved ? 2.6 : 1.5) * sizeMult, 300);
         this.spawnBurstFx(x, y, evolved ? frostEvoTint : 0x8fe3ff, evolved ? 12 : 5, 'fx_frost', evolved ? 110 : 90);
         break;
       }
@@ -1598,9 +1614,9 @@ export default class GameScene extends Phaser.Scene {
       }
       case 'bloodStorm': {
         // 改用正式美術圖（血紅色旋轉刀刃圖騰）取代借用的十字爆閃圖示
-        const fx = this.add.image(x, y, 'fx_bloodstorm').setDepth(29999).setScale(0.55).setAlpha(0.95);
-        this.tweens.add({ targets: fx, scale: 0.55 * 2, alpha: 0, duration: 160, onComplete: () => fx.destroy() });
-        this.spawnGlowRing(x, y, 'fx_crit', 0xff5050, 0.3, 2, 200);
+        const fx = this.add.image(x, y, 'fx_bloodstorm').setDepth(29999).setScale(0.55 * sizeMult).setAlpha(0.95);
+        this.tweens.add({ targets: fx, scale: 0.55 * 2 * sizeMult, alpha: 0, duration: 160, onComplete: () => fx.destroy() });
+        this.spawnGlowRing(x, y, 'fx_crit', 0xff5050, 0.3 * sizeMult, 2 * sizeMult, 200);
         this.spawnBurstFx(x, y, 0xff8f8f, 9, 'fx_crit', 120);
         break;
       }
@@ -1650,11 +1666,11 @@ export default class GameScene extends Phaser.Scene {
   // （見下方 pillarTexture），不再跟一般版共用同一張貼圖疊色縮放。
   // outermost：進化版六方向冰柱中「離玩家最遠那一圈」——做得比其他冰柱更大，
   // 命中時直接冰凍（而不只是緩速），當作進化冰霜新星收尾的重擊。
-  spawnIcePillar(x, y, dmg, slowDuration, critRate, critDmg, knockback, evolved = false, outermost = false) {
+  spawnIcePillar(x, y, dmg, slowDuration, critRate, critDmg, knockback, evolved = false, outermost = false, sizeMult = 1) {
     // 地面裂痕／冰霜擴散提示，讓玩家注意到冰柱要冒出來的位置
-    const crack = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setScale(evolved ? (outermost ? 0.55 : 0.4) : 0.25).setAlpha(0.6);
+    const crack = this.add.image(x, y, 'fx_frost').setDepth(y - 1).setScale((evolved ? (outermost ? 0.55 : 0.4) : 0.25) * sizeMult).setAlpha(0.6);
     crack.setTint(evolved ? 0x8fd6ff : 0x8fe3ff);
-    this.tweens.add({ targets: crack, scale: evolved ? (outermost ? 2.4 : 1.9) : 1.3, alpha: 0, duration: 260, onComplete: () => crack.destroy() });
+    this.tweens.add({ targets: crack, scale: (evolved ? (outermost ? 2.4 : 1.9) : 1.3) * sizeMult, alpha: 0, duration: 260, onComplete: () => crack.destroy() });
 
     // 進化版限定：地面額外噴出幾道放射狀碎冰，堆疊出比一般版更華麗的地面特效
     if (evolved) {
@@ -1678,7 +1694,7 @@ export default class GameScene extends Phaser.Scene {
     // 更高更尖），縮放倍率調到讓它比一般版高上約 1.4 倍，跟命中半徑（evolved 50 /
     // 一般 36）的比例搭起來，視覺上有「進化後更巨大」的份量感。outermost 再放大
     // 一截，跟「直接冰凍」的效果份量對上。
-    const pillarScale = evolved ? (outermost ? 0.35 * 1.4 : 0.35) : 0.55;
+    const pillarScale = (evolved ? (outermost ? 0.35 * 1.4 : 0.35) : 0.55) * sizeMult;
     const pillar = this.add.image(x, y, pillarTexture).setOrigin(0.5, 1).setDepth(y + 1).setScale(pillarScale, pillarScale * 0.05).setAlpha(0.95);
 
     this.tweens.add({
@@ -1688,8 +1704,10 @@ export default class GameScene extends Phaser.Scene {
       ease: 'Back.easeOut',
       onComplete: () => {
         if (!pillar.active) return;
-        // 冰柱冒出的瞬間造成傷害＋減速（outermost 額外直接冰凍）＋擊退
-        const hitRadius = evolved ? (outermost ? 65 : 50) : 36;
+        // 冰柱冒出的瞬間造成傷害＋減速（outermost 額外直接冰凍）＋擊退——狂風套裝
+        // 五件套的 sizeMult 這裡才是真正影響「打不打得到」的地方，之前這個
+        // hitRadius 是寫死常數，wind5 對冰霜新星完全沒有實際效果，只有冰柱間距變寬
+        const hitRadius = (evolved ? (outermost ? 65 : 50) : 36) * sizeMult;
         this.enemySystem.queryNear(x, y, hitRadius, (e) => {
           if (dist(x, y, e.x, e.y) > hitRadius) return;
           this.enemySystem.damageEnemy(e, dmg, critRate, critDmg, knockback ? {
