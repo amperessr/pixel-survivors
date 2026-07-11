@@ -1,5 +1,6 @@
 import { BOSS_TYPES } from '../boss/Boss.js';
 import { textStyle } from '../utils/TextStyle.js';
+import { getEquipped, isLevelUpAutoMode } from '../managers/SaveManager.js';
 
 // 暗影君王套裝五件套：擊敗魔王後跳出的抽取視窗（取代原本擊殺瞬間 50% 自動判定）。
 // 最多三次機會，機率遞增（10%／25%／50%），任一次成功就停止並把 bossType 記進
@@ -13,6 +14,11 @@ export default class ShadowExtractScene extends Phaser.Scene {
     this.gs = data.gameScene;
     this.bossType = data.bossType;
     this.attempt = 0; // 已經嘗試的次數，下一次要骰 EXTRACT_CHANCES[this.attempt]
+    // 自動戒指的全自動模式：跟 RelicChoiceScene 同一個開關，直接自動選「是」一路
+    // 抽到成功或三次都失敗為止，不用手動點按鈕（見 UIScene 的升級選卡模式按鈕）。
+    const equipped = getEquipped();
+    const hasAutoRing = equipped.ring1 === 'ring_auto' || equipped.ring2 === 'ring_auto';
+    this.autoMode = hasAutoRing && isLevelUpAutoMode();
   }
 
   create() {
@@ -54,6 +60,12 @@ export default class ShadowExtractScene extends Phaser.Scene {
     const verb = this.attempt === 0 ? '是否抽取' : '是否再次抽取';
     const prefix = this.attempt === 0 ? `${verb}${this.bossName}的影子？` : `抽取失敗\n${verb}？`;
     this.msgText.setText(prefix);
+    if (this.autoMode) {
+      // 全自動：不用等玩家點按鈕，短暫停留讓文字看得到之後直接自動骰
+      this._setButtonsVisible(false);
+      this.time.delayedCall(700, () => this._roll());
+      return;
+    }
     this._setButtonsVisible(true);
     this.yesBtn.removeAllListeners('pointerdown');
     this.noBtn.removeAllListeners('pointerdown');
