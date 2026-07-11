@@ -27,6 +27,16 @@ export default class UIScene extends Phaser.Scene {
   create() {
     const w = this.scale.width, h = this.scale.height;
 
+    // 汪汪大作戰結果視窗只在第一次呼叫 showWoofWarResult() 時建立（見該函式的
+    // `if (!this.woofWarResultOverlay)`），但這個欄位是存在 Scene 實例上的一般
+    // JS 屬性，不會因為 scene.stop()／重新 create() 就自動清空——玩家點「再次
+    // 挑戰」時 restartWoofWarChallenge() 會先 stop UIScene 再重開，畫面上的物件
+    // 被 Phaser 銷毀了，但 this.woofWarResultOverlay 還留著指向「已銷毀物件」的
+    // 舊參考，導致第二次結算呼叫 setText() 直接噴錯、卡在半途沒顯示結果（這正是
+    // 玩家回報「時間到部分沒有順利結束遊戲」的另一個成因）。這裡在 create() 開頭
+    // 明確重置，讓每次重開都會照 `!this.woofWarResultOverlay` 的判斷重新建立。
+    this.woofWarResultOverlay = null;
+
     // ---- 左上：HP / 等級 / EXP ----
     this.add.image(280, 70, 'ui_bar_bg').setScrollFactor(0).setDisplaySize(500, 44).setOrigin(0.5);
     this.hpFill = this.add.image(30, 70, 'ui_bar_fill_hp').setScrollFactor(0).setOrigin(0, 0.5).setDisplaySize(492, 38);

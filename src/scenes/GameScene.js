@@ -424,11 +424,31 @@ export default class GameScene extends Phaser.Scene {
     // 只要偵測到玩家血量已經歸零但遊戲還沒結束，就直接強制觸發死亡流程。
     // 這個呼叫本身也包 try/catch——萬一 onPlayerDeath() 內部真的有什麼漏網之魚，
     // 至少不會讓整個 update() 迴圈跟著掛掉，下一幀還有機會再試一次。
+    // 汪汪大作戰倒數時間到：這個判斷同樣不能被 this.paused 擋住，理由跟下面死亡
+    // 監控一樣——原本寫在只有「沒暫停」才會跑到的 _update() 裡面，玩家如果在快
+    // 3 分鐘時剛好按 ESC 暫停、或分頁切到背景（見下面 visibilitychange 監聽器），
+    // 時間到的判斷就完全不會被執行到，挑戰會卡住不結算，直到玩家自己想到要
+    // 恢復暫停才會補上——這正是「部分玩家時間到沒有順利結束遊戲」的成因。
+    if (this.woofWarMode && !this._woofWarEnded && !this.gameEnded && time >= this._woofWarEndAt) {
+      try {
+        this._endWoofWarChallenge();
+      } catch (err) {
+        console.error('[GameScene] _endWoofWarChallenge()（時間到）發生未預期錯誤：', err);
+      }
+      return;
+    }
+
     if (this.player && this.player.hp <= 0) {
       // 汪汪大作戰：血量歸零直接視為挑戰結束，跳跟時間到一樣的結算畫面
       // （見 _endWoofWarChallenge），不再原地滿血復活。
       if (this.woofWarMode) {
-        if (!this._woofWarEnded && !this.gameEnded) this._endWoofWarChallenge();
+        if (!this._woofWarEnded && !this.gameEnded) {
+          try {
+            this._endWoofWarChallenge();
+          } catch (err) {
+            console.error('[GameScene] _endWoofWarChallenge()（死亡）發生未預期錯誤：', err);
+          }
+        }
         return;
       }
       if (!this._hpZeroSince) this._hpZeroSince = time;
@@ -477,10 +497,7 @@ export default class GameScene extends Phaser.Scene {
 
     this._updateCollisions(time);
 
-    if (this.woofWarMode && !this._woofWarEnded && time >= this._woofWarEndAt) {
-      this._endWoofWarChallenge();
-      return;
-    }
+    // 倒數時間到的判斷已經搬到最上面的 update()（不受 this.paused 影響），這裡不用再判斷一次。
 
     if (this.boss) {
       this.boss.update(time, delta);
