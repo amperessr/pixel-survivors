@@ -94,6 +94,11 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('fx_explosion_boss', 'assets/fx_explosion_boss.png');
     this.load.image('fx_explosion_player', 'assets/fx_explosion_player.png');
 
+    // 雷霆套裝五件套「打雷」正式美術圖（見 GameScene.spawnThunderStrikeFx），
+    // 取代原本用染色拉長的 fx_bolt 長方形佔位。含透明背景，光柱置中、
+    // 落雷點在圖片高度約 87.5% 處。
+    this.load.image('fx_thunder_strike', 'assets/fx_thunder_strike.png');
+
     // 汪汪大作戰（限時挑戰活動）專用魔王美術圖，見 src/boss/WoofBoss.js
     this.load.image('boss_woof', 'assets/boss_woof.png');
   }

@@ -1296,11 +1296,20 @@ export default class GameScene extends Phaser.Scene {
 
   // 雷霆套裝五件套專用：打中麻痺中的怪物時，從高空劈下一道閃電打雷特效
   spawnThunderStrikeFx(x, y) {
-    const bolt = this.add.image(x, y - 260, 'fx_bolt').setDepth(30002).setOrigin(0.5, 0)
-      .setScale(1.4, 5.5).setTint(0xffe066).setAlpha(0.9).setBlendMode(Phaser.BlendModes.ADD);
+    // 正式美術圖：光柱在圖片水平置中、落雷點在圖片高度約 87.5% 處，origin 設在
+    // (0.5, 0.875) 讓落雷點對齊命中座標 (x,y)，光柱自然往上延伸，不用再手動算
+    // 「畫在 y-260 的地方」這種土法偏移。
+    const bolt = this.add.image(x, y, 'fx_thunder_strike').setDepth(30002).setOrigin(0.5, 0.875)
+      .setScale(0.4).setAlpha(0.95).setBlendMode(Phaser.BlendModes.ADD);
     this.tweens.add({ targets: bolt, alpha: 0, duration: 220, delay: 60, onComplete: () => bolt.destroy() });
-    this.spawnGlowRing(x, y, 'fx_bolt', 0xffe066, 0.3, 1.8, 260);
+    // 落雷點的光效：亮白閃光 + 金色外環，兩層疊加做出「這一下很亮」的爆閃感
+    this.spawnGlowRing(x, y, 'fx_bolt', 0xffffff, 0.2, 1.4, 180);
+    this.spawnGlowRing(x, y, 'fx_bolt', 0xffe066, 0.3, 2.2, 300);
     this.spawnBurstFx(x, y, 0xffe066, 8, 'fx_bolt', 130);
+    // 電弧圍繞：落雷點旁邊竄出幾簇電弧（沿用狀態麻痺特效的同一支函式），
+    // 呼應「閃電圍繞在圖片旁」的要求，讓落雷不是只有一張靜態貼圖。
+    this.spawnBodyLightningFx(x, y);
+    this.time.delayedCall(70, () => { if (this.player) this.spawnBodyLightningFx(x, y); });
   }
 
   // 傷害數字：一般傷害白色，爆擊傷害黃色（字體也比較大），從敵人身上往上飄再淡出。
