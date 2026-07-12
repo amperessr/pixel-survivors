@@ -44,13 +44,44 @@ export function createRarityFrame(scene, x, y, width, height, rarityId) {
     }
 
     case 'mythic': {
-      // 紅金雙色：外層紅色發光暈持續脈動，內層金色實線邊框
-      const glow = addRect(width + 10, height + 10, 7, 0xff3b3b, 0.35);
-      addRect(width, height, 3, 0xffd700, 1);
+      // 神話跟傳說原本都走「橘/紅單色系」，色相太接近容易混淆，改成：
+      // 主色統一收斂成紅色（外層淡金暈只當點綴，不再是邊框主色），
+      // 加上雙層發光暈（金暈+紅暈，各自不同節奏脈動）跟四角紅底金邊菱形
+      // 鑲嵌（形狀語彙跟傳說的 L 形刻花完全不同），在顏色、層次、裝飾形狀
+      // 三個面向都跟傳說拉開差異，不只是換個顏色而已。
+      const outerGold = addRect(width + 16, height + 16, 5, 0xffd700, 0.2);
+      const glow = addRect(width + 9, height + 9, 6, rarity.color, 0.4);
+      addRect(width, height, 3, rarity.color, 1);
+
+      const hw = width / 2, hh = height / 2;
+      const gems = [];
+      [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
+        const gem = scene.add.rectangle(sx * hw, sy * hh, 11, 11, rarity.color, 1)
+          .setRotation(Math.PI / 4).setStrokeStyle(2, 0xffd700, 1);
+        container.add(gem);
+        gems.push(gem);
+      });
+
       scene.tweens.add({
         targets: glow,
         alpha: { from: 0.25, to: 0.7 },
         duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+      scene.tweens.add({
+        targets: outerGold,
+        alpha: { from: 0.12, to: 0.32 },
+        duration: 1400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+      scene.tweens.add({
+        targets: gems,
+        scale: { from: 0.85, to: 1.15 },
+        duration: 700,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
