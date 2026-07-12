@@ -47,6 +47,12 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('ring_auto', 'assets/ring_auto.png');
     this.load.image('ring_gravity', 'assets/ring_gravity.png');
     this.load.image('ring_clone', 'assets/ring_clone.png');
+    // 2026-07-12 新增四枚戒指的正式美術圖（爆擊/狂怒/蓄力/連鎖），剩下的輪迴戒／
+    // 時光戒還沒有圖，繼續由 TextureFactory.generateNewRingIcons() 畫暫代圖示。
+    this.load.image('ring_crit', 'assets/ring_crit.png');
+    this.load.image('ring_rage', 'assets/ring_rage.png');
+    this.load.image('ring_charge', 'assets/ring_charge.png');
+    this.load.image('ring_chain', 'assets/ring_chain.png');
 
     const equipSlots = ['weapon', 'helmet', 'clothes', 'pants', 'shoes'];
     const equipTiers = ['beginner', 'mid', 'high'];

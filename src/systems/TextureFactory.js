@@ -360,18 +360,15 @@ export default class TextureFactory {
     }
   }
 
-  // ---------- 2026-07-12 新增六枚戒指的暫代圖示（尚無正式美術圖）----------
-  // 統一畫成「金色戒環＋爪座寶石＋寶石中央符號」，跟現有四枚戒指的正式圖走
-  // 同一種「戒指」語彙，符號區分各自效果。之後有正式美術圖時，比照 CLAUDE.md
-  // 的規範把這裡對應的呼叫拿掉、改到 BootScene.preload() 加 load.image(...)。
+  // ---------- 2026-07-12 新增戒指的暫代圖示（尚無正式美術圖）----------
+  // 爆擊戒/狂怒戒/蓄力戒/連鎖戒已經換成正式美術圖（見 BootScene.preload()），
+  // 這裡只剩輪迴戒／時光戒兩枚還沒有圖，繼續畫成「金色戒環＋爪座寶石＋
+  // 寶石中央符號」頂替。之後有正式圖時，比照 CLAUDE.md 的規範把這裡對應的
+  // 呼叫拿掉、改到 BootScene.preload() 加 load.image(...)。
   generateNewRingIcons() {
     const rings = [
-      { key: 'ring_crit', gem: '#ff4d4d', glyph: (ctx, cx, cy) => this._glyphCrosshair(ctx, cx, cy) },
-      { key: 'ring_rage', gem: '#ff8a3d', glyph: (ctx, cx, cy) => this._glyphFlame(ctx, cx, cy) },
-      { key: 'ring_charge', gem: '#ffe066', glyph: (ctx, cx, cy) => this._glyphBolt(ctx, cx, cy) },
       { key: 'ring_revive', gem: '#c58fff', glyph: (ctx, cx, cy) => this._glyphRebirth(ctx, cx, cy) },
       { key: 'ring_time', gem: '#5bd4ff', glyph: (ctx, cx, cy) => this._glyphClock(ctx, cx, cy) },
-      { key: 'ring_chain', gem: '#5bff8f', glyph: (ctx, cx, cy) => this._glyphChain(ctx, cx, cy) },
     ];
     rings.forEach(({ key, gem, glyph }) => this._drawRingIcon(key, gem, glyph));
   }
@@ -449,42 +446,6 @@ export default class TextureFactory {
     this._finish(tex);
   }
 
-  _glyphCrosshair(ctx, cx, cy) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 7, 0, Math.PI * 2);
-    ctx.moveTo(cx - 11, cy); ctx.lineTo(cx - 5, cy);
-    ctx.moveTo(cx + 5, cy); ctx.lineTo(cx + 11, cy);
-    ctx.moveTo(cx, cy - 11); ctx.lineTo(cx, cy - 5);
-    ctx.moveTo(cx, cy + 5); ctx.lineTo(cx, cy + 11);
-    ctx.stroke();
-  }
-
-  _glyphFlame(ctx, cx, cy) {
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - 11);
-    ctx.bezierCurveTo(cx + 9, cy - 3, cx + 6, cy + 6, cx, cy + 11);
-    ctx.bezierCurveTo(cx - 6, cy + 6, cx - 7, cy - 1, cx - 2, cy - 6);
-    ctx.bezierCurveTo(cx - 1, cy - 2, cx + 2, cy - 3, cx, cy - 11);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  _glyphBolt(ctx, cx, cy) {
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.beginPath();
-    ctx.moveTo(cx + 4, cy - 11);
-    ctx.lineTo(cx - 6, cy + 1);
-    ctx.lineTo(cx - 1, cy + 1);
-    ctx.lineTo(cx - 4, cy + 11);
-    ctx.lineTo(cx + 7, cy - 2);
-    ctx.lineTo(cx + 2, cy - 2);
-    ctx.closePath();
-    ctx.fill();
-  }
-
   _glyphRebirth(ctx, cx, cy) {
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
     ctx.lineWidth = 2.5;
@@ -509,17 +470,6 @@ export default class TextureFactory {
     ctx.beginPath();
     ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - 6);
     ctx.moveTo(cx, cy); ctx.lineTo(cx + 5, cy + 2);
-    ctx.stroke();
-  }
-
-  _glyphChain(ctx, cx, cy) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.ellipse(cx - 5, cy - 3, 6, 8, Math.PI / 4, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.ellipse(cx + 5, cy + 3, 6, 8, Math.PI / 4, 0, Math.PI * 2);
     ctx.stroke();
   }
 
