@@ -624,6 +624,8 @@ export default class Boss {
       dmg *= critDmg / 100;
       isCrit = true;
     }
+    // 狂怒戒／蓄力戒：打魔王一樣吃這兩枚戒指的傷害乘數（見 GameScene.getRingDamageMultiplier）
+    dmg *= this.scene.getRingDamageMultiplier();
     // 雷霆套裝五件套：打中麻痺中的 Boss 額外補上 10% 玩家攻擊力的傷害＋打雷特效
     const setBonuses = this.scene.setBonuses;
     if (setBonuses && setBonuses.thunder5 && this.scene.time.now < this.paralyzedUntil) {
@@ -632,6 +634,8 @@ export default class Boss {
     }
     // 吸血戒指：打魔王一樣會吸血（比例與每秒上限見 GameScene.applyLifesteal）
     this.scene.applyLifesteal(dmg);
+    // 連鎖戒：打魔王時額外對場上一名隨機小怪補上同傷害的連鎖攻擊
+    this.scene.triggerChainRing(dmg, null);
     this.hp -= dmg;
     this.sprite.setTintFill(0xffffff);
     this.scene.spawnDamageNumber(this.sprite.x, this.sprite.y - 30, dmg, isCrit);

@@ -153,6 +153,14 @@ export default class Player {
     const len = Math.hypot(vx, vy) || 1;
     this.sprite.body.setVelocity((vx / len) * speed, (vy / len) * speed);
 
+    // 蓄力戒：追蹤「這次不動是從什麼時候開始的」，不管是玩家手動站著不動、
+    // 還是自動戒指判斷當下不用移動，都算——見 isChargeReady()/consumeCharge()。
+    if (vx === 0 && vy === 0) {
+      if (this._stillSince == null) this._stillSince = time;
+    } else {
+      this._stillSince = null;
+    }
+
     if (vx !== 0) this.sprite.setFlipX(vx < 0);
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.dash) && time > this.dashCooldownUntil && (vx !== 0 || vy !== 0)) {
@@ -162,6 +170,18 @@ export default class Player {
     this._updateSquishAnim(time, vx !== 0 || vy !== 0);
     this._updateHeadBar();
     this.sprite.setDepth(PLAYER_DEPTH);
+  }
+
+  // 蓄力戒：站滿 1.5 秒沒動就緒。GameScene.getRingDamageMultiplier() 用這個判斷
+  // 下一次傷害要不要吃 +100%，觸發後呼叫 consumeCharge() 立刻重新起算，如果玩家
+  // 繼續站著不動，1.5 秒後可以再蓄力一次；一旦移動，update() 裡會把 _stillSince
+  // 清成 null，蓄力進度歸零。
+  isChargeReady(time) {
+    return this._stillSince != null && (time - this._stillSince) >= 1500;
+  }
+
+  consumeCharge(time) {
+    this._stillSince = time;
   }
 
   // 兩個戒指欄任一格裝著指定戒指就算「有裝備」（目前只有回血/自動兩種戒指，

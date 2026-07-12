@@ -11,7 +11,7 @@ import { WEAPON_KNOCKBACK } from '../weapons/WeaponData.js';
 import { RELICS } from '../relics/RelicData.js';
 import { EQUIPMENT_DATA, getLegendarySeriesSlug } from '../equipment/EquipmentData.js';
 import { getEquipped, addGold, setBestScore, setCheckpointStage, getStatBonus, getPlayerName } from '../managers/SaveManager.js';
-import { dist } from '../utils/MathUtils.js';
+import { dist, clamp } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 import { submitWoofWarScore } from '../firebase/firebase.js';
@@ -312,6 +312,9 @@ export default class GameScene extends Phaser.Scene {
       if (bonus.attack) stats.attack += bonus.attack;
       if (bonus.defense) stats.defense += bonus.defense;
       if (bonus.moveSpeed) stats.moveSpeed += bonus.moveSpeed;
+      // 爆擊戒：直接疊進基礎爆擊率/爆傷，跟其他來源（被動/永久等級）共用同一組數值。
+      if (bonus.critRate) stats.critRate += bonus.critRate;
+      if (bonus.critDmg) stats.critDmg += bonus.critDmg;
       if (bonus.maxHp) {
         stats.maxHp += bonus.maxHp;
         this.player.hp += bonus.maxHp; // 生命上限提升的部分直接補滿，不用讓玩家「掉血」
@@ -362,6 +365,48 @@ export default class GameScene extends Phaser.Scene {
     this._hasLifestealRing = equipped.ring1 === 'ring_heal' || equipped.ring2 === 'ring_heal';
     this._lifestealWindowAt = 0;
     this._lifestealHealed = 0;
+
+    // 2026-07-12 新增六枚戒指的旗標，跟吸血戒指一樣開局判斷一次、戰鬥中直接讀
+    // 這些布林值，不用每次都重新查存檔。三個神話戒指（輪迴/時光/連鎖）另外
+    // 各自需要一點狀態（冷卻時間戳、上次連鎖觸發時間），一併在這裡初始化。
+    const hasRing = (id) => equipped.ring1 === id || equipped.ring2 === id;
+    this._hasRageRing = hasRing('ring_rage');
+    this._hasChargeRing = hasRing('ring_charge');
+    this._hasReviveRing = hasRing('ring_revive');
+    this._reviveRingCooldownUntil = 0;
+    this._hasTimeRing = hasRing('ring_time');
+    this._hasChainRing = hasRing('ring_chain');
+    this._lastChainRingAt = 0;
+  }
+
+  // 狂怒戒／蓄力戒的傷害乘算，統一從這裡算出一個乘數，讓三個傷害入口
+  // （EnemySystem.damageEnemy／Boss.takeDamage／WoofBoss.takeDamage）都呼叫
+  // 同一份邏輯，不用各自重複寫一次判斷。
+  getRingDamageMultiplier() {
+    let mult = 1;
+    if (this._hasRageRing && this.player) {
+      const hpPercent = clamp((this.player.hp / this.player.stats.maxHp) * 100, 1, 100);
+      mult *= 1 + (100 - hpPercent) / 100; // 血越少，加成越高，滿血 0%、1% 血最高 +99%
+    }
+    if (this._hasChargeRing && this.player && this.player.isChargeReady(this.time.now)) {
+      mult *= 2; // 蓄力戒：站滿 1.5 秒的下一次傷害 +100%，觸發後立刻消耗重新起算
+      this.player.consumeCharge(this.time.now);
+    }
+    return mult;
+  }
+
+  // 連鎖戒：造成傷害時，額外對場上一名隨機敵人（不含觸發本次傷害的目標）補上
+  // 同傷害的連鎖攻擊。0.3 秒節流防止連鎖打連鎖無限遞迴——遞迴呼叫發生在節流
+  // 視窗內（幾乎是 0ms），一定會被擋下來，不需要另外寫遞迴保護旗標。
+  triggerChainRing(dmg, excludeEnemy) {
+    if (!this._hasChainRing || !this.enemySystem) return;
+    const now = this.time.now;
+    if (now - this._lastChainRingAt < 300) return;
+    const target = this.enemySystem.findRandomOther(excludeEnemy);
+    if (!target) return;
+    this._lastChainRingAt = now;
+    this.spawnBurstFx(target.x, target.y, 0x5bff8f, 6, 'fx_crit', 100);
+    this.enemySystem.damageEnemy(target, dmg, 0, 100, null, true);
   }
 
   // 狂風套裝五件套「所有技能大小 +100%」的統一倍率來源——WeaponSystem（貼圖縮放）
@@ -1140,6 +1185,22 @@ export default class GameScene extends Phaser.Scene {
 
   onPlayerDeath() {
     if (this.gameEnded) return;
+
+    // 輪迴戒：血量歸零時攔截在死亡流程最前面，冷卻內只會走一次，復活後直接
+    // return，不往下碰 gameEnded/paused，遊戲照常繼續。汪汪大作戰模式故意不吃
+    // 這個效果（跟原本「血量歸零直接視為挑戰結束」的規則一致，見 update()）。
+    if (this._hasReviveRing && !this.woofWarMode && this.time.now >= (this._reviveRingCooldownUntil || 0)) {
+      this._reviveRingCooldownUntil = this.time.now + 300000;
+      this.player.hp = Math.round(this.player.stats.maxHp * 0.5);
+      this.player.invulnerableUntil = this.time.now + 1500;
+      this._hpZeroSince = null;
+      const px = this.player.sprite.x, py = this.player.sprite.y;
+      if (this.enemySystem) this.enemySystem.killActiveInRadius(px, py, 300);
+      this.cameras.main.flash(400, 200, 255, 220);
+      this.spawnBurstFx(px, py, 0x7dff8f, 24, 'fx_crit', 260);
+      return;
+    }
+
     this.gameEnded = true;
     this.paused = true;
 

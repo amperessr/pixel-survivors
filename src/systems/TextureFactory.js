@@ -51,6 +51,7 @@ export default class TextureFactory {
       ['generateEffects', () => this.generateEffects()],
       ['generatePickups', () => this.generatePickups()],
       ['generateUI', () => this.generateUI()],
+      ['generateNewRingIcons', () => this.generateNewRingIcons()],
       ['generateLootBalls', () => this.generateLootBalls()],
     ];
     for (const [name, fn] of steps) {
@@ -357,6 +358,169 @@ export default class TextureFactory {
       ctx.fill();
       this._finish(tex);
     }
+  }
+
+  // ---------- 2026-07-12 新增六枚戒指的暫代圖示（尚無正式美術圖）----------
+  // 統一畫成「金色戒環＋爪座寶石＋寶石中央符號」，跟現有四枚戒指的正式圖走
+  // 同一種「戒指」語彙，符號區分各自效果。之後有正式美術圖時，比照 CLAUDE.md
+  // 的規範把這裡對應的呼叫拿掉、改到 BootScene.preload() 加 load.image(...)。
+  generateNewRingIcons() {
+    const rings = [
+      { key: 'ring_crit', gem: '#ff4d4d', glyph: (ctx, cx, cy) => this._glyphCrosshair(ctx, cx, cy) },
+      { key: 'ring_rage', gem: '#ff8a3d', glyph: (ctx, cx, cy) => this._glyphFlame(ctx, cx, cy) },
+      { key: 'ring_charge', gem: '#ffe066', glyph: (ctx, cx, cy) => this._glyphBolt(ctx, cx, cy) },
+      { key: 'ring_revive', gem: '#c58fff', glyph: (ctx, cx, cy) => this._glyphRebirth(ctx, cx, cy) },
+      { key: 'ring_time', gem: '#5bd4ff', glyph: (ctx, cx, cy) => this._glyphClock(ctx, cx, cy) },
+      { key: 'ring_chain', gem: '#5bff8f', glyph: (ctx, cx, cy) => this._glyphChain(ctx, cx, cy) },
+    ];
+    rings.forEach(({ key, gem, glyph }) => this._drawRingIcon(key, gem, glyph));
+  }
+
+  _drawRingIcon(key, gemColor, drawGlyph) {
+    const w = 128, h = 128;
+    const { tex, ctx } = this._canvas(key, w, h);
+    const cx = w / 2, cy = h / 2 + 8;
+
+    // 戒環本體：金色圓環（外圓填色，內圓用 destination-out 挖空成環狀）
+    ctx.fillStyle = '#e8b84b';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 27, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = '#a3780a';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 27, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 33.5, Math.PI * 1.1, Math.PI * 1.7);
+    ctx.stroke();
+
+    // 頂部寶石爪座
+    const gemY = cy - 46;
+    ctx.fillStyle = '#e8b84b';
+    [-14, 14].forEach((dx) => {
+      ctx.beginPath();
+      ctx.moveTo(cx + dx, gemY + 14);
+      ctx.lineTo(cx + dx * 1.4, gemY - 4);
+      ctx.lineTo(cx + dx * 0.5, gemY - 10);
+      ctx.closePath();
+      ctx.fill();
+    });
+
+    // 寶石本體（菱形切面：左上亮面／整體描邊）
+    ctx.fillStyle = gemColor;
+    ctx.beginPath();
+    ctx.moveTo(cx, gemY - 22);
+    ctx.lineTo(cx + 20, gemY);
+    ctx.lineTo(cx, gemY + 20);
+    ctx.lineTo(cx - 20, gemY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.beginPath();
+    ctx.moveTo(cx, gemY - 22);
+    ctx.lineTo(cx + 20, gemY);
+    ctx.lineTo(cx, gemY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, gemY - 22);
+    ctx.lineTo(cx + 20, gemY);
+    ctx.lineTo(cx, gemY + 20);
+    ctx.lineTo(cx - 20, gemY);
+    ctx.closePath();
+    ctx.stroke();
+
+    // 寶石中央的白色符號，用來區分六種戒指的效果類型
+    drawGlyph(ctx, cx, gemY);
+
+    this._finish(tex);
+  }
+
+  _glyphCrosshair(ctx, cx, cy) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+    ctx.moveTo(cx - 11, cy); ctx.lineTo(cx - 5, cy);
+    ctx.moveTo(cx + 5, cy); ctx.lineTo(cx + 11, cy);
+    ctx.moveTo(cx, cy - 11); ctx.lineTo(cx, cy - 5);
+    ctx.moveTo(cx, cy + 5); ctx.lineTo(cx, cy + 11);
+    ctx.stroke();
+  }
+
+  _glyphFlame(ctx, cx, cy) {
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 11);
+    ctx.bezierCurveTo(cx + 9, cy - 3, cx + 6, cy + 6, cx, cy + 11);
+    ctx.bezierCurveTo(cx - 6, cy + 6, cx - 7, cy - 1, cx - 2, cy - 6);
+    ctx.bezierCurveTo(cx - 1, cy - 2, cx + 2, cy - 3, cx, cy - 11);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  _glyphBolt(ctx, cx, cy) {
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath();
+    ctx.moveTo(cx + 4, cy - 11);
+    ctx.lineTo(cx - 6, cy + 1);
+    ctx.lineTo(cx - 1, cy + 1);
+    ctx.lineTo(cx - 4, cy + 11);
+    ctx.lineTo(cx + 7, cy - 2);
+    ctx.lineTo(cx + 2, cy - 2);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  _glyphRebirth(ctx, cx, cy) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 8, Math.PI * 0.35, Math.PI * 2.1);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx + 7, cy - 7);
+    ctx.lineTo(cx + 11, cy - 4);
+    ctx.lineTo(cx + 6, cy - 1);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fill();
+  }
+
+  _glyphClock(ctx, cx, cy) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 9, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - 6);
+    ctx.moveTo(cx, cy); ctx.lineTo(cx + 5, cy + 2);
+    ctx.stroke();
+  }
+
+  _glyphChain(ctx, cx, cy) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(cx - 5, cy - 3, 6, 8, Math.PI / 4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(cx + 5, cy + 3, 6, 8, Math.PI / 4, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   // ---------- 地圖 Tile：三種地形的圖塊集（草地/沙漠/雪地）+ 各自的裝飾物 ----------

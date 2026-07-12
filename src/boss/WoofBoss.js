@@ -413,6 +413,8 @@ export default class WoofBoss {
       dmg *= critDmg / 100;
       isCrit = true;
     }
+    // 狂怒戒／蓄力戒：打汪汪一樣吃這兩枚戒指的傷害乘數
+    if (this.scene.getRingDamageMultiplier) dmg *= this.scene.getRingDamageMultiplier();
     // 雷霆套裝五件套：打中麻痺中的汪汪額外補傷害＋打雷特效，跟一般魔王的規則一致
     const setBonuses = this.scene.setBonuses;
     if (setBonuses && setBonuses.thunder5 && this.scene.time.now < this.paralyzedUntil) {
@@ -421,6 +423,7 @@ export default class WoofBoss {
     }
     const mitigated = Math.max(1, dmg * (100 / (100 + this.defense)));
     if (this.scene.applyLifesteal) this.scene.applyLifesteal(mitigated);
+    if (this.scene.triggerChainRing) this.scene.triggerChainRing(mitigated, null);
     this.hp -= mitigated;
     this.totalDamageTaken += mitigated;
     this.sprite.setTintFill(0xffffff);

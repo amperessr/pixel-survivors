@@ -170,6 +170,40 @@ export const EQUIPMENT_DATA = {
     name: '分身戒', desc: '召喚一個怪物打不到的分身幻影，跟隨本尊一起攻擊，攻擊力為本尊的一半。（僅扭蛋機取得）',
     icon: 'ring_clone', bonus: {},
   },
+  // 2026-07-12 新增六枚戒指：三傳說（強化型）+三神話（玩法改變型）。
+  // 傳說三枚效果都很直觀，直接靠 bonus 欄位（critRate/critDmg）或戰鬥系統裡
+  // 讀取「是否戴著」來實作；神話三枚則各自需要動到 GameScene/EnemySystem 的
+  // 專屬邏輯（見 GameScene._applyRingFlags、EnemySystem.killActiveInRadius 等）。
+  ring_crit: {
+    id: 'ring_crit', slot: 'ring', tier: null, tierIndex: 0, prevId: null, rarity: 'legendary',
+    name: '爆擊戒', desc: '爆擊率 +25%，爆擊傷害 +40%。（僅扭蛋機取得）',
+    icon: 'ring_crit', bonus: { critRate: 25, critDmg: 40 },
+  },
+  ring_rage: {
+    id: 'ring_rage', slot: 'ring', tier: null, tierIndex: 0, prevId: null, rarity: 'legendary',
+    name: '狂怒戒', desc: '生命值越低，傷害越高：每減少 1% 生命值，傷害額外提高 1%（滿血無加成，最高 +99%）。（僅扭蛋機取得）',
+    icon: 'ring_rage', bonus: {},
+  },
+  ring_charge: {
+    id: 'ring_charge', slot: 'ring', tier: null, tierIndex: 0, prevId: null, rarity: 'legendary',
+    name: '蓄力戒', desc: '站立不動超過 1.5 秒，下一次造成的傷害 +100%。（僅扭蛋機取得）',
+    icon: 'ring_charge', bonus: {},
+  },
+  ring_revive: {
+    id: 'ring_revive', slot: 'ring', tier: null, tierIndex: 0, prevId: null, rarity: 'mythic',
+    name: '輪迴戒', desc: '生命歸零時以 50% 生命復活一次，並清空半徑 300 內所有小怪（不含魔王）。冷卻 300 秒。（僅扭蛋機取得）',
+    icon: 'ring_revive', bonus: {},
+  },
+  ring_time: {
+    id: 'ring_time', slot: 'ring', tier: null, tierIndex: 0, prevId: null, rarity: 'mythic',
+    name: '時光戒', desc: '周圍範圍內的敵人移動與攻擊速度 -50%，玩家不受影響（範圍同血肉風暴外圈）。（僅扭蛋機取得）',
+    icon: 'ring_time', bonus: {},
+  },
+  ring_chain: {
+    id: 'ring_chain', slot: 'ring', tier: null, tierIndex: 0, prevId: null, rarity: 'mythic',
+    name: '連鎖戒', desc: '造成傷害時，額外對場上一名隨機敵人補上同傷害的連鎖攻擊（每 0.3 秒最多觸發一次）。（僅扭蛋機取得）',
+    icon: 'ring_chain', bonus: {},
+  },
 };
 
 // 每個部位依「初心者→中階→高階」排序的 id 清單，購買限制／背包升級都靠這份表查詢
@@ -181,8 +215,11 @@ export const EQUIP_LINES = {
   shoes: ['shoes_basic', 'shoes_mid', 'shoes_high'],
 };
 
-// 四種戒指只能從扭蛋機取得，不會出現在商店購買清單裡。
-export const GACHA_RING_IDS = ['ring_heal', 'ring_auto', 'ring_gravity', 'ring_clone'];
+// 戒指只能從扭蛋機取得，不會出現在商店購買清單裡。
+export const GACHA_RING_IDS = [
+  'ring_heal', 'ring_auto', 'ring_gravity', 'ring_clone',
+  'ring_crit', 'ring_rage', 'ring_charge', 'ring_revive', 'ring_time', 'ring_chain',
+];
 
 // 商店排版順序：以部位分欄、階級由低到高分排
 export const SHOP_ITEM_IDS = EQUIP_SLOTS.flatMap((slot) => EQUIP_LINES[slot]);
@@ -319,9 +356,9 @@ export function getLegendarySeriesSlug(itemId) {
 
 // 抽獎機率表：直接是百分比，加總剛好 100%。六個稀有度全部有對應的裝備可抽到：
 // 普通/優秀/稀有/史詩是編號式一般裝備（1-7/8-12/13-17/18-20），傳說是 5 部位
-// x 5 套主題裝（見 LEGENDARY_SERIES）額外加兩個戒指（回血戒指/引力戒）、
-// 神話＝自動戒指/分身戒。神話 0.1%、傳說 1%，其餘依「越稀有掉率越低」
-// 照比例補滿剩下的 98.9%。
+// x 5 套主題裝（見 LEGENDARY_SERIES）額外加五個戒指（吸血/引力/爆擊/狂怒/蓄力）、
+// 神話是暗影君王套裝 5 部位額外加五個戒指（自動/分身/輪迴/時光/連鎖）。
+// 神話 0.1%、傳說 1%，其餘依「越稀有掉率越低」照比例補滿剩下的 98.9%。
 export const GACHA_RARITY_WEIGHTS = {
   common: 46.41,
   uncommon: 27.80,
