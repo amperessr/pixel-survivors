@@ -1496,7 +1496,11 @@ export default class GameScene extends Phaser.Scene {
     const auraTint = 0xffe066;
     p.setTint(auraTint);
     this.cameras.main.flash(320, 255, 224, 100);
-    this.hitStop(80);
+    // 這裡本來也有 this.hitStop(80)，會把物理時間流速瞬間壓到 0.05 倍再彈回 1 倍，
+    // 跟 Boss._die() 註解說明的是同一個 bug（「幾乎凍結」到「正常速度」的反差
+    // 看起來像玩家突然衝刺/瞬移）——那邊已經拿掉了，但每次打死魔王一定會呼叫
+    // 到的這個「慶祝特效」漏掉了，才會「還是」在魔王死亡時發作。畫面閃光已經
+    // 足夠交代「這下打贏了」，不需要 hitStop。
     this.spawnGlowRing(p.x, p.y, 'fx_levelup', auraTint, 0.4, 5, 700, 29997);
     this.spawnBurstFx(p.x, p.y, auraTint, 26, 'fx_levelup', 210);
     this.saiyanBurstUntil = this.time.now + duration;
