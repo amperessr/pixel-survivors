@@ -26,6 +26,7 @@ const AUTO_SELL_KEY = 'pixelSurvivors_autoSellRarities'; // JSON 陣列：扭蛋
 const GACHA_PITY_KEY = 'pixelSurvivors_gachaPity'; // 目前連續多少抽沒抽到傳說（或更高）以上，滿 100 強制出一件傳說
 const WOOF_WAR_REWARD_KEY = 'pixelSurvivors_woofWarReward'; // JSON：活動結束後結算出的個人獎勵快取，見 WoofWarRewardSystem.js
 const NEWBIE_KEY = 'pixelSurvivors_isNewbie'; // '1' = 這個帳號是「新手禮包」功能上線後才建立的新帳號（見 promptPlayerName 新帳號分支）
+const PLAYER_COLOR_HUE_KEY = 'pixelSurvivors_playerColorHue'; // 角色自訂顏色的色相（0-360），沒設定過就是 null（維持原圖顏色）
 
 // 背包格數要跟 InventoryScene.js 的 COLS(12) x ROWS(6) 格子數對齊——這裡原本寫死 50，
 // 但畫面早就改成 12x6=72 格了，兩邊對不上導致背包畫面明明還有一堆空格、抽獎/購買
@@ -217,6 +218,22 @@ export function isLevelUpAutoMode() {
 
 export function setLevelUpAutoMode(auto) {
   localStorage.setItem(LEVEL_UP_AUTO_KEY, auto ? '1' : '0');
+  _scheduleCloudPush();
+}
+
+// ---------- 角色自訂顏色（InventoryScene 色相滑桿）----------
+// 回傳 0-360 的色相，沒自訂過回傳 null（代表用原圖顏色，見 PlayerColor.js）。
+export function getPlayerColorHue() {
+  const raw = localStorage.getItem(PLAYER_COLOR_HUE_KEY);
+  if (raw === null) return null;
+  const hue = Number(raw);
+  return Number.isFinite(hue) ? hue : null;
+}
+
+// hue 傳 null 代表重設回原圖顏色
+export function setPlayerColorHue(hue) {
+  if (hue === null) localStorage.removeItem(PLAYER_COLOR_HUE_KEY);
+  else localStorage.setItem(PLAYER_COLOR_HUE_KEY, String(Math.round(hue)));
   _scheduleCloudPush();
 }
 
@@ -448,6 +465,7 @@ function _gatherLocalBundle() {
     gachaPity: getGachaPity(),
     woofWarReward: getWoofWarReward(),
     newbie: isNewbieAccount(),
+    playerColorHue: getPlayerColorHue(),
   };
 }
 
@@ -499,6 +517,11 @@ function _applyCloudBundle(data) {
   }
   if (typeof data.newbie === 'boolean') {
     localStorage.setItem(NEWBIE_KEY, data.newbie ? '1' : '0');
+  }
+  if (typeof data.playerColorHue === 'number') {
+    localStorage.setItem(PLAYER_COLOR_HUE_KEY, String(Math.round(data.playerColorHue)));
+  } else if (data.playerColorHue === null) {
+    localStorage.removeItem(PLAYER_COLOR_HUE_KEY);
   }
 }
 

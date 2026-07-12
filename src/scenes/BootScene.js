@@ -1,5 +1,7 @@
 import TextureFactory from '../systems/TextureFactory.js';
 import { textStyle } from '../utils/TextStyle.js';
+import { applyPlayerColorTexture } from '../utils/PlayerColor.js';
+import { getPlayerColorHue } from '../managers/SaveManager.js';
 
 export default class BootScene extends Phaser.Scene {
   constructor() { super('BootScene'); }
@@ -33,8 +35,11 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('fx_ice_pillar_evo', 'assets/fx_ice_pillar_evo.png');
     // 世界末日新增的炎柱環（見 WeaponSystem._fireWorldEndPillarRing()），跟冰柱交替往外刺出
     this.load.image('fx_fire_pillar', 'assets/fx_fire_pillar.png');
-    // 玩家角色改用正式美術圖（藍色史萊姆），取代原本程式產生的簡易貼圖
-    this.load.image('player_balanced', 'assets/player_slime.png');
+    // 玩家角色改用正式美術圖（藍色史萊姆），取代原本程式產生的簡易貼圖。
+    // 這裡載入的是「不會被動到的原始圖」，實際遊戲/背包畫面用的 'player_balanced'
+    // 材質改在 create() 由 PlayerColor.applyPlayerColorTexture() 從這張原圖動態
+    // 產生（套用玩家自訂的色相，或原封不動複製一份），見角色顏色自訂功能。
+    this.load.image('player_balanced_src', 'assets/player_slime.png');
     // 四種小怪改用正式美術圖（山豬/哥布林/骷髏/半獸人），取代原本 TextureFactory
     // 程式產生的簡易貼圖（見 EnemyData.js 的角色定位分配）。
     this.load.image('enemy_boar', 'assets/enemy_boar.png');
@@ -47,12 +52,13 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('ring_auto', 'assets/ring_auto.png');
     this.load.image('ring_gravity', 'assets/ring_gravity.png');
     this.load.image('ring_clone', 'assets/ring_clone.png');
-    // 2026-07-12 新增四枚戒指的正式美術圖（爆擊/狂怒/蓄力/連鎖），剩下的輪迴戒／
-    // 時光戒還沒有圖，繼續由 TextureFactory.generateNewRingIcons() 畫暫代圖示。
+    // 2026-07-12 新增五枚戒指的正式美術圖（爆擊/狂怒/蓄力/連鎖/時光），只剩
+    // 輪迴戒還沒有圖，繼續由 TextureFactory.generateNewRingIcons() 畫暫代圖示。
     this.load.image('ring_crit', 'assets/ring_crit.png');
     this.load.image('ring_rage', 'assets/ring_rage.png');
     this.load.image('ring_charge', 'assets/ring_charge.png');
     this.load.image('ring_chain', 'assets/ring_chain.png');
+    this.load.image('ring_time', 'assets/ring_time.png');
 
     const equipSlots = ['weapon', 'helmet', 'clothes', 'pants', 'shoes'];
     const equipTiers = ['beginner', 'mid', 'high'];
@@ -181,6 +187,10 @@ export default class BootScene extends Phaser.Scene {
 
     const factory = new TextureFactory(this);
     factory.generateAll();
+
+    // 角色顏色自訂：從 player_balanced_src 產生玩家實際會用到的 'player_balanced'
+    // 材質（套用玩家上次選的色相，沒選過就是原圖顏色）。
+    applyPlayerColorTexture(this, getPlayerColorHue());
 
     if (this._loadingParts) {
       this.tweens.killTweensOf(this._loadingParts);

@@ -67,8 +67,10 @@ export default class TextureFactory {
   // 注意：這裡用 64x64（原本 32x32 的兩倍）繪製，讓選角畫面放大顯示時
   // 有更多細節可看，而不是把一張很小的圖直接暴力放大變得死板。
   generatePlayers() {
-    // 'balanced' 現在改用玩家提供的正式美術圖（藍色史萊姆，見 BootScene 的
-    // player_balanced 圖片載入），不再程式產生，避免跟載入的圖片同一個材質 key 衝突。
+    // 'balanced' 現在改用玩家提供的正式美術圖（藍色史萊姆），這裡不再產生同名
+    // 材質——'player_balanced' 這個 key 改由 BootScene.create() 呼叫
+    // PlayerColor.applyPlayerColorTexture() 從 player_balanced_src 動態產生
+    // （套用玩家自訂的角色顏色），避免材質 key 衝突。
     // 其餘三種角色目前選角畫面已經沒有入口（CharacterSelectScene 沒有被排進場景清單），
     // 保留程式產生只是不讓 Player.js 裡的 CHARACTERS 定義失效，不影響實際遊戲畫面。
     const palette = {
@@ -361,14 +363,13 @@ export default class TextureFactory {
   }
 
   // ---------- 2026-07-12 新增戒指的暫代圖示（尚無正式美術圖）----------
-  // 爆擊戒/狂怒戒/蓄力戒/連鎖戒已經換成正式美術圖（見 BootScene.preload()），
-  // 這裡只剩輪迴戒／時光戒兩枚還沒有圖，繼續畫成「金色戒環＋爪座寶石＋
-  // 寶石中央符號」頂替。之後有正式圖時，比照 CLAUDE.md 的規範把這裡對應的
-  // 呼叫拿掉、改到 BootScene.preload() 加 load.image(...)。
+  // 爆擊戒/狂怒戒/蓄力戒/連鎖戒/時光戒都已經換成正式美術圖（見 BootScene.preload()），
+  // 只剩輪迴戒還沒有圖，繼續畫成「金色戒環＋爪座寶石＋寶石中央符號」頂替。
+  // 之後有正式圖時，比照 CLAUDE.md 的規範把這裡對應的呼叫拿掉、改到
+  // BootScene.preload() 加 load.image(...)。
   generateNewRingIcons() {
     const rings = [
       { key: 'ring_revive', gem: '#c58fff', glyph: (ctx, cx, cy) => this._glyphRebirth(ctx, cx, cy) },
-      { key: 'ring_time', gem: '#5bd4ff', glyph: (ctx, cx, cy) => this._glyphClock(ctx, cx, cy) },
     ];
     rings.forEach(({ key, gem, glyph }) => this._drawRingIcon(key, gem, glyph));
   }
@@ -459,18 +460,6 @@ export default class TextureFactory {
     ctx.closePath();
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.fill();
-  }
-
-  _glyphClock(ctx, cx, cy) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 9, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - 6);
-    ctx.moveTo(cx, cy); ctx.lineTo(cx + 5, cy + 2);
-    ctx.stroke();
   }
 
   // ---------- 地圖 Tile：三種地形的圖塊集（草地/沙漠/雪地）+ 各自的裝飾物 ----------

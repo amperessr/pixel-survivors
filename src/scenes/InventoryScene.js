@@ -8,9 +8,11 @@ import {
   getStatLevel, getStatExp, getStatExpToNext, getStatPoints, getStatInvest,
   getStatBonus, investStatPoint, resetStatPoints,
   RESET_STAT_POINTS_GOLD_COST, STAT_INVEST_DEFS,
+  getPlayerColorHue, setPlayerColorHue,
 } from '../managers/SaveManager.js';
 import { CHARACTERS, BASE_STATS } from '../player/Player.js';
 import { textStyle } from '../utils/TextStyle.js';
+import { applyPlayerColorTexture } from '../utils/PlayerColor.js';
 
 const COLS = 12, ROWS = 6; // 12x6 背包格子（放大版面＋增加格數）
 
@@ -155,6 +157,10 @@ export default class InventoryScene extends Phaser.Scene {
       })).setOrigin(0.5).setAlpha(0.6).setDepth(11);
     }
 
+    // ---------- 角色左右兩排裝備欄跟背包格之間有一段沒用到的空隙，拿來放
+    // 角色顏色自訂的色相滑桿（見 _buildColorPicker）----------
+    this._buildColorPicker((leftX + 155 + 33 + w * 0.375) / 2, 190);
+
     // ---------- 左側下方：能力值面板（每項能力值旁邊都能直接加點）----------
     this._buildStatsPanel(leftX, 480);
 
@@ -233,6 +239,64 @@ export default class InventoryScene extends Phaser.Scene {
   // 每一項旁邊都有「+1」可以加點；下方統一放「剩餘點數／確認／重置」。
   // 「+1」只是先累積待確認的點數，按「確認」才會真的扣點數寫入存檔——這樣
   // 點錯了在確認前都還能反悔（離開背包畫面不按確認，待加點數就直接作廢）。
+  // 角色顏色自訂：一條直向的色相滑桿（0-360 度色環），拖曳時即時重新產生
+  // 'player_balanced' 材質（見 PlayerColor.applyPlayerColorTexture），角色圖示
+  // 會馬上跟著變色；放開滑鼠才寫入存檔，不會拖曳過程中每一幀都寫 localStorage。
+  _buildColorPicker(cx, top) {
+    const barW = 30, barH = 450;
+    const barTop = top + 40, barCy = barTop + barH / 2;
+
+    this.add.text(cx, top, '角色顏色', textStyle({ fontSize: '22px', color: '#9fd3ff' })).setOrigin(0.5);
+
+    // 色環漸層貼圖只需要產生一次（跟 InventoryScene 本身無關，換場景重進來
+    // texture manager 裡還在，不用每次都重畫）。
+    if (!this.textures.exists('ui_hue_bar')) {
+      const tex = this.textures.createCanvas('ui_hue_bar', 2, 360);
+      const ctx = tex.getContext();
+      for (let i = 0; i < 360; i++) {
+        ctx.fillStyle = `hsl(${i}, 85%, 55%)`;
+        ctx.fillRect(0, i, 2, 1);
+      }
+      tex.refresh();
+    }
+
+    this.add.rectangle(cx, barCy, barW + 6, barH + 6, 0x000000, 0.4).setStrokeStyle(2, 0x6fd3ff, 0.6);
+    const bar = this.add.image(cx, barCy, 'ui_hue_bar').setDisplaySize(barW, barH).setInteractive({ useHandCursor: true });
+
+    const savedHue = getPlayerColorHue();
+    const marker = this.add.triangle(cx + barW / 2 + 12, barTop, 0, -7, 0, 7, 11, 0, 0xffffff)
+      .setStrokeStyle(1, 0x10131a);
+
+    const hueToY = (hue) => barTop + (hue / 360) * barH;
+    const yToHue = (y) => Phaser.Math.Clamp(((y - barTop) / barH) * 360, 0, 360);
+    marker.y = hueToY(savedHue == null ? 210 : savedHue); // 沒自訂過時，指標停在原圖藍色對應的色相位置附近，不影響實際顯示
+
+    let dragging = false;
+    const applyFromPointer = (pointer) => {
+      const hue = yToHue(pointer.y);
+      marker.y = hueToY(hue);
+      applyPlayerColorTexture(this, hue);
+      return hue;
+    };
+    bar.on('pointerdown', (pointer) => { dragging = true; applyFromPointer(pointer); });
+    this.input.on('pointermove', (pointer) => { if (dragging) applyFromPointer(pointer); });
+    this.input.on('pointerup', (pointer) => {
+      if (!dragging) return;
+      dragging = false;
+      setPlayerColorHue(applyFromPointer(pointer));
+    });
+
+    const resetBtn = this.add.image(cx, barTop + barH + 34, 'ui_button_parchment').setDisplaySize(120, 40).setInteractive({ useHandCursor: true });
+    this.add.text(cx, barTop + barH + 34, '重設顏色', textStyle({ fontSize: '17px', color: '#3a2413' })).setOrigin(0.5);
+    resetBtn.on('pointerover', () => resetBtn.setTint(0xfff3d0));
+    resetBtn.on('pointerout', () => resetBtn.clearTint());
+    resetBtn.on('pointerdown', () => {
+      setPlayerColorHue(null);
+      applyPlayerColorTexture(this, null);
+      marker.y = hueToY(210);
+    });
+  }
+
   _buildStatsPanel(cx, panelTop) {
     // +110 是多留給面板最下面「已發動能力」那一小塊的空間（見下面 setBonusTitle）。
     const panelW = 420, panelH = 590;

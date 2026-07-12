@@ -34,7 +34,8 @@ src/
   systems/      TextureFactory.js（Canvas程式生成美術，尚未換正式圖的素材）／
                 MapGenerator.js（無限地圖）／HealthPackSystem.js／MagnetSystem.js
   firebase/     firebase.js：Realtime Database 讀寫
-  utils/        MathUtils.js／TextStyle.js（統一字型樣式）
+  utils/        MathUtils.js／TextStyle.js（統一字型樣式）／RarityFrame.js（裝備稀有度外框）／
+                PlayerColor.js（角色顏色自訂：HSL 色相旋轉重繪 player_balanced 材質）
 assets/         正式美術圖，見下方「美術資產規範」
 ```
 
