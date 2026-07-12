@@ -5,6 +5,11 @@ export default class BootScene extends Phaser.Scene {
   constructor() { super('BootScene'); }
 
   preload() {
+    // 150+ 張正式圖片素材要下載，中間完全沒有畫面回饋的話玩家會覺得網頁卡住了
+    // 才進主選單——先畫一個讀取畫面（標題＋進度條＋百分比＋脈動文字），再掛上
+    // this.load 的 progress 事件即時更新進度條寬度。
+    this._createLoadingUI();
+
     // 目前的外部圖片素材：龍之翼遺物特效 + 主選單背景 + 五隻 Boss 的正式美術圖 +
     // 裝備圖示（商店三階 15 張／扭蛋一般裝備 100 張／扭蛋傳說裝備 25 張／四種戒指），
     // 其餘材質還是 TextureFactory 產生。
@@ -115,16 +120,64 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('boss_woof', 'assets/boss_woof.png');
   }
 
-  create() {
+  // 讀取畫面：標題 + 進度條（外框/底色/即時填充）+ 百分比文字 + 持續脈動的
+  // 「載入素材中...」文字（用 Tween 淡入淡出循環，讓等待期間畫面仍有動態，
+  // 不會讓人以為網頁卡死）。全部用 Phaser Text/Graphics 畫，不吃任何素材，
+  // 所以在素材真正下載完成之前就能顯示。
+  _createLoadingUI() {
     const w = this.scale.width, h = this.scale.height;
-    const label = this.add.text(w / 2, h / 2, '生成像素素材中...', textStyle({
-      fontSize: '32px', color: '#6fd3ff',
+    const barW = 560, barH = 22;
+    const barX = w / 2 - barW / 2, barY = h / 2 + 20;
+
+    const title = this.add.text(w / 2, h / 2 - 70, '像素求生 Pixel Survivors', textStyle({
+      fontSize: '48px', color: '#6fd3ff',
     })).setOrigin(0.5);
+
+    const frame = this.add.rectangle(w / 2, barY + barH / 2, barW + 6, barH + 6)
+      .setStrokeStyle(2, 0x6fd3ff, 0.8);
+    const track = this.add.rectangle(w / 2, barY + barH / 2, barW, barH, 0x1e2230);
+    const fill = this.add.graphics();
+    const drawFill = (ratio) => {
+      fill.clear();
+      fill.fillStyle(0x6fd3ff, 1);
+      fill.fillRect(barX, barY, Math.max(0, barW * Phaser.Math.Clamp(ratio, 0, 1)), barH);
+    };
+    drawFill(0);
+
+    const percentText = this.add.text(w / 2, barY + barH + 26, '0%', textStyle({
+      fontSize: '22px', color: '#9fd3ff',
+    })).setOrigin(0.5);
+
+    const loadingText = this.add.text(w / 2, barY + barH + 58, '載入素材中...', textStyle({
+      fontSize: '20px', color: '#6fd3ff',
+    })).setOrigin(0.5);
+    this.tweens.add({
+      targets: loadingText, alpha: { from: 1, to: 0.35 }, duration: 650, yoyo: true, repeat: -1,
+    });
+
+    this.load.on('progress', (value) => {
+      drawFill(value);
+      percentText.setText(`${Math.round(value * 100)}%`);
+    });
+
+    this._loadingLabel = loadingText;
+    this._loadingParts = [title, frame, track, fill, percentText, loadingText];
+  }
+
+  create() {
+    // preload() 的進度條只涵蓋圖片下載進度，接下來 TextureFactory 同步生成一批
+    // Canvas 貼圖也要花一點時間——把讀取文字換成對應說明，讓畫面全程都有回饋，
+    // 不會在圖片載完之後突然看起來卡住。
+    if (this._loadingLabel) this._loadingLabel.setText('生成像素素材中...');
 
     const factory = new TextureFactory(this);
     factory.generateAll();
 
-    label.destroy();
+    if (this._loadingParts) {
+      this.tweens.killTweensOf(this._loadingParts);
+      this._loadingParts.forEach((p) => p.destroy());
+    }
+
     this.scene.start('MainMenuScene');
   }
 }
