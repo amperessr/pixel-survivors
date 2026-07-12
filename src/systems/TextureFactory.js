@@ -51,7 +51,6 @@ export default class TextureFactory {
       ['generateEffects', () => this.generateEffects()],
       ['generatePickups', () => this.generatePickups()],
       ['generateUI', () => this.generateUI()],
-      ['generateGachaMachine', () => this.generateGachaMachine()],
       ['generateLootBalls', () => this.generateLootBalls()],
     ];
     for (const [name, fn] of steps) {
@@ -921,84 +920,4 @@ export default class TextureFactory {
     });
   }
 
-
-  // 商店抽獎機用的「日式扭蛋機」圖示：紅色底座＋透明玻璃圓頂，裡面裝著幾顆彩色扭蛋，
-  // 側邊一根轉柄，風格跟其他 UI/裝備圖示一樣走「粗描邊＋鮮豔色塊」的可愛路線。
-  generateGachaMachine() {
-    const w = 220, h = 260;
-    const { tex, ctx } = this._canvas('gacha_machine', w, h);
-    const cx = w / 2;
-
-    // 底座
-    ctx.fillStyle = '#e63950';
-    TextureFactory.roundRect(ctx, cx - 70, 190, 140, 50, 10);
-    ctx.fill();
-    ctx.strokeStyle = '#a01f30';
-    ctx.lineWidth = 3;
-    TextureFactory.roundRect(ctx, cx - 70, 190, 140, 50, 10);
-    ctx.stroke();
-    // 投幣孔
-    ctx.fillStyle = '#3a1015';
-    TextureFactory.roundRect(ctx, cx - 10, 205, 20, 10, 3);
-    ctx.fill();
-    // 轉柄
-    ctx.fillStyle = '#ffd93d';
-    ctx.beginPath();
-    ctx.arc(cx + 78, 218, 14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#a3780a';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    // 出球口
-    ctx.fillStyle = '#3a1015';
-    TextureFactory.roundRect(ctx, cx - 22, 168, 44, 22, 6);
-    ctx.fill();
-
-    // 玻璃圓頂
-    ctx.fillStyle = 'rgba(191,230,255,0.35)';
-    ctx.beginPath();
-    ctx.arc(cx, 110, 88, Math.PI, 0, false);
-    ctx.lineTo(cx + 88, 176);
-    ctx.lineTo(cx - 88, 176);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = '#6fd3ff';
-    ctx.lineWidth = 4;
-    ctx.stroke();
-
-    // 圓頂裡的扭蛋（每顆兩色：上半亮、下半深，模擬扭蛋殼的分色）
-    const capsules = [
-      { x: cx - 40, y: 130, r: 17, c: '#ff6bd6' },
-      { x: cx + 4, y: 150, r: 20, c: '#6fd3ff' },
-      { x: cx + 46, y: 122, r: 16, c: '#ffe066' },
-      { x: cx - 8, y: 100, r: 15, c: '#7dff8f' },
-      { x: cx - 46, y: 90, r: 13, c: '#ff9d3d' },
-      { x: cx + 34, y: 90, r: 13, c: '#c58fff' },
-    ];
-    capsules.forEach((b) => {
-      ctx.fillStyle = b.c;
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.r, Math.PI, 0, false);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.r, 0, Math.PI, false);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-      ctx.stroke();
-    });
-
-    // 玻璃反光
-    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.arc(cx, 110, 78, Math.PI * 1.15, Math.PI * 1.5, false);
-    ctx.stroke();
-
-    this._finish(tex);
-  }
 }

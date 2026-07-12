@@ -19,6 +19,9 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('fx_dragon_aura', 'assets/fx_dragon_aura.png');
     this.load.image('fx_dragon_aura_icon', 'assets/fx_dragon_aura_icon.png');
     this.load.image('menu_bg', 'assets/menu_bg.jpg');
+    // 商店抽獎機正式美術圖，取代原本 TextureFactory.generateGachaMachine() 畫的
+    // 簡易圖示（已去背，只留機台本體）。
+    this.load.image('gacha_machine', 'assets/gacha_machine.png');
     this.load.image('boss_red', 'assets/boss_red.png');
     this.load.image('boss_black', 'assets/boss_black.png');
     // 新增三隻 Boss：惡魔王／樹王／獅鷲王的正式美術圖

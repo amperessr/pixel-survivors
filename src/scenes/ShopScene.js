@@ -78,16 +78,15 @@ export default class ShopScene extends Phaser.Scene {
     })).setOrigin(0.5);
     this.add.rectangle(cx, panelTop + 66, panelW - 60, 2, 0xff9ad6, 0.4);
 
-    // 扭蛋機圖片縮小一點、整體往上收，騰出空間給下面的提示/保底進度兩行字——
-    // 原本保底進度那一行（+493）剛好被「一抽」按鈕（中心 +521、高 68，上緣 +487）
-    // 蓋住，看起來就是「字卡在按鈕後面」。
-    this.add.image(cx, panelTop + 240, 'gacha_machine').setScale(1.15);
+    // 扭蛋機改用正式美術圖（原始解析度較大且長寬比跟舊版程式圖示不同，用
+    // setDisplaySize 固定顯示高度、保留原圖比例，避免直接套用舊的 setScale
+    // 數字把面板撐爆），整體往上收，騰出空間給下面的保底進度文字。
+    const gachaImg = this.add.image(cx, panelTop + 240, 'gacha_machine');
+    const gachaDisplayH = 330;
+    gachaImg.setDisplaySize(gachaDisplayH * (gachaImg.width / gachaImg.height), gachaDisplayH);
 
-    this.add.text(cx, panelTop + 428, '每次抽獎都有機會拿到豐厚獎勵！', textStyle({
-      fontSize: '19px', color: '#cfe9ff',
-    })).setOrigin(0.5);
-    this.pityText = this.add.text(cx, panelTop + 458, '', textStyle({
-      fontSize: '16px', color: '#ffd93d',
+    this.pityText = this.add.text(cx, panelTop + 448, '', textStyle({
+      fontSize: '22px', color: '#ffd93d',
     })).setOrigin(0.5);
     this._refreshPityText();
 
@@ -113,8 +112,8 @@ export default class ShopScene extends Phaser.Scene {
   // 不會佔背包格子。只開放普通/優秀/稀有/史詩四階，傳說/神話太稀有，不給誤勾賣掉。
   _buildAutoSellRow(cx, cy, rowW) {
     this.autoSellSet = new Set(getAutoSellRarities());
-    this.add.text(cx, cy - 30, '扭蛋抽到時自動賣出：', textStyle({
-      fontSize: '17px', color: '#9fd3ff',
+    this.add.text(cx, cy - 36, '扭蛋抽到時自動賣出：', textStyle({
+      fontSize: '20px', color: '#9fd3ff',
     })).setOrigin(0.5);
 
     const rarities = ['common', 'uncommon', 'rare', 'epic'];
@@ -124,9 +123,9 @@ export default class ShopScene extends Phaser.Scene {
       const rx = cx - rowW / 2 + colW * i + colW / 2;
       const rarityDef = RARITY_DATA[rarity];
       const hex = '#' + rarityDef.color.toString(16).padStart(6, '0');
-      const box = this.add.image(rx, cy, 'ui_equip_slot').setDisplaySize(28, 28).setInteractive({ useHandCursor: true });
-      const check = this.add.text(rx, cy, '✓', textStyle({ fontSize: '20px', color: '#5bff8f' })).setOrigin(0.5);
-      this.add.text(rx, cy + 24, rarityDef.label, textStyle({ fontSize: '15px', color: hex })).setOrigin(0.5);
+      const box = this.add.image(rx, cy, 'ui_equip_slot').setDisplaySize(36, 36).setInteractive({ useHandCursor: true });
+      const check = this.add.text(rx, cy, '✓', textStyle({ fontSize: '26px', color: '#5bff8f' })).setOrigin(0.5);
+      this.add.text(rx, cy + 32, rarityDef.label, textStyle({ fontSize: '18px', color: hex })).setOrigin(0.5);
       this.autoSellBoxes[rarity] = check;
       box.on('pointerover', () => box.setTint(0xffe066));
       box.on('pointerout', () => box.clearTint());
@@ -156,8 +155,9 @@ export default class ShopScene extends Phaser.Scene {
 
   // 道具機率表：整畫面覆蓋層，參考一般手遊的抽卡機率公示排版——每個稀有度一欄，
   // 欄首是「稀有度色帶＋總機率」的標題區塊，下面標示件數與單件機率，清單只列
-  // 道具名稱（效果說明拿掉了——塞在表裡太亂，玩家滑鼠移到商店/背包的裝備上
-  // 本來就看得到完整效果），道具多的稀有度自動分成兩小欄。
+  // 道具圖示＋名稱＋單件機率，仿照手遊常見的「提供比例」單欄捲動清單排版
+  // （六個稀有度由上到下依序列出，各自先是一列稀有度色帶＋總機率的標題列，
+  // 再列出該階所有道具），取代舊版「擠成 6 欄看不清楚」的並排表格。
   _showDropList() {
     const w = this.scale.width, h = this.scale.height;
     const overlay = this.add.container(0, 0).setDepth(9500);
@@ -166,58 +166,110 @@ export default class ShopScene extends Phaser.Scene {
       fontSize: '34px', color: '#ff9ad6',
     })).setOrigin(0.5));
     overlay.add(this.add.text(w / 2, 80, '每次抽獎先依各稀有度的機率決定階級，再從該階級的道具池中均勻隨機抽出一件', textStyle({
-      fontSize: '17px', color: '#8fa3b8',
+      fontSize: '19px', color: '#8fa3b8',
     })).setOrigin(0.5));
 
-    const colW = w / RARITY_IDS.length;
-    RARITY_IDS.forEach((rarityId, col) => {
+    // 可捲動清單區域：listContent 裡的所有列由上往下堆疊，超出可視範圍的部分
+    // 用 Geometry Mask 裁掉，滑鼠滾輪捲動整個 listContent（見下面 onWheel）。
+    const listX = w / 2, listW = Math.min(920, w - 240);
+    const viewTop = 116, viewBottom = h - 88;
+    const viewH = viewBottom - viewTop;
+    const rowH = 56, headerH = 48;
+
+    const listContent = this.add.container(listX, viewTop);
+    overlay.add(listContent);
+
+    let y = 0;
+    // 由上到下神話→傳說→...→普通（由高到低），跟玩家「先看想要的稀有度」的
+    // 習慣一致；RARITY_IDS 本身是共用常數（其他地方也用得到，見 InventoryScene），
+    // 這裡另外複製一份反轉，不動到原本的順序。
+    const displayOrder = [...RARITY_IDS].reverse();
+    displayOrder.forEach((rarityId) => {
       const rarity = RARITY_DATA[rarityId];
       const pool = GACHA_POOL_BY_RARITY[rarityId] || [];
       const weight = GACHA_RARITY_WEIGHTS[rarityId] || 0;
-      const cx = colW * col + colW / 2;
       const hex = '#' + rarity.color.toString(16).padStart(6, '0');
 
-      // 欄首色帶：稀有度底色色塊＋名稱＋總機率，抬頭一眼掃過就能比較六個階級
-      overlay.add(this.add.rectangle(cx, 148, colW - 26, 66, rarity.color, 0.14)
+      // 稀有度標題列：色帶底＋名稱（左）＋總機率（右）
+      listContent.add(this.add.rectangle(0, y + headerH / 2, listW, headerH, rarity.color, 0.16)
         .setStrokeStyle(2, rarity.color, 0.9));
-      overlay.add(this.add.text(cx, 136, rarity.label, textStyle({
-        fontSize: '24px', color: hex, fontStyle: 'bold',
-      })).setOrigin(0.5));
-      overlay.add(this.add.text(cx, 163, `${weight}%`, textStyle({
-        fontSize: '18px', color: hex,
-      })).setOrigin(0.5));
+      listContent.add(this.add.text(-listW / 2 + 24, y + headerH / 2, rarity.label, textStyle({
+        fontSize: '25px', color: hex, fontStyle: 'bold',
+      })).setOrigin(0, 0.5));
+      listContent.add(this.add.text(listW / 2 - 24, y + headerH / 2, `${weight}%（共 ${pool.length} 件）`, textStyle({
+        fontSize: '19px', color: hex,
+      })).setOrigin(1, 0.5));
+      y += headerH + 8;
 
-      // 件數與單件機率（總機率平均分給池內每一件）
+      // 單件機率（總機率平均分給池內每一件）
       const per = pool.length ? weight / pool.length : 0;
       const perStr = per >= 0.1 ? per.toFixed(2) : per.toFixed(3);
-      overlay.add(this.add.text(cx, 196, `共 ${pool.length} 件・每件 ${perStr}%`, textStyle({
-        fontSize: '14px', color: '#8fa3b8',
-      })).setOrigin(0.5));
-      overlay.add(this.add.rectangle(cx, 214, colW - 40, 1, rarity.color, 0.35));
 
-      // 名單只列名稱；超過 18 件的稀有度自動排成兩小欄，才不會一路長到畫面外
-      const twoCol = pool.length > 18;
-      const rowH = twoCol ? 26 : 28;
-      const startY = 228;
-      pool.forEach((id, i) => {
-        const name = EQUIPMENT_DATA[id].name;
-        const mini = twoCol ? i % 2 : 0;
-        const row = twoCol ? Math.floor(i / 2) : i;
-        const nx = twoCol ? cx - colW * 0.23 + mini * colW * 0.46 : cx;
-        overlay.add(this.add.text(nx, startY + row * rowH, name, textStyle({
-          fontSize: twoCol ? '15px' : '16px', color: '#cfe9ff',
-        })).setOrigin(0.5, 0));
+      pool.forEach((id) => {
+        const item = EQUIPMENT_DATA[id];
+        const rowCy = y + rowH / 2;
+        listContent.add(this.add.rectangle(0, rowCy, listW, rowH - 6, 0x161a24, 0.65));
+        listContent.add(this.add.image(-listW / 2 + 38, rowCy, item.icon).setDisplaySize(42, 42));
+        listContent.add(this.add.text(-listW / 2 + 70, rowCy, item.name, textStyle({
+          fontSize: '19px', color: '#cfe9ff',
+        })).setOrigin(0, 0.5));
+        listContent.add(this.add.text(listW / 2 - 24, rowCy, `${perStr}%`, textStyle({
+          fontSize: '18px', color: '#8fa3b8',
+        })).setOrigin(1, 0.5));
+        y += rowH;
       });
+
+      y += 20; // 稀有度區塊之間留白
     });
 
-    // 關閉鈕沿用「深色底＋粉紅描邊」的資訊按鈕樣式，跟開啟它的那顆按鈕成對
+    const totalContentH = y;
+    const maxScroll = Math.max(0, totalContentH - viewH);
+
+    const maskShape = this.make.graphics().fillRect(listX - listW / 2 - 30, viewTop, listW + 60, viewH);
+    listContent.setMask(maskShape.createGeometryMask());
+
+    // 右側細長滾動軸：拇指高度依可視比例縮放，位置跟著 listContent 捲動同步，
+    // 提示玩家「這裡可以滾動」，不然滑鼠滾輪這個互動方式不夠明顯。
+    let scrollThumb = null;
+    if (maxScroll > 0) {
+      const trackX = listX + listW / 2 + 18, trackTop = viewTop, trackH = viewH;
+      overlay.add(this.add.rectangle(trackX, trackTop + trackH / 2, 6, trackH, 0xffffff, 0.12));
+      const thumbH = Math.max(40, (viewH / totalContentH) * trackH);
+      scrollThumb = this.add.rectangle(trackX, trackTop + thumbH / 2, 6, thumbH, 0xff9ad6, 0.8);
+      overlay.add(scrollThumb);
+    }
+
+    const applyScroll = (scrollY) => {
+      const clamped = Phaser.Math.Clamp(scrollY, 0, maxScroll);
+      listContent.y = viewTop - clamped;
+      if (scrollThumb) {
+        const ratio = maxScroll > 0 ? clamped / maxScroll : 0;
+        const trackTop = viewTop, trackH = viewH;
+        const thumbH = scrollThumb.height;
+        scrollThumb.y = trackTop + thumbH / 2 + ratio * (trackH - thumbH);
+      }
+    };
+    let scrollY = 0;
+    const onWheel = (pointer, gameObjects, deltaX, deltaY) => {
+      scrollY += deltaY * 0.6;
+      applyScroll(scrollY);
+    };
+    this.input.on('wheel', onWheel);
+
+    // 關閉鈕沿用「深色底＋粉紅描邊」的資訊按鈕樣式，跟開啟它的那顆按鈕成對；
+    // 關閉時要把滾輪監聽跟遮罩用的 Graphics 一起清掉，避免離開這個畫面之後
+    // 滾輪還在影響（已被銷毀的）清單、或 Graphics 物件變成孤兒殘留在記憶體裡。
     const closeBtn = this.add.rectangle(w / 2, h - 52, 220, 54, 0x2a1a2e, 1)
       .setStrokeStyle(2, 0xff9ad6, 0.9).setInteractive({ useHandCursor: true });
     overlay.add(closeBtn);
     overlay.add(this.add.text(w / 2, h - 52, '關閉', textStyle({ fontSize: '24px', color: '#ff9ad6' })).setOrigin(0.5));
     closeBtn.on('pointerover', () => closeBtn.setFillStyle(0x45294a, 1));
     closeBtn.on('pointerout', () => closeBtn.setFillStyle(0x2a1a2e, 1));
-    closeBtn.on('pointerdown', () => overlay.destroy());
+    closeBtn.on('pointerdown', () => {
+      this.input.off('wheel', onWheel);
+      maskShape.destroy();
+      overlay.destroy();
+    });
   }
 
   _buildGachaButton(cx, cy, btnW, label, onClick) {
