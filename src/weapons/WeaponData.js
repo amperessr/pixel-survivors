@@ -193,12 +193,12 @@ export const WEAPON_EVOLUTIONS = {
   },
   sword: {
     name: '劍陣風暴',
-    desc: '劍氣斬的最終進化。攻擊半徑直接翻倍，扇形夾角擴大成近乎一圈的環繞劍陣，範圍內敵人無所遁形。',
-    // extraMult 這裡專門用來把攻擊半徑（range）直接翻倍——劍氣斬只有 range 跟
-    // arcDeg 兩個受 extraMult 影響的欄位，arcDeg 另外被 arcOverride 蓋掉
-    // （見下方），所以 extraMult=2 實際上只吃在 range 上，乾淨對應「半徑要比
-    // 劍氣斬多一倍」的需求，不用另外開一個專屬倍率欄位。
-    dmgMult: 1.8, extraMult: 2, cooldownMult: 1.2,
+    desc: '劍氣斬的最終進化。攻擊半徑大幅提升，扇形夾角擴大成近乎一圈的環繞劍陣，範圍內敵人無所遁形。',
+    // extraMult 這裡專門用來放大攻擊半徑（range）——劍氣斬只有 range 跟 arcDeg
+    // 兩個受 extraMult 影響的欄位，arcDeg 另外被 arcOverride 蓋掉（見下方），
+    // 所以這個倍率實際上只吃在 range 上。原本設 2（剛好翻倍）試玩後感覺範圍
+    // 誇張過頭，調降到 1.5 倍。
+    dmgMult: 1.8, extraMult: 1.5, cooldownMult: 1.2,
     // 一般武器進化的扇形角度是「乘 extraMult」，但劍氣斬進化要求直接跳到近乎
     // 滿圈（340 度，留一點縫隙做視覺上的「起手方向」），用這個欄位覆蓋掉
     // 預設的倍率規則（跟 WeaponSystem._getEffectiveData 對 pierceOverride 的
