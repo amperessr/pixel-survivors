@@ -421,13 +421,14 @@ export default class WeaponSystem {
   _fireSword(data, stats, enemy, px, py, dmgMult = 1) {
     // 範圍/扇形角度只受本場選到的「致命打擊（爆傷）卡片」張數影響（每張 +8%），
     // 不受角色永久能力值或裝備影響；致命打擊原本沒有專屬武器聯動，劍氣斬走
-    // 「爆擊重擊」定位剛好補上。進化後的半徑倍率已經由 WeaponData.js 的
-    // WEAPON_EVOLUTIONS.sword.extraMult 算過一次（見 _getEffectiveData），這裡
-    // 不再疊加額外的進化倍率，避免半徑被算兩次、超過「剛好翻倍」的需求。
+    // 「爆擊重擊」定位剛好補上。進化後的半徑倍率、狂風套裝的 wind5 加成都已經
+    // 由 _getEffectiveData()／_applyWindSizeBonus() 算進 data.range 裡了（'range'
+    // 在那份會被 wind5 影響的欄位清單中），這裡不能再乘一次 _windSizeMult()，
+    // 不然狂風套裝下範圍會變成疊乘的 4 倍而不是設計中的 2 倍。
     const critCards = this.player.passiveLevels.critDmg || 0;
     const scaleBonus = 1 + critCards * 0.08;
     const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult;
-    const range = data.range * scaleBonus * this._windSizeMult();
+    const range = data.range * scaleBonus;
     const ang = angleTo(px, py, enemy.x, enemy.y);
     const kb = WEAPON_KNOCKBACK.sword;
     this.scene.spawnSwordSlash(px, py, ang, range, data.arcDeg, dmg, stats.critRate, stats.critDmg, kb, !!data.evolved);
