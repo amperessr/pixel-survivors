@@ -40,17 +40,13 @@ export default class WeaponSystem {
   // 融合武器暫時不開放再進化（之後有需要再開放），所以這裡額外排除掉它
   canEvolve(id) { return this.owned[id] >= 5 && !this.evolved[id] && !WEAPON_FUSIONS[id]; }
 
-  // 只有「鋸片」在「血肉風暴」還在的期間需要鎖住不能重新選——鋸片的環繞渲染
-  // （見 update() 的 owned.sawblade || owned['knife_sawblade']、以及
-  // _rebuildSawblades() 的 if (owned['knife_sawblade']) 直接 return）是兩者共用
-  // 同一組「非此即彼」的狀態，同時存在的話融合武器會整個蓋掉鋸片，鋸片變成一張
-  // 完全不開火、不計傷害的廢卡。
-  // 其餘武器（飛刀/雷電/火球/冰霜）都是各自獨立的計時開火（見 update() 對
-  // Object.keys(this.owned) 的逐一開火迴圈），跟自己的融合武器可以同時存在、
-  // 互不干擾，所以不用鎖——飛刀+雷電融合成電擊飛刃之後，玩家還能重新選到
-  // 「新武器：飛刀」，讓飛刀之後可以再去跟旋轉鋸片融合。
+  // 這把「基礎武器」是不是被某個目前擁有中的融合武器鎖住了——一度改成只鎖
+  // 鋸片（其餘武器融合後開放重選，見 git 歷史），但實際玩起來很難真的湊到
+  // 「重新練起一把再跟第三把融合」的機會（升級選卡池裡競爭的選項太多），
+  // 改回最初的規則：只要某把武器是目前任一擁有中融合武器的親本，就整個鎖住
+  // 不能重新選，直到玩家哪天把融合武器拆開（目前沒有拆開機制）才會又開放。
   isLockedByFusion(id) {
-    return id === 'sawblade' && !!this.owned['knife_sawblade'];
+    return Object.values(WEAPON_FUSIONS).some((f) => f.parents.includes(id) && this.owned[f.id]);
   }
 
   // 兩把武器都滿 5 級、都還沒進化、也都還不是融合武器本身，且剛好有對應配方
