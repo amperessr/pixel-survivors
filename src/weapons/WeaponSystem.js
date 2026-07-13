@@ -121,6 +121,9 @@ export default class WeaponSystem {
     // 一般武器進化的穿透力預設是「+1」，飛刀進化要求命中數直接跳到 10，用
     // evo.pierceOverride 覆蓋掉預設規則（見 WeaponData.js 的 WEAPON_EVOLUTIONS.knife）。
     if (base.pierce != null) scaled.pierce = evo.pierceOverride != null ? evo.pierceOverride : base.pierce + 1;
+    // 劍氣斬進化要求扇形角度直接跳到近乎滿圈，同樣用 evo.arcOverride 覆蓋掉
+    // 「乘 extraMult」的預設規則（見 WeaponData.js 的 WEAPON_EVOLUTIONS.sword）。
+    if (base.arcDeg != null) scaled.arcDeg = evo.arcOverride != null ? evo.arcOverride : Math.min(360, base.arcDeg * evo.extraMult);
     scaled.cooldown = base.cooldown / (evo.cooldownMult || evo.extraMult);
     return this._applyWindSizeBonus(scaled);
   }
@@ -156,6 +159,7 @@ export default class WeaponSystem {
     sawblade: 1.0,
     lightning_knife: 0.85, // 電擊飛刃：飛刀+雷電混血，攻速權重介於兩者之間
     fireball_frost: 0.6,   // 世界末日：爆發系融合武器，維持火球/冰霜那種慢而重的手感
+    sword: 0.6, // 劍氣斬：單次重擊定位，攻速權重比照火球/冰霜這類「慢而重」的武器
   };
 
   _scaledCooldown(id, base) {
@@ -259,6 +263,7 @@ export default class WeaponSystem {
       case 'frost': this._fireFrost(data, stats, ox, oy, dmgMult); break;
       case 'lightning_knife': this._fireElectroKnife(data, stats, enemy, ox, oy, dmgMult); break;
       case 'fireball_frost': this._fireWorldEnd(data, stats, enemy, ox, oy, dmgMult); break;
+      case 'sword': this._fireSword(data, stats, enemy, ox, oy, dmgMult); break;
     }
   }
 
@@ -407,6 +412,25 @@ export default class WeaponSystem {
         });
       }
     }
+  }
+
+  // 劍氣斬：無屬性物理武器第三把（見 WeaponData.js 開頭說明），原地朝最近敵人
+  // 揮出一道扇形劍氣，範圍內敵人（含魔王）一次全部判定，不是飛行彈道，實際
+  // 命中判定跟視覺特效都交給 GameScene.spawnSwordSlash()（跟冰柱/隕石同一種
+  // 「WeaponSystem 算數值、GameScene 管世界互動」分工）。
+  _fireSword(data, stats, enemy, px, py, dmgMult = 1) {
+    // 範圍/扇形角度只受本場選到的「致命打擊（爆傷）卡片」張數影響（每張 +8%），
+    // 不受角色永久能力值或裝備影響；致命打擊原本沒有專屬武器聯動，劍氣斬走
+    // 「爆擊重擊」定位剛好補上。進化後的半徑倍率已經由 WeaponData.js 的
+    // WEAPON_EVOLUTIONS.sword.extraMult 算過一次（見 _getEffectiveData），這裡
+    // 不再疊加額外的進化倍率，避免半徑被算兩次、超過「剛好翻倍」的需求。
+    const critCards = this.player.passiveLevels.critDmg || 0;
+    const scaleBonus = 1 + critCards * 0.08;
+    const dmg = data.dmg * (1 + stats.attack * 0.02) * dmgMult;
+    const range = data.range * scaleBonus * this._windSizeMult();
+    const ang = angleTo(px, py, enemy.x, enemy.y);
+    const kb = WEAPON_KNOCKBACK.sword;
+    this.scene.spawnSwordSlash(px, py, ang, range, data.arcDeg, dmg, stats.critRate, stats.critDmg, kb, !!data.evolved);
   }
 
   // 帶電飛刀（電擊飛刃）：跟一般飛刀一樣連續投擲，只是命中後會在 GameScene 那邊

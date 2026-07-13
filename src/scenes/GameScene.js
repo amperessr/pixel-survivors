@@ -11,7 +11,7 @@ import { WEAPON_KNOCKBACK } from '../weapons/WeaponData.js';
 import { RELICS } from '../relics/RelicData.js';
 import { EQUIPMENT_DATA, getLegendarySeriesSlug } from '../equipment/EquipmentData.js';
 import { getEquipped, addGold, setBestScore, setCheckpointStage, getStatBonus, getPlayerName } from '../managers/SaveManager.js';
-import { dist, clamp } from '../utils/MathUtils.js';
+import { dist, clamp, angleTo } from '../utils/MathUtils.js';
 import { audioManager } from '../managers/AudioManager.js';
 import { textStyle } from '../utils/TextStyle.js';
 import { submitWoofWarScore } from '../firebase/firebase.js';
@@ -1864,6 +1864,56 @@ export default class GameScene extends Phaser.Scene {
         });
       },
     });
+  }
+
+  // 劍氣斬：原地朝方向揮出一道扇形範圍的劍氣，範圍內敵人（含魔王）一次全部
+  // 判定。命中範圍先用 Graphics 的 slice() 畫一層很淡的扇形色塊當「這一下打
+  // 得到哪裡」的範圍指示（向量圖形才能精準對應任何角度，包含進化後接近滿圈的
+  // 340 度）；真正的揮砍視覺交給一整排爪擊斬波正式美術圖（fx_claw_slash_gold/
+  // amber，本來是王魔專用）鋪滿整個扇形，角度越大鋪的張數越多，才會有「一整片
+  // 劍陣」的份量感，不用另外準備新素材。
+  spawnSwordSlash(px, py, ang, range, arcDeg, dmg, critRate, critDmg, knockback, evolved = false) {
+    const halfArc = (arcDeg * Math.PI) / 360;
+    const color = evolved ? 0xffe066 : 0xdfefff;
+
+    const g = this.add.graphics().setDepth(20005);
+    g.fillStyle(color, 0.15);
+    g.slice(px, py, range, ang - halfArc, ang + halfArc, false);
+    g.fillPath();
+    this.tweens.add({ targets: g, alpha: 0, duration: 220, onComplete: () => g.destroy() });
+
+    const clawTexture = evolved ? 'fx_claw_slash_amber' : 'fx_claw_slash_gold';
+    // 每約 40 度鋪一張，3~9 張之間夾住，避免角度很小時擠成一團、角度很大時
+    // （進化後 340 度）反而鋪太稀疏看起來破碎。
+    const slashCount = Phaser.Math.Clamp(Math.ceil((arcDeg * Math.PI / 180) / 0.7) + 1, 3, 9);
+    for (let i = 0; i < slashCount; i++) {
+      const t = slashCount === 1 ? 0.5 : i / (slashCount - 1);
+      const slashAng = ang - halfArc + t * (halfArc * 2);
+      const sx = px + Math.cos(slashAng) * range * 0.55, sy = py + Math.sin(slashAng) * range * 0.55;
+      const slash = this.add.image(sx, sy, clawTexture).setDepth(20006).setRotation(slashAng)
+        .setDisplaySize(range * 1.1, range * 0.6).setAlpha(0.9).setBlendMode(Phaser.BlendModes.ADD).setTint(color);
+      const finalScaleX = slash.scaleX, finalScaleY = slash.scaleY;
+      slash.setScale(finalScaleX * 0.6, finalScaleY * 0.6);
+      this.tweens.add({ targets: slash, scaleX: finalScaleX, scaleY: finalScaleY, duration: 130, delay: i * 18, ease: 'Back.easeOut' });
+      this.tweens.add({ targets: slash, alpha: 0, duration: 200, delay: 130 + i * 18, onComplete: () => slash.destroy() });
+    }
+    this.spawnBurstFx(px, py, color, evolved ? 16 : 9, 'fx_crit', evolved ? 160 : 115);
+
+    this.enemySystem.queryNear(px, py, range, (e) => {
+      if (dist(px, py, e.x, e.y) > range) return;
+      const eAng = angleTo(px, py, e.x, e.y);
+      if (Math.abs(Phaser.Math.Angle.Wrap(eAng - ang)) > halfArc) return;
+      this.enemySystem.damageEnemy(e, dmg, critRate, critDmg, knockback ? {
+        fromX: px, fromY: py, force: knockback.force, duration: knockback.duration,
+      } : null);
+    });
+    if (this.boss && this.boss.alive) {
+      const bx = this.boss.sprite.x, by = this.boss.sprite.y;
+      if (dist(px, py, bx, by) <= range + 20) {
+        const eAng = angleTo(px, py, bx, by);
+        if (Math.abs(Phaser.Math.Angle.Wrap(eAng - ang)) <= halfArc) this.boss.takeDamage(dmg, critRate, critDmg);
+      }
+    }
   }
 
   // 世界末日新增技能：完全比照冰霜新星進化版「永凍冰川」的技能結構，由近到遠

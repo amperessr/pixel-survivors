@@ -1,7 +1,9 @@
 // 五種武器，每種五階，每階外觀/效果/攻擊方式皆不同。
 // 技能的體積/數量/範圍/轉速只由「武器等級 + 是否進化」決定，不再受角色能力值影響
 // （攻擊力仍會透過統一公式提升所有武器的傷害，爆擊率/爆傷影響爆擊，見 PassiveData）。
-export const WEAPON_IDS = ['fireball', 'lightning', 'knife', 'sawblade', 'frost'];
+// 飛刀／鋸片／劍氣斬是「無屬性」（物理系）武器，之後才能各自跟三個元素
+// （火球/雷電/冰霜）融合出對應的元素武器；劍氣斬是這條線的第三把。
+export const WEAPON_IDS = ['fireball', 'lightning', 'knife', 'sawblade', 'frost', 'sword'];
 
 export const WEAPON_DATA = {
   fireball: {
@@ -79,6 +81,22 @@ export const WEAPON_DATA = {
       { dmg: 42, cooldown: 1800, radius: 126, slowDuration: 2400 },
     ],
   },
+  sword: {
+    id: 'sword',
+    name: '劍氣斬',
+    desc: '原地朝最近敵人揮出一道扇形劍氣，範圍內敵人全部受到傷害。升級可提升傷害、範圍與扇形角度。',
+    projectile: null, // 不是飛行道具，原地扇形判定（見 WeaponSystem._fireSword）
+    synergyStat: 'critDmg',
+    // 定位是「單次重擊」：攻速比其他武器慢一截，但傷害拉得比較高做補償，
+    // 跟飛刀「密集小刀」形成對比。arcDeg：扇形夾角（度）。
+    levels: [
+      { dmg: 22, cooldown: 1500, range: 100, arcDeg: 80 },
+      { dmg: 29, cooldown: 1400, range: 110, arcDeg: 85 },
+      { dmg: 39, cooldown: 1300, range: 120, arcDeg: 90 },
+      { dmg: 52, cooldown: 1200, range: 130, arcDeg: 95 },
+      { dmg: 70, cooldown: 1100, range: 145, arcDeg: 100 },
+    ],
+  },
 };
 
 // 融合武器：兩把「都滿 5 級、都還沒進化」的武器可以融合成一把全新武器（見
@@ -132,6 +150,7 @@ export const WEAPON_KNOCKBACK = {
   knife: { force: 210, duration: 150 },
   sawblade: { force: 300, duration: 120 },
   frost: { force: 350, duration: 260 },
+  sword: { force: 320, duration: 200 },
   // 融合武器與進化版本也使用相同擊退設定
   knife_sawblade: { force: 300, duration: 120 },
 };
@@ -171,5 +190,19 @@ export const WEAPON_EVOLUTIONS = {
     name: '永凍冰川',
     desc: '冰霜新星的最終進化。範圍與減速效果大幅提升，凍結一切靠近的敵人。',
     dmgMult: 1.8, extraMult: 1.6, cooldownMult: 1.3,
+  },
+  sword: {
+    name: '劍陣風暴',
+    desc: '劍氣斬的最終進化。攻擊半徑直接翻倍，扇形夾角擴大成近乎一圈的環繞劍陣，範圍內敵人無所遁形。',
+    // extraMult 這裡專門用來把攻擊半徑（range）直接翻倍——劍氣斬只有 range 跟
+    // arcDeg 兩個受 extraMult 影響的欄位，arcDeg 另外被 arcOverride 蓋掉
+    // （見下方），所以 extraMult=2 實際上只吃在 range 上，乾淨對應「半徑要比
+    // 劍氣斬多一倍」的需求，不用另外開一個專屬倍率欄位。
+    dmgMult: 1.8, extraMult: 2, cooldownMult: 1.2,
+    // 一般武器進化的扇形角度是「乘 extraMult」，但劍氣斬進化要求直接跳到近乎
+    // 滿圈（340 度，留一點縫隙做視覺上的「起手方向」），用這個欄位覆蓋掉
+    // 預設的倍率規則（跟 WeaponSystem._getEffectiveData 對 pierceOverride 的
+    // 處理方式一致）。
+    arcOverride: 340,
   },
 };

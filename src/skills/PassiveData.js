@@ -21,7 +21,7 @@ export const PASSIVE_DATA = {
   },
   critDmg: {
     id: 'critDmg', name: '致命打擊', icon: 'icon_critDmg',
-    desc: '每級爆擊傷害 +15%。爆擊時的傷害倍率（基礎 150%，即爆擊為一般的 1.5 倍起跳）。',
+    desc: '每級爆擊傷害 +15%（基礎 150%，即爆擊為一般的 1.5 倍起跳）；並使劍氣斬\n（含進化版）扇形範圍每級 +8%。',
     perLevel: 15,
   },
   atkSpeed: {

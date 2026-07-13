@@ -258,6 +258,7 @@ export default class TextureFactory {
       knife: { base: '#c9d6df', glow: '#8fa3ad' },
       sawblade: { base: '#c0c0c0', glow: '#6e6e6e' },
       frost: { base: '#8fe3ff', glow: '#e3faff' },
+      sword: { base: '#dfefff', glow: '#ffffff' },
     };
     for (const [id, c] of Object.entries(weapons)) {
       for (let lvl = 1; lvl <= 5; lvl++) {
@@ -298,6 +299,17 @@ export default class TextureFactory {
           ctx.lineTo(cx + r * 0.1, cy + r * 0.1);
           ctx.closePath();
           ctx.fill();
+        } else if (id === 'sword') {
+          // 直立的劍刃（尖頭菱形）+ 十字護手，簡單的劍形剪影
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - r);
+          ctx.lineTo(cx + r * 0.22, cy + r * 0.35);
+          ctx.lineTo(cx - r * 0.22, cy + r * 0.35);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = '#8a6a3a';
+          ctx.fillRect(cx - r * 0.5, cy + r * 0.32, r, r * 0.14);
+          ctx.fillRect(cx - r * 0.1, cy + r * 0.32, r * 0.2, r * 0.5);
         } else {
           ctx.beginPath();
           ctx.arc(cx, cy, r, 0, Math.PI * 2);
