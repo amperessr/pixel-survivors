@@ -105,10 +105,10 @@ export default class WeaponSystem {
   // 進化倍率）；一般武器則是五級數值 + (若已進化) 進化倍率加成。
   _getEffectiveData(id) {
     const fusion = WEAPON_FUSIONS[id];
-    if (fusion) return this._applyWindSizeBonus({ ...fusion.stats, isFusion: true });
+    if (fusion) return this._applyWindSizeBonus({ ...fusion.stats, isFusion: true }, id);
 
     const base = getWeaponLevelData(id, this.owned[id]);
-    if (!this.evolved[id]) return this._applyWindSizeBonus({ ...base });
+    if (!this.evolved[id]) return this._applyWindSizeBonus({ ...base }, id);
 
     const evo = WEAPON_EVOLUTIONS[id];
     const scaled = { ...base, evolved: true, evoName: evo.name };
@@ -125,17 +125,31 @@ export default class WeaponSystem {
     // 「乘 extraMult」的預設規則（見 WeaponData.js 的 WEAPON_EVOLUTIONS.sword）。
     if (base.arcDeg != null) scaled.arcDeg = evo.arcOverride != null ? evo.arcOverride : Math.min(360, base.arcDeg * evo.extraMult);
     scaled.cooldown = base.cooldown / (evo.cooldownMult || evo.extraMult);
-    return this._applyWindSizeBonus(scaled);
+    return this._applyWindSizeBonus(scaled, id);
   }
 
-  // 狂風套裝五件套：所有技能的「大小」+100%——這裡統一放大命中判定用的範圍/半徑
+  // 狂風套裝五件套：所有技能的「大小」+50%——這裡統一放大命中判定用的範圍/半徑
   // 欄位，各 _fireXXX 方法再各自把對應的投射物/特效視覺縮放乘上同一個倍率
   // （見 _windSizeMult()），確保「看起來變大」跟「打得到的範圍變大」是一致的。
-  _applyWindSizeBonus(data) {
+  //
+  // 例外：只有鋸片的 radius（跟血肉風暴的 innerRadius/outerRadius，同一種持續
+  // 環繞機制）排除在外——這個欄位代表「刀刃離玩家本人有多遠」，鋸片是持續繞著
+  // 玩家轉的環繞武器，這個距離被放大會讓刀刃看起來離玩家越來越遠、像是飛脫
+  // 出去；鋸片「本身的大小」（sprite 縮放、接觸傷害判定半徑，見 _rebuildSawblades
+  // 的 sizeMult／GameScene 的 hitRadius）不受這裡影響，一樣正常吃狂風加成變大。
+  // 劍氣斬的 range 不是持續環繞、每次都是原地重新揮出去，不算「越轉越遠」的
+  // 情況，維持吃狂風加成正常放大。
+  static WIND_SIZE_EXCLUDE_DISTANCE = {
+    sawblade: ['radius'],
+    knife_sawblade: ['innerRadius', 'outerRadius'],
+  };
+
+  _applyWindSizeBonus(data, id) {
     const mult = this._windSizeMult();
     if (mult === 1) return data;
+    const exclude = WeaponSystem.WIND_SIZE_EXCLUDE_DISTANCE[id] || [];
     ['aoe', 'radius', 'range', 'chainRange', 'innerRadius', 'outerRadius'].forEach((key) => {
-      if (data[key] != null) data[key] *= mult;
+      if (data[key] != null && !exclude.includes(key)) data[key] *= mult;
     });
     return data;
   }

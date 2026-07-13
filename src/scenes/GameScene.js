@@ -415,7 +415,7 @@ export default class GameScene extends Phaser.Scene {
   // 縮放（spawnIcePillar 寫死的 hitRadius、_handleSawbladeHits 寫死的 16）各自為政，
   // 才會出現「數值有放大、畫面跟判定沒有跟著變大」的落差。
   windSizeMult() {
-    return this.setBonuses && this.setBonuses.wind5 ? 2 : 1;
+    return this.setBonuses && this.setBonuses.wind5 ? 1.5 : 1;
   }
 
   // 吸血戒指：攻擊造成傷害時吸取傷害的 3% 回復生命，每秒最多回復最大生命的 5%
